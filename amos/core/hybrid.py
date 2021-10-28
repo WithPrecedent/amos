@@ -1,5 +1,5 @@
 """
-arrays: lightweight linear composite data structures
+hybrid: lightweight linear composite data structures
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2021, Corey Rayburn Yung
 License: Apache-2.0
@@ -16,7 +16,7 @@ License: Apache-2.0
     See the License for the specific language governing permissions and
     limitations under the License.
 
-Classes:
+Contents:
     
           
 To Do:

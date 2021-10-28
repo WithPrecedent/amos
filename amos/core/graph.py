@@ -16,7 +16,7 @@ License: Apache-2.0
     See the License for the specific language governing permissions and
     limitations under the License.
 
-Classes:
+Contents:
     System (Graph): a lightweight directed acyclic graph (DAG). Internally, the 
         graph is stored as an adjacency list. As a result, it should primarily 
         be used for workflows or other uses that do require large graphs.

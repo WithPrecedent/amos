@@ -387,14 +387,10 @@ class Library(MutableMapping):
             Catalog.
         instances (Catalog): a catalog of stored class instances. Defaults to an
             empty Catalog.
-    
-    Attributes:
-        maps (list[Catalog]): the ordered mappings to search, as required from
-             inheriting from ChainMap.
                  
     """
-    classes: Catalog = dataclasses.field(default_factory = dict)
-    instances: Catalog = dataclasses.field(default_factory = dict)
+    classes: Catalog = dataclasses.field(default_factory = Catalog)
+    instances: Catalog = dataclasses.field(default_factory = Catalog)
         
     """ Public Methods """
     
