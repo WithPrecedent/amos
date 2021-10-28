@@ -54,10 +54,10 @@ __author__ = 'Corey Rayburn Yung'
 
 
 from .utilities import *
-from .build.configuration import *
-from .build.create import *
-from .build.filing import *
-from .build.lazy import *
+from .construct.configuration import *
+from .construct.create import *
+from .construct.filing import *
+from .construct.lazy import *
 from .observe.examine import *
 from .observe.module import *
 from .observe.package import *
