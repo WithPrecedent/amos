@@ -3,7 +3,7 @@
 Like the Roci's most interesting character, this package is designed to handle the dirtiest jobs in a python project.
 
 
-[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![PyPi version](https://badgen.net/pypi/v/pip/)](https://pypi.com/project/pip) ![test](https://github.com/WithPrecedent/test-actions/workflows/test/badge.svg) [![PyPI status](https://img.shields.io/pypi/status/amos.svg)](https://pypi.python.org/pypi/amos/) [![Documentation Status](https://readthedocs.org/projects/amos/badge/?version=latest)](http://amos.readthedocs.io/?badge=latest)
+[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![PyPi version](https://badgen.net/pypi/v/pip/)] [![PyPI status](https://img.shields.io/pypi/status/amos.svg)](https://pypi.python.org/pypi/amos/) [![Documentation Status](https://readthedocs.org/projects/amos/badge/?version=latest)](http://amos.readthedocs.io/?badge=latest)
 
 amos's framework supports a wide range of coding styles. You can create complex multiple inheritance structures with mixins galore or simpler, compositional objects. Even though the data structures are necessarily object-oriented, all of the tools to modify them are also available as functions, for those who prefer a more funcitonal approaching to programming. 
 
