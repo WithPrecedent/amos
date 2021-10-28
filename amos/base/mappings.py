@@ -34,8 +34,9 @@ import dataclasses
 import inspect
 from typing import Any, Optional, Type, Union
 
+from ..observe import traits
+from ..repair import convert
 from . import bunches
-from . import utilities
                   
 
 _ALL_KEYS: list[Any] = ['all', 'All', ['all'], ['All']]
@@ -190,10 +191,10 @@ class Dictionary(bunches.Bunch, MutableMapping):  # type: ignore
             if include is None:
                 contents = self.contents
             else:
-                include = list(utilities.iterify(item = include)) 
+                include = list(convert.iterify(item = include)) 
                 contents = {k: self.contents[k] for k in include}
             if exclude is not None:
-                exclude = list(utilities.iterify(item = exclude))
+                exclude = list(convert.iterify(item = exclude))
                 contents = {
                     k: v for k, v in contents.items() 
                     if k not in exclude}
@@ -366,7 +367,7 @@ class Catalog(Dictionary):
                 'contents' to delete the key/value pair.
 
         """
-        keys = list(utilities.iterify(item = key))
+        keys = list(convert.iterify(item = key))
         if all(k in self for k in keys):
             self.contents = {
                 i: self.contents[i] for i in self.contents if i not in keys}
@@ -413,7 +414,7 @@ class Library(MutableMapping):
                 passed, a key will be created using the 'get_name' method.
                 
         """
-        key = name or utilities.get_name(item = item)
+        key = name or traits.get_name(item = item)
         if inspect.isclass(item):
             self.classes[key] = item
         elif isinstance(item, object):
@@ -474,7 +475,7 @@ class Library(MutableMapping):
                 found. If 'kwargs' are passed, an instance is always returned.
             
         """
-        items = utilities.iterify(item)
+        items = convert.iterify(item)
         item = None
         for key in items:
             for catalog in ['instances', 'classes']:

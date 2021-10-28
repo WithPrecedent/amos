@@ -1,5 +1,5 @@
 """
-convert: functions to convert data between composite structures
+transform: functions to convert data between composite structures
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2021, Corey Rayburn Yung
 License: Apache-2.0

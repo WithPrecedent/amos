@@ -22,7 +22,7 @@ Contents:
         
 """
 from __future__ import annotations
-import collections
+import abc
 from collections.abc import Callable, MutableMapping, Sequence
 import copy
 import dataclasses
@@ -30,7 +30,8 @@ import functools
 import inspect
 from typing import Any, ClassVar, Optional, Type, Union
 
-from . import utilities
+from . import traits
+
 
 """ Basic Registration System """
 
@@ -49,7 +50,7 @@ class registered(object):
     wrapped: Callable[..., Optional[Any]]
     defaults: dict[str, Callable[..., Optional[Any]]] = dataclasses.field(
         default_factory = dict)
-    namer: Callable[[Any], str] = utilities.get_name
+    namer: Callable[[Any], str] = traits.get_name
     
     """ Initialization Methods """
         
@@ -147,7 +148,7 @@ class Registrar(object):
         # if abc.ABC not in cls.__bases__:
         # The default key for storing cls relies on the 'get_name' method, 
         # which usually will use the snakecase name of 'item'.
-        key = name or utilities.get_name(item = cls)
+        key = name or traits.get_name(item = cls)
         cls.registry[key] = item
         return   
 
@@ -186,7 +187,7 @@ class RegistrarFactory(Registrar, abc.ABC):
             except KeyError:
                 pass
         try:
-            name = utilities.get_name(item = item)
+            name = traits.get_name(item = item)
             return cls.registry[name](item, *args, **kwargs)
         except KeyError:
             for name, kind in cls.registry.items():

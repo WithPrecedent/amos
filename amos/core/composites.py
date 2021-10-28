@@ -35,9 +35,9 @@ import inspect
 from typing import Any, ClassVar, Optional, Type, TYPE_CHECKING, Union
 
 from ..base import bunches
+from ..observe import registries
 from . import check
-from . import tracking
-from . import utilities
+
 
 if TYPE_CHECKING:
     from . import hybrid
@@ -82,7 +82,7 @@ class Node(object):
     def __post_init__(self) -> None:
         """Initializes class instance attributes."""
         # Sets 'name' attribute if 'name' is None.
-        self.name = self.name or utilities.get_name(item = self)
+        self.name = self.name or traits.get_name(item = self)
                 
     """ Dunder Methods """
     
@@ -276,12 +276,12 @@ def nodify(item: Union[Type[Any], object]) -> Union[Type[Node], Node]:
         item.__post_init__ = Node.__post_init__ # type: ignore
     else:
         if not hasattr(item, 'name') or not item.name:
-            item.name = utilities.get_name(item = item)
+            item.name = traits.get_name(item = item)
     return item
 
            
 @dataclasses.dataclass
-class Composite(tracking.RegistrarFactory, abc.ABC):
+class Composite(registries.RegistrarFactory, abc.ABC):
     """Base class for composite data structures.
     
     Args:

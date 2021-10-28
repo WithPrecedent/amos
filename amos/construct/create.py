@@ -30,8 +30,7 @@ from collections.abc import Mapping
 import dataclasses
 from typing import Any, ClassVar, Optional, Type, Union
 
-from . import modify
-from . import utilities
+from ..repair import modify
 
  
 @dataclasses.dataclass
@@ -44,7 +43,7 @@ class BaseFactory(abc.ABC):
     
     """ Required Subclass Methods """
 
-    @abc.abstractclassmethodclassmethod
+    @abc.abstractclassmethod
     def create(cls, item: Any, *args: Any, **kwargs: Any) -> BaseFactory:
         """Implements technique for creating a (sub)class instance.
 
@@ -189,7 +188,7 @@ class SubclassFactory(BaseFactory, abc.ABC):
             
         """
         options = {
-            utilities.snakify(item = s.__name__): s for s in cls.__subclasses__}
+            modify.snakify(item = s.__name__): s for s in cls.__subclasses__}
         try:
             return options[item](*args, **kwargs)
         except KeyError:

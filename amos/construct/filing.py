@@ -33,7 +33,6 @@ import pathlib
 import types
 from typing import Any, Optional, Union
 
-from . import utilities
 
         
 @dataclasses.dataclass
@@ -333,7 +332,7 @@ class Clerk(object):
             pathlib.Path: derived from 'path'.
 
         """
-        path = utilities.pathlibify(item = path)
+        path = convert.pathlibify(item = path)
         if isinstance(path, str):
             if (hasattr(self, path) 
                     and isinstance(getattr(self, path), pathlib.Path)):
@@ -489,7 +488,7 @@ def prepare_transfer(
 
     """
     if file_path:
-        file_path = utilities.pathlibify(item = file_path)
+        file_path = convert.pathlibify(item = file_path)
         if not file_format:
             try:
                 file_format = [f for f in formats.values()

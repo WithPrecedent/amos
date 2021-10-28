@@ -55,6 +55,7 @@ def test_all() -> None:
     assert type(a_module) == types.ModuleType
     assert a_module.__name__ == 'dummy_module'
     class_names = amos.name_classes(item = a_module)
+    print('test class names', class_names)
     assert class_names == ['DummyClass', 'DummyDataclass']
     function_names = amos.name_functions(item = a_module)
     assert function_names == ['dummy_function']

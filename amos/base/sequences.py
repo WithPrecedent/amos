@@ -32,12 +32,13 @@ import copy
 import dataclasses
 from typing import Any, Optional, Union
 
+from ..observe import traits
+from ..repair import convert
 from . import bunches
-from . import utilities
 
                           
 @dataclasses.dataclass # type: ignore
-class Listing(base.Bunch, MutableSequence): # type: ignore
+class Listing(bunches.Bunch, MutableSequence): # type: ignore
     """Basic bunches list replacement.
     
     A Listing differs from an ordinary python list in ways required by 
@@ -134,10 +135,10 @@ class Listing(base.Bunch, MutableSequence): # type: ignore
             if include is None:
                 contents = self.contents
             else:
-                include = list(utilities.iterify(item = include))
+                include = list(convert.iterify(item = include))
                 contents = [i for i in self.contents if i in include]
             if exclude is not None:
-                exclude = list(utilities.iterify(item = exclude))
+                exclude = list(convert.iterify(item = exclude))
                 contents = [i for i in contents if i not in exclude]
             new_listing = copy.deepcopy(self)
             new_listing.contents = contents
@@ -278,7 +279,7 @@ class Hybrid(Listing):
                 any duplicate keys, which are permitted by Hybrid.
             
         """
-        return tuple([utilities.get_name(item = c) for c in self.contents])
+        return tuple([traits.get_name(item = c) for c in self.contents])
 
     def setdefault(self, value: Any) -> None: # type: ignore
         """sets default value to return when 'get' method is used.
@@ -346,16 +347,16 @@ class Hybrid(Listing):
         else:
             
             matches = [
-                c for c in self.contents if utilities.get_name(item = c) == key]
+                c for c in self.contents if traits.get_name(item = c) == key]
             # matches = []
             # for value in self.contents:
             #     if (
             #         hash(value) == key 
-            #         or utilities.get_name(item = value) == key):
+            #         or traits.get_name(item = value) == key):
             #         matches.append(value)
             # matches = [
             #     i for i, c in enumerate(self.contents)
-            #     if utilities.get_name(c) == key]
+            #     if traits.get_name(c) == key]
             if len(matches) == 0:
                 raise KeyError(f'{key} is not in {self.__class__.__name__}')
             elif len(matches) == 1:
@@ -396,6 +397,6 @@ class Hybrid(Listing):
             del self.contents[key]
         else:
             self.contents = [
-                c for c in self.contents if utilities.get_name(c) != key]
+                c for c in self.contents if traits.get_name(c) != key]
         return
 

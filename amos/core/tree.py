@@ -29,10 +29,8 @@ from collections.abc import MutableSequence, Sequence
 import dataclasses
 from typing import Any, Callable, ClassVar, Optional, Type, TypeVar, Union
 
-
-from ..base import bunches
+from ..base import sequences
 from . import composites
-from . import utilities
 
 
 """ Type Aliases """
@@ -42,7 +40,7 @@ Finder: Type[Any] = Callable[[composites.Node], Optional[composites.Node]]
 
 
 @dataclasses.dataclass # type: ignore
-class Tree(bunches.Hybrid, composites.Composite, abc.ABC):
+class Tree(sequences.Hybrid, composites.Composite, abc.ABC):
     """composites class for an tree data structures.
     
     The Tree class uses a Hybrid instead of a linked list for storing children
@@ -97,22 +95,22 @@ class Tree(bunches.Hybrid, composites.Composite, abc.ABC):
            
     """ Dunder Methods """
 
-    def __add__(self, other: Union[composites.Composite]) -> None:
+    def __add__(self, other: composites.Composite) -> None:
         """Adds 'other' to the stored tree using the 'append' method.
 
         Args:
-            other (Union[composites.Composite]): another Tree, an adjacency list, an 
+            other (composites.Composite): another Tree, an adjacency list, an 
                 edge list, an adjacency matrix, or one or more nodes.
             
         """
         self.append(item = other)     
         return 
 
-    def __radd__(self, other: Union[composites.Composite]) -> None:
+    def __radd__(self, other: composites.Composite) -> None:
         """Adds 'other' to the stored tree using the 'prepend' method.
 
         Args:
-            other (Union[composites.Composite]): another Tree, an adjacency list, an 
+            other (composites.Composite): another Tree, an adjacency list, an 
                 edge list, an adjacency matrix, or one or more nodes.
             
         """
@@ -423,22 +421,22 @@ class Categorizer(Tree):
 
     """ Dunder Methods """
 
-    def __add__(self, other: Union[composites.Composite]) -> None:
+    def __add__(self, other: composites.Composite) -> None:
         """Adds 'other' to the stored tree using the 'append' method.
 
         Args:
-            other (Union[composites.Composite]): another Composite or supported
+            other (composites.Composite): another Composite or supported
                 raw data structure.
             
         """
         self.append(item = other)     
         return 
 
-    def __radd__(self, other: Union[composites.Composite]) -> None:
+    def __radd__(self, other: composites.Composite) -> None:
         """Adds 'other' to the stored tree using the 'prepend' method.
 
         Args:
-            other (Union[composites.Composite]): another Composite or supported
+            other (composites.Composite): another Composite or supported
                 raw data structure.
             
         """

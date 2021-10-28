@@ -43,17 +43,13 @@ ToDo:
 """
 from __future__ import annotations
 import ast
-import collections
 from collections.abc import (
     Collection, Hashable, Iterable, Mapping, MutableMapping, MutableSequence, 
     Sequence, Set)
-import functools
 import inspect
 import pathlib
-import re
 from typing import Any, Callable, Optional, Type, Union
 
-from . import containers
 from . import modify
 
 
@@ -86,7 +82,28 @@ def instancify(item: Union[Type[Any], object], **kwargs: Any) -> Any:
         return item
     else:
         raise TypeError('item must be a class or class instance')
+                  
+def iterify(item: Any) -> Iterable:
+    """Returns 'item' as an iterable, but does not iterate str types.
+    
+    Args:
+        item (Any): item to turn into an iterable
 
+    Returns:
+        Iterable: of 'item'. A str type will be stored as a single item in an
+            Iterable wrapper.
+        
+    """     
+    if item is None:
+        return iter(())
+    elif isinstance(item, (str, bytes)):
+        return iter([item])
+    else:
+        try:
+            return iter(item)
+        except TypeError:
+            return iter((item,))
+        
 def kwargify(item: Type[Any], args: tuple[Any]) -> dict[Hashable, Any]:
     """Converts args to kwargs.
     

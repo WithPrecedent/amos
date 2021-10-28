@@ -34,9 +34,7 @@ import importlib.util
 import pathlib
 from typing import Any, ClassVar, Optional, Type, Union
 
-import bunches
-
-from . import utilities
+from ..base import bunches
 
 
 """ Configuration System"""
@@ -148,7 +146,7 @@ class Settings(MutableMapping): # type: ignore
             settings: [description]
             
         """
-        path = utilities.pathlibify(item = path)   
+        path = convert.pathlibify(item = path)   
         extension = path.suffix[1:]
         load_method = getattr(cls, f'from_{extension}')
         return load_method(path = path, **kwargs)
@@ -170,7 +168,7 @@ class Settings(MutableMapping): # type: ignore
             FileNotFoundError: if the path does not correspond to a file.
 
         """
-        path = utilities.pathlibify(item = path) 
+        path = convert.pathlibify(item = path) 
         if 'infer_types' not in kwargs:
             kwargs['infer_types'] = True
         try:
@@ -199,7 +197,7 @@ class Settings(MutableMapping): # type: ignore
 
         """
         import json
-        path = utilities.pathlibify(item = path) 
+        path = convert.pathlibify(item = path) 
         if 'infer_types' not in kwargs:
             kwargs['infer_types'] = True
         try:
@@ -229,7 +227,7 @@ class Settings(MutableMapping): # type: ignore
                 file.
 
         """
-        path = utilities.pathlibify(item = path) 
+        path = convert.pathlibify(item = path) 
         if 'infer_types' not in kwargs:
             kwargs['infer_types'] = False
         try:
@@ -261,7 +259,7 @@ class Settings(MutableMapping): # type: ignore
 
         """
         import toml
-        path = utilities.pathlibify(item = path) 
+        path = convert.pathlibify(item = path) 
         if 'infer_types' not in kwargs:
             kwargs['infer_types'] = True
         try:
@@ -287,7 +285,7 @@ class Settings(MutableMapping): # type: ignore
 
         """
         import yaml
-        path = utilities.pathlibify(item = path) 
+        path = convert.pathlibify(item = path) 
         if 'infer_types' not in kwargs:
             kwargs['infer_types'] = False
         try:
@@ -358,7 +356,7 @@ class Settings(MutableMapping): # type: ignore
         except AttributeError:
             pass
         if additional:
-            sections.extend(utilities.iterify(additional))
+            sections.extend(convert.iterify(additional))
         for section in sections:
             try:
                 for key, value in self.contents[section].items():

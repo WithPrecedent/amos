@@ -37,7 +37,6 @@ from typing import Any, Optional, Type, Union
 from . import module
 from . import package
 from . import traits
-from . import utilities
 
 
 @dataclasses.dataclass
@@ -386,7 +385,7 @@ class PackageInspector(Inspector):
     
     def __post_init__(self) -> None:
         """Initializes class instance attributes."""
-        self.item = utilities.pathlibify(item = self.item)
+        self.item = convert.pathlibify(item = self.item)
         
     """ Properties """
 

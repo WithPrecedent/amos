@@ -35,13 +35,12 @@ import dataclasses
 import itertools
 from typing import Any, Optional, Type, TYPE_CHECKING, Union
 
-import more_itertools
-
-from ..base import bunches
-from . import utilities
+from ..base import mappings
+from ..observe import traits
+from ..repair import convert
 from . import composites
 from . import check
-from . import convert
+from . import transform
 from . import hybrid
 
 if TYPE_CHECKING:
@@ -104,7 +103,7 @@ class Graph(composites.Composite, abc.ABC):
 
 
 @dataclasses.dataclass
-class Adjacency(bunches.Dictionary, Graph):
+class Adjacency(mappings.Dictionary, Graph):
     """composites class for adjacency-list-compositesd graphs.
     
     Args:
@@ -199,12 +198,12 @@ class System(Adjacency):
     @property
     def edges(self) -> Edges:
         """Returns the stored graph as an edge list."""
-        return convert.adjacency_to_edges(item = self.contents)
+        return transform.adjacency_to_edges(item = self.contents)
     
     @property
     def matrix(self) -> Matrix:
         """Returns the stored graph as an adjacency matrix."""
-        return convert.adjacency_to_matrix(item = self.contents)
+        return transform.adjacency_to_matrix(item = self.contents)
                       
     @property
     def nodes(self) -> set[composites.Node]:
@@ -249,29 +248,29 @@ class System(Adjacency):
     @classmethod
     def from_edges(cls, item: Edges) -> System:
         """Creates a System instance from an edge list."""
-        return cls(contents = convert.edges_to_adjacency(item = item))
+        return cls(contents = transform.edges_to_adjacency(item = item))
     
     @classmethod
     def from_matrix(cls, item: Matrix) -> System:
         """Creates a System instance from an adjacency matrix."""
-        return cls(contents = convert.matrix_to_adjacency(item = item))
+        return cls(contents = transform.matrix_to_adjacency(item = item))
     
     @classmethod
     def from_nodes(cls, item: composites.Nodes) -> System:
         """Creates a System instance from a Nodes."""
-        new_contents = convert.pipeline_to_adjacency(item = item)
+        new_contents = transform.pipeline_to_adjacency(item = item)
         return cls(contents = new_contents)
 
     @classmethod
     def from_pipeline(cls, item: hybrid.Pipeline) -> System:
         """Creates a System instance from a Pipeline."""
-        new_contents = convert.pipeline_to_adjacency(item = item)
+        new_contents = transform.pipeline_to_adjacency(item = item)
         return cls(contents = new_contents)
     
     @classmethod
     def from_pipelines(cls, item: hybrid.Pipelines) -> System:
         """Creates a System instance from a Pipeline."""
-        new_contents = convert.pipelines_to_adjacency(item = item)
+        new_contents = transform.pipelines_to_adjacency(item = item)
         return cls(contents = new_contents)
 
     @classmethod
@@ -305,8 +304,8 @@ class System(Adjacency):
         # elif utilities.is_property(item = descendants, instance = self):
         #     self.contents = set(getattr(self, descendants))
         else:
-            descendants = list(utilities.iterify(item = descendants))
-            descendants = [utilities.get_name(item = n) for n in descendants]
+            descendants = list(convert.iterify(item = descendants))
+            descendants = [traits.get_name(item = n) for n in descendants]
             missing = [n for n in descendants if n not in self.contents]
             if missing:
                 raise KeyError(
@@ -318,7 +317,7 @@ class System(Adjacency):
             # if utilities.is_property(item = ancestors, instance = self):
             #     start = list(getattr(self, ancestors))
             # else:
-            ancestors = list(utilities.iterify(item = ancestors))
+            ancestors = list(convert.iterify(item = ancestors))
             missing = [n for n in ancestors if n not in self.contents]
             if missing:
                 raise KeyError(
@@ -329,14 +328,14 @@ class System(Adjacency):
                     self.connect(start = start, stop = node)                 
         return 
 
-    def append(self, item: Union[composites.Composite]) -> None:
+    def append(self, item: composites.Composite) -> None:
         """Appends 'item' to the endpoints of the stored graph.
 
         Appending creates an edge between every endpoint of this instance's
         stored graph and the every root of 'item'.
 
         Args:
-            item (Union[composites.Composite]): another Graph, 
+            item (composites.Composite): another Graph, 
                 an adjacency list, an edge list, an adjacency matrix, or one or
                 more nodes.
             
@@ -376,7 +375,7 @@ class System(Adjacency):
         elif stop not in self:
             self.add(node = stop)
         if stop not in self.contents[start]:
-            self.contents[start].add(utilities.get_name(item = stop))
+            self.contents[start].add(traits.get_name(item = stop))
         return
 
     def delete(self, node: composites.Node) -> None:
@@ -413,15 +412,15 @@ class System(Adjacency):
             raise KeyError(f'{start} does not exist in the graph')
         return
 
-    def merge(self, item: Union[composites.Composite]) -> None:
+    def merge(self, item: composites.Composite) -> None:
         """Adds 'item' to this Graph.
 
         This method is roughly equivalent to a dict.update, just adding the
-        new keys and values to the existing graph. It converts 'item' to an 
+        new keys and values to the existing graph. It transforms 'item' to an 
         adjacency list that is then added to the existing 'contents'.
         
         Args:
-            item (Union[composites.Composite]): another Graph, an adjacency 
+            item (composites.Composite): another Graph, an adjacency 
                 list, an edge list, an adjacency matrix, or one or more nodes.
             
         Raises:
@@ -434,11 +433,11 @@ class System(Adjacency):
         elif isinstance(item, Adjacency):
             adjacency = item
         elif isinstance(item, Edges):
-            adjacency = convert.edges_to_adjacency(item = item)
+            adjacency = transform.edges_to_adjacency(item = item)
         elif isinstance(item, Matrix):
-            adjacency = convert.matrix_to_adjacency(item = item)
+            adjacency = transform.matrix_to_adjacency(item = item)
         elif isinstance(item, (list, tuple, set)):
-            adjacency = convert.pipeline_to_adjacency(item = item)
+            adjacency = transform.pipeline_to_adjacency(item = item)
         elif isinstance(item, composites.Node):
             adjacency = {item: set()}
         else:
@@ -446,14 +445,14 @@ class System(Adjacency):
         self.contents.update(adjacency)
         return
 
-    def prepend(self, item: Union[composites.Composite]) -> None:
+    def prepend(self, item: composites.Composite) -> None:
         """Prepends 'item' to the roots of the stored graph.
 
         Prepending creates an edge between every endpoint of 'item' and every
         root of this instance;s stored graph.
 
         Args:
-            item (Union[composites.Composite]): another Graph, an adjacency list, an 
+            item (composites.Composite): another Graph, an adjacency list, an 
                 edge list, an adjacency matrix, or one or more nodes.
             
         Raises:
@@ -505,7 +504,7 @@ class System(Adjacency):
                 excludables = []
             excludables.extend([i for i in self.contents if i in exclude])
             new_graph = copy.deepcopy(self)
-            for node in utilities.iterify(item = excludables):
+            for node in convert.iterify(item = excludables):
                 new_graph.delete(node = node)
         return new_graph
     
@@ -567,8 +566,8 @@ class System(Adjacency):
             
         """
         all_paths = []
-        for start in utilities.iterify(item = starts):
-            for end in utilities.iterify(item = stops):
+        for start in convert.iterify(item = starts):
+            for end in convert.iterify(item = stops):
                 paths = self.walk(start = start, stop = end)
                 if paths:
                     if all(isinstance(path, composites.Node) for path in paths):
@@ -668,7 +667,7 @@ class System(Adjacency):
 #                 values are the nodes themselves.
             
 #         """
-#         return {self.utilities.get_name(item = n): n for n in self.contents.keys()}
+#         return {self.traits.get_name(item = n): n for n in self.contents.keys()}
   
 #     @property
 #     def roots(self) -> list[composites.Node]:
@@ -788,7 +787,7 @@ class System(Adjacency):
 #         if descendants is None:
 #             self.contents[node] = []
 #         elif descendants in self:
-#             self.contents[node] = utilities.iterify(item = descendants)
+#             self.contents[node] = convert.iterify(item = descendants)
 #         else:
 #             missing = [n for n in descendants if n not in self.contents]
 #             raise KeyError(f'descendants {missing} are not in the stored graph.')
@@ -804,7 +803,7 @@ class System(Adjacency):
 #             else:
 #                 missing = [n for n in ancestors if n not in self.contents]
 #                 raise KeyError(f'ancestors {missing} are not in the stored graph.')
-#             for starting in utilities.iterify(item = start):
+#             for starting in convert.iterify(item = start):
 #                 if node not in [starting]:
 #                     self.connect(start = starting, stop = node)                 
 #         return 
@@ -876,7 +875,7 @@ class System(Adjacency):
 #             if start not in self.contents:
 #                 self.add(node = start)
 #             if stop not in self.contents[start]:
-#                 self.contents[start].append(self.utilities.get_name(item = stop))
+#                 self.contents[start].append(self.traits.get_name(item = stop))
 #         return
 
 #     def delete(self, node: composites.Node) -> None:
@@ -921,7 +920,7 @@ class System(Adjacency):
 #         """Adds 'item' to this Graph.
 
 #         This method is roughly equivalent to a dict.update, just adding the
-#         new keys and values to the existing graph. It converts the supported
+#         new keys and values to the existing graph. It transforms the supported
 #         formats to an adjacency list that is then added to the existing 
 #         'contents'.
         
@@ -980,7 +979,7 @@ class System(Adjacency):
 #                 excludables = []
 #             excludables.extend([i for i in self.contents if i not in exclude])
 #             new_graph = copy.deepcopy(self)
-#             for node in utilities.iterify(item = excludables):
+#             for node in convert.iterify(item = excludables):
 #                 new_graph.delete(node = node)
 #         return new_graph
 
@@ -1103,8 +1102,8 @@ class System(Adjacency):
             
 #         """
 #         all_paths = []
-#         for start in utilities.iterify(item = starts):
-#             for end in utilities.iterify(item = stops):
+#         for start in convert.iterify(item = starts):
+#             for end in convert.iterify(item = stops):
 #                 paths = self.walk(
 #                     start = start, 
 #                     stop = end,

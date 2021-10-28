@@ -80,8 +80,7 @@ import inspect
 import types
 from typing import Any, Optional, Type, Union
 
-from . import utilities
-
+from ..repair import modify
 
 @functools.singledispatch
 def contains(
@@ -281,18 +280,19 @@ def get_name(item: Any, default: Optional[str] = None) -> Optional[str]:
     """        
     if isinstance(item, str):
         return item
+    elif (
+        hasattr(item, 'name') 
+        and not inspect.isclass(item)
+        and isinstance(item.name, str)):
+        return item.name
     else:
-        if hasattr(item, 'name') and isinstance(item.name, str):
-            return item.name
-        else:
-            try:
-                return utilities.snakify(item.__name__) # type: ignore
-            except AttributeError:
-                if item.__class__.__name__ is not None:
-                    return utilities.snakify( # type: ignore
-                        item.__class__.__name__) 
-                else:
-                    return default
+        try:
+            return modify.snakify(item.__name__)
+        except AttributeError:
+            if item.__class__.__name__ is not None:
+                return modify.snakify(item.__class__.__name__) 
+            else:
+                return default
 
 def get_properties(
     item: object, 
@@ -385,7 +385,7 @@ def has_methods(
         bool: whether all 'methods' exist in 'items' and are types.MethodType.
         
     """
-    methods = list(utilities.iterify(methods))
+    methods = list(convert.iterify(methods))
     return all(is_method(item = item, attribute = m) for m in methods)
 
 def has_properties(
@@ -402,7 +402,7 @@ def has_properties(
         bool: whether all 'properties' exist in 'items'.
         
     """
-    properties = list(utilities.iterify(properties))
+    properties = list(convert.iterify(properties))
     return all(is_property(item = item, attribute = p) for p in properties)
 
 def has_signatures(
@@ -666,7 +666,7 @@ def name_attributes(
     """
     names = dir(item)
     if not include_private:
-        names = utilities.drop_privates(item = names)
+        names = modify.drop_privates(item = names)
     return names
 
 def name_methods(
@@ -687,7 +687,7 @@ def name_methods(
         a for a in dir(item)
         if is_method(item = item, attribute = a)]
     if not include_private:
-        methods = utilities.drop_privates(item = methods)
+        methods = modify.drop_privates(item = methods)
     return methods
 
 def name_parameters(item: Type[Any]) -> list[str]:
@@ -722,7 +722,7 @@ def name_properties(
         a for a in dir(item)
         if is_property(item = item, attribute = a)]
     if not include_private:
-        properties = utilities.drop_privates(item = properties)
+        properties = modify.drop_privates(item = properties)
     return properties
 
 def name_variables(
@@ -742,7 +742,7 @@ def name_variables(
     """
     names = [a for a in dir(item) if is_variable(item = item, attribute = a)]
     if not include_private:
-        names = utilities.drop_privates(item = names)
+        names = modify.drop_privates(item = names)
     return names
 
 

@@ -49,9 +49,8 @@ import inspect
 from types import FunctionType
 from typing import Any, Optional, Type, Union
 
-import miller
-
-from . import modify
+from ..observe import traits
+from ..repair import modify
 
 
 LINE_BREAK: str = '\n'
@@ -219,7 +218,7 @@ def beautify_object(
         if hasattr(module, '__package__'):
             package = module.__package__
     if facade.name == 'object':
-        name = miller.get_name(item = item)
+        name = traits.get_name(item = item)
     else:
         name = ''
     base = modify.snakify(item.__class__.__name__)

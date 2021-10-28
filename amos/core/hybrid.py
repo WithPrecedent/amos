@@ -30,14 +30,16 @@ from collections.abc import (
 import dataclasses
 from typing import Any, Callable, ClassVar, Optional, Type, TypeVar, Union
 
-from ..base import bunches
+from ..base import mappings
+from ..base import sequences
+from ..observe import traits
+from ..repair import modify
 from . import composites
 from . import check
-from . import utilities
  
  
 @dataclasses.dataclass # type: ignore
-class Pipeline(bunches.Hybrid, composites.Composite, abc.ABC):
+class Pipeline(sequences.Hybrid, composites.Composite, abc.ABC):
     """composites class for pipeline data structures.
     
     Args:
@@ -125,7 +127,7 @@ class Pipeline(bunches.Hybrid, composites.Composite, abc.ABC):
      
  
 @dataclasses.dataclass # type: ignore
-class Pipelines(bunches.Dictionary, composites.Composite, abc.ABC):
+class Pipelines(mappings.Dictionary, composites.Composite, abc.ABC):
     """composites class a collection of Pipeline instances.
         
     Args:
@@ -156,9 +158,9 @@ class Pipelines(bunches.Dictionary, composites.Composite, abc.ABC):
             node (Node): a node to add to the stored composite object.
                 
         """
-        name = name or utilities.get_name(item = item)
+        name = name or traits.get_name(item = item)
         if name in self.contents:
-            name = utilities.uniquify(item = name, dictionary = self.contents)            
+            name = modify.uniquify(key = name, dictionary = self.contents)            
         self.contents[name] = item
         return
 

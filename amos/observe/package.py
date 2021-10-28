@@ -36,7 +36,8 @@ import pathlib
 import types
 from typing import Any, Optional, Union
 
-from . import utilities
+from ..construct import lazy
+from ..repair import convert
 
 
 def get_file_paths(
@@ -87,7 +88,7 @@ def get_modules(
         
     """
     return [
-        utilities.from_file_path(path = p)
+        lazy.from_file_path(path = p)
         for p in get_paths(item = item, recursive = recursive)]
 
 def get_module_paths(
@@ -121,7 +122,7 @@ def get_paths(
         list[pathlib.Path]: a list of all paths in 'item'.
         
     """
-    item = utilities.pathlibify(item = item) 
+    item = convert.pathlibify(item = item) 
     if recursive:
         return  list(folder.rglob(f'*.{suffix}')) # type: ignore
     else:
@@ -137,7 +138,7 @@ def is_file(item: Union[str, pathlib.Path]) -> bool:
         bool: whether 'item' is a non-python-module file.
         
     """
-    item = utilities.pathlibify(item = item)
+    item = convert.pathlibify(item = item)
     return (
         item.exists() 
         and item.is_file() 
@@ -153,7 +154,7 @@ def is_folder(item: Union[str, pathlib.Path]) -> bool:
         bool: whether 'item' is a path to a folder.
         
     """
-    item = utilities.pathlibify(item = item)
+    item = convert.pathlibify(item = item)
     return item.exists() and item.is_dir() # type: ignore
 
 def is_module(item: Union[str, pathlib.Path]) -> bool:
@@ -166,7 +167,7 @@ def is_module(item: Union[str, pathlib.Path]) -> bool:
         bool: whether 'item' is a python-module file.
         
     """
-    item = utilities.pathlibify(item = item)
+    item = convert.pathlibify(item = item)
     return item.exists() and item.is_file() and item.suffix in ['.py'] # type: ignore
 
 def is_path(item: Union[str, pathlib.Path]) -> bool:
@@ -179,7 +180,7 @@ def is_path(item: Union[str, pathlib.Path]) -> bool:
         bool: whether 'item' is a currently existing path.
         
     """
-    item = utilities.pathlibify(item = item)
+    item = convert.pathlibify(item = item)
     return item.exists() # type: ignore
       
 def name_modules(
@@ -195,7 +196,7 @@ def name_modules(
         list[str]: a list of python module names in 'item'.
         
     """
-    item = utilities.pathlibify(item = item)
+    item = convert.pathlibify(item = item)
     kwargs = {'item': item, 'suffix': 'py', 'recursive': recursive}
     paths = [p.stem for p in get_paths(**kwargs)] # type: ignore
     return [str(p) for p in paths]

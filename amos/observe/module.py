@@ -31,7 +31,7 @@ import inspect
 import types
 from typing import Any, Optional, Type, Union
 
-from . import utilities
+from ..repair import modify
 
 
 """ Introspection Tools """
@@ -54,7 +54,7 @@ def get_classes(
         m[1] for m in inspect.getmembers(item, inspect.isclass)
         if m[1].__module__ == item.__name__]
     if not include_private:
-        classes = utilities.drop_privates(item = classes)
+        classes = modify.drop_privates(item = classes)
     return classes
         
 def get_functions(
@@ -75,7 +75,7 @@ def get_functions(
         m[1] for m in inspect.getmembers(item, inspect.isfunction)
         if m[1].__module__ == item.__name__]
     if not include_private:
-        functions = utilities.drop_privates(item = functions)
+        functions = modify.drop_privates(item = functions)
     return functions 
    
 def name_classes(
@@ -96,7 +96,8 @@ def name_classes(
         m[0] for m in inspect.getmembers(item, inspect.isclass)
         if m[1].__module__ == item.__name__]
     if not include_private:
-        names = utilities.drop_privates(item = names)
+        names = modify.drop_privates(item = names)
+    print('test class', names)
     return names
        
 def name_functions(
@@ -117,5 +118,5 @@ def name_functions(
         m[0] for m in inspect.getmembers(item, inspect.isfunction)
         if m[1].__module__ == item.__name__]
     if not include_private:
-        names = utilities.drop_privates(item = names)
+        names = modify.drop_privates(item = names)
     return names

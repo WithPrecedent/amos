@@ -279,7 +279,7 @@ class Delayed(object):
         item = super().__getattribute__(name)
         if isinstance(item, str) and '.' in item:
             imported = from_import_path(item = name)
-            super().__setattr(name) = imported
+            super().__setattr__(name, imported)
             return imported
         else:
             return item

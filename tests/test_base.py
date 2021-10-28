@@ -1,5 +1,5 @@
 """
-test_bunches: tests classes in bunches
+test_amos: tests classes in amos
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2020-2021, Corey Rayburn Yung
 License: Apache-2.0 (https://www.apache.org/licenses/LICENSE-2.0)
@@ -9,7 +9,7 @@ ToDo:
 """
 import dataclasses
 
-import bunches
+import amos
 
 
 @dataclasses.dataclass
@@ -32,7 +32,7 @@ class ThirdClass(object):
 
 def test_proxy():
     wrapped = TestClass()
-    proxy = bunches.Proxy(contents = wrapped)
+    proxy = amos.Proxy(contents = wrapped)
     proxy.id = 4543
     assert proxy.name == 'something'
     assert proxy.id == 4543
@@ -45,7 +45,7 @@ def test_proxy():
     
 
 def test_listing():
-    listing = bunches.Listing(contents = ['a', 'b', 'c'])
+    listing = amos.Listing(contents = ['a', 'b', 'c'])
     assert listing[1] == 'b'
     listing.add(item = 'd')
     assert listing[3] == 'd'
@@ -65,7 +65,7 @@ def test_listing():
     return
 
 def test_hybrid():
-    hybrid = bunches.Hybrid(contents = ['a', 'b', 'c'])
+    hybrid = amos.Hybrid(contents = ['a', 'b', 'c'])
     hybrid.setdefault(value = 'No')
     assert hybrid.get('tree') == 'No'
     assert hybrid[1] == 'b'
@@ -94,11 +94,11 @@ def test_hybrid():
     return
 
 def test_dictionary():
-    alt_created = bunches.Dictionary.fromkeys(
+    alt_created = amos.Dictionary.fromkeys(
         keys = ['a', 'b', 'c'], 
         value = 'tree')
     assert alt_created['a'] == 'tree'
-    dictionary = bunches.Dictionary(
+    dictionary = amos.Dictionary(
         contents = {'a': 'b', 'c': 'd'}, 
         default_factory = 'Nada')
     assert dictionary.get('f') == 'Nada'
@@ -113,7 +113,7 @@ def test_dictionary():
     return
 
 def test_catalog():
-    catalog = bunches.Catalog(contents = {'tester': TestClass})
+    catalog = amos.Catalog(contents = {'tester': TestClass})
     catalog.add({'another': AnotherClass})
     catalog.add({'a_third': ThirdClass()})
     assert 'tester' in catalog
@@ -129,13 +129,14 @@ def test_catalog():
     return
     
 def test_library():
-    library = bunches.Library(classes = bunches.Catalog(contents = {
+    library = amos.Library(classes = amos.Catalog(contents = {
         'tester': TestClass}))
     library.deposit(AnotherClass())
     library.deposit(ThirdClass, 'random_name')
     assert 'tester' in library
     assert issubclass(library['random_name'], ThirdClass)
     assert 'another_class' not in library.instances
+
     assert 'another_class' in library.classes
     assert 'another' in library.instances
     library.remove('random_name')
