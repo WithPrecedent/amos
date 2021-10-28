@@ -29,6 +29,7 @@ import pathlib
 from typing import Any, ClassVar, Optional, Type, Union
 import warnings
 
+from . import helpers
 
 @dataclasses.dataclass
 class Project(denovo.quirks.Element, denovo.quirks.Factory):
@@ -78,7 +79,8 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
     director: fiat.shared.bases.director = None
     stages: Sequence[Union[str, fiat.shared.bases.stage]] = dataclasses.field(
         default_factory = lambda: ['settings', 'outline', 'workflow', 'report'])
-    library: fiat.shared.bases.library = None
+    library: helpers.ProjectLibrary = dataclasses.field(
+        default_factory = helpers.ProjectLibrary)
     data: object = None
     identification: str = None
     automatic: bool = True
