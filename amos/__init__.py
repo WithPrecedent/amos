@@ -53,11 +53,19 @@ __package__ = 'amos'
 __author__ = 'Corey Rayburn Yung'
 
 
-from .utilities import *
+from .base.bunches import *
+from .base.mappings import *
+from .base.sequences import *
 from .construct.configuration import *
 from .construct.create import *
 from .construct.filing import *
 from .construct.lazy import *
+from .core.check import *
+from .core.composites import *
+from .core.convert import *
+from .core.graph import *
+from .core.hybrid import *
+from .core.tree import *
 from .observe.examine import *
 from .observe.module import *
 from .observe.package import *
