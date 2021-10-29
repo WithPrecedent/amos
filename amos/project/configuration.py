@@ -468,7 +468,7 @@ class Section(mappings.Dictionary):
     contents: MutableMapping[Hashable, Any] = dataclasses.field(
         default_factory = dict)
     default_factory: Optional[Any] = None
-    name: str = None
+    name: Optional[str] = None
 
     """ Properties """
     

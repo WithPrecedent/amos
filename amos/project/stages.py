@@ -17,16 +17,21 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-
+    Stage
+    Outline
+    Workflow
+    Product
+    
 """
 from __future__ import annotations
 import collections
-from collections.abc import Hashable, Iterable, MutableMapping, Set
+from collections.abc import Collection, Hashable, MutableMapping, Set
 import dataclasses
 import itertools
 from typing import Any, ClassVar, Optional, Type, Union
 
 from ..base import mappings
+from ..construct import factories
 from ..core import composites
 from ..core import graph
 from ..core import hybrid
@@ -36,15 +41,17 @@ from . import workshop
 
 
 @dataclasses.dataclass
-class Stage(object):
+class Stage(factories.RegistrarFactory):
     """Base classes for project stages.
 
     Args:
-        contents (denovo.configuration.TwoLevel): a two-level nested dict for 
-            storing configuration options. Defaults to en empty dict.
-
+        contents (Optional[Collection]): collection of data at a project stage.
+        registry (ClassVar[MutableMapping[str, Type[Any]]]): key names are str
+            names of a subclass (snake_case by default) and values are the 
+            subclasses. Defaults to an empty dict.  
     """
-    contents: Optional[Iterable] = None
+    contents: Optional[Collection] = None
+    registry: ClassVar[MutableMapping[str, Type[Any]]] = {}
     
 
 @dataclasses.dataclass
@@ -118,7 +125,7 @@ class Outline(mappings.Dictionary, Stage):
         initialization = collections.defaultdict(dict)
         keys = [k.endswith('_parameters') for k in self.keys]
         for key in keys:
-            prefix, suffix = modify.cleave_str(key)
+            prefix, _ = modify.cleave_str(key)
             initialization[prefix] = self[key]
         return initialization
 
@@ -151,10 +158,7 @@ class Outline(mappings.Dictionary, Stage):
     """ Public Methods """
 
     @classmethod
-    def from_settings(
-        cls, 
-        settings: configuration.Settings,
-        **kwargs) -> Outline:
+    def from_settings(cls, item: configuration.Settings, **kwargs) -> Outline:
         """[summary]
 
         Args:
@@ -163,7 +167,7 @@ class Outline(mappings.Dictionary, Stage):
             Outline: derived from 'settings'.
             
         """
-        return workshop.settings_to_outline(settings = settings, **kwargs)
+        return workshop.settings_to_outline(item = item, **kwargs)
 
 
 @dataclasses.dataclass
@@ -192,4 +196,46 @@ class Workflow(graph.System, Stage):
     def cookbook(self) -> hybrid.Pipelines:
         """Returns stored graph as pipelines."""
         return self.pipelines
+    
+    """ Public Methods """
 
+    @classmethod
+    def from_outline(cls, item: Outline, **kwargs) -> Workflow:
+        """[summary]
+
+        Args:
+
+        Returns:
+            Workflow: derived from 'item'.
+            
+        """
+        return workshop.outline_to_workflow(item = item, **kwargs)
+
+@dataclasses.dataclass
+class Product(graph.System, Stage):
+    """Project workflow after it has been implemented.
+    
+    Args:
+        contents (MutableMapping[composites.Node, Set[composites.Node]]): keys 
+            are nodes and values are sets of nodes (or hashable representations 
+            of nodes). Defaults to a defaultdict that has a set for its value 
+            format.
+                  
+    """  
+    contents: MutableMapping[composites.Node, Set[composites.Node]] = (
+        dataclasses.field(
+            default_factory = lambda: collections.defaultdict(set)))
+
+    """ Public Methods """
+
+    @classmethod
+    def from_workflow(cls, item: Workflow, **kwargs) -> Product:
+        """[summary]
+
+        Args:
+
+        Returns:
+            Product: derived from 'item'.
+            
+        """
+        return workshop.workflow_to_product(item = item, **kwargs)
