@@ -37,8 +37,6 @@ Contents:
 
 ToDo:
     Add more flexible tools.
-    Get more_itertools function for 'kwargify' to deal with uneven args and
-        parameters.
     
 """
 from __future__ import annotations

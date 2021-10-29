@@ -153,11 +153,11 @@ class Component(abc.ABC):
 
 @dataclasses.dataclass
 class Task(denovo.structures.Node):
-    """Node type for fiat Workflows.
+    """Node type for amos Workflows.
 
     Args:
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout fiat. For example, if a fiat 
+            internal referencing throughout amos. For example, if an amos 
             instance needs settings from an Outline instance, 'name' should 
             match the appropriate section name in an Outline instance. 
             Defaults to None. 

@@ -9,7 +9,7 @@ import dataclasses
 
 import denovo
 
-import fiat
+import amos
 
 
 @dataclasses.dataclass
@@ -95,6 +95,6 @@ def test_workflow():
 
 
 if __name__ == '__main__':
-    denovo.testing.testify(target_module = fiat.structures, 
+    denovo.testing.testify(target_module = amos.structures, 
                            testing_module = __name__)
     

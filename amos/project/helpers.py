@@ -25,254 +25,19 @@ from collections.abc import (
 import dataclasses
 from typing import Any, ClassVar, Optional, Type, Union
 
+import more_itertools
+
 from ..base import mappings
 from ..repair import modify
 
 
 @dataclasses.dataclass
-class ProjectLibrary(mappings.Library):
-    """Stores project classes and class instances.
-    
-    When searching for matches, instances are prioritized over classes.
-    
-    Args:
-        classes (Catalog): a catalog of stored classes. Defaults to any empty
-            Catalog.
-        instances (Catalog): a catalog of stored class instances. Defaults to an
-            empty Catalog.
-                 
-    """
-    classes: mappings.Catalog = dataclasses.field(
-        default_factory = mappings.Catalog)
-    instances: mappings.Catalog = dataclasses.field(
-        default_factory = mappings.Catalog)
-
-    """ Properties """
-    
-    @property
-    def suffixes(self) -> tuple[str]:
-        """Returns all stored names and naive plurals of those names.
-        
-        Returns:
-            tuple[str]: all names with an 's' added in order to create simple 
-                plurals combined with the stored keys.
-                
-        """
-        plurals = [key + 's' for key in self.instances.keys()]
-        return tuple(list(self.classes.keys()) + plurals)
-    
-    @property
-    def laborers(self) -> tuple[str]:
-        kind = configuration.bases.laborer
-        instances = [
-            k for k, v in self.instances.items() if isinstance(v, kind)]
-        subclasses = [
-            k for k, v in self.subclasses.items() if issubclass(v, kind)]
-        return tuple(instances + subclasses)   
-        
-    @property
-    def manager(self) -> tuple[str]:
-        kind = configuration.bases.manager
-        instances = [
-            k for k, v in self.instances.items() if isinstance(v, kind)]
-        subclasses = [
-            k for k, v in self.subclasses.items() if issubclass(v, kind)]
-        return tuple(instances + subclasses)   
-     
-    @property
-    def tasks(self) -> tuple[str]:
-        kind = configuration.bases.task
-        instances = [
-            k for k, v in self.instances.items() if isinstance(v, kind)]
-        subclasses = [
-            k for k, v in self.subclasses.items() if issubclass(v, kind)]
-        return tuple(instances + subclasses)
-
-    @property
-    def workers(self) -> tuple[str]:
-        kind = configuration.bases.worker
-        instances = [
-            k for k, v in self.instances.items() if isinstance(v, kind)]
-        subclasses = [
-            k for k, v in self.subclasses.items() if issubclass(v, kind)]
-        return tuple(instances + subclasses)
-
-    """ Public Methods """
-    
-    def classify(self, component: str) -> str:
-        """[summary]
-
-        Args:
-            component (str): [description]
-
-        Returns:
-            str: [description]
-            
-        """        
-        if component in self.laborers:
-            return 'laborer'
-        elif component in self.managers:
-            return 'manager'
-        elif component in self.tasks:
-            return 'task'
-        elif component in self.workers:
-            return 'worker'
-        else:
-            raise TypeError(f'{component} is not a recognized type')
-
-    def instance(self, name: Union[str, Sequence[str]], **kwargs) -> Component:
-        """Returns instance of first match of 'name' in stored catalogs.
-        
-        The method prioritizes the 'instances' catalog over 'subclasses' and any
-        passed names in the order they are listed.
-        
-        Args:
-            name (Union[str, Sequence[str]]): [description]
-            
-        Raises:
-            KeyError: [description]
-            
-        Returns:
-            Component: [description]
-            
-        """
-        names = convert.iterify(name)
-        primary = names[0]
-        item = None
-        for key in names:
-            for catalog in ['instances', 'subclasses']:
-                try:
-                    item = getattr(self, catalog)[key]
-                    break
-                except KeyError:
-                    pass
-            if item is not None:
-                break
-        if item is None:
-            raise KeyError(f'No matching item for {name} was found') 
-        elif inspect.isclass(item):
-            instance = item(name = primary, **kwargs)
-        else:
-            instance = copy.deepcopy(item)
-            for key, value in kwargs.items():
-                setattr(instance, key, value)  
-        return instance 
-
-    def parameterify(self, name: Union[str, Sequence[str]]) -> list[str]:
-        """[summary]
-
-        Args:
-            name (Union[str, Sequence[str]]): [description]
-
-        Returns:
-            list[str]: [description]
-            
-        """        
-        component = self.select(name = name)
-        return list(component.__annotations__.keys())
-       
-    def register(self, component: Union[Component, Type[Component]]) -> None:
-        """[summary]
-
-        Args:
-            component (Union[Component, Type[Component]]): [description]
-
-        Raises:
-            TypeError: [description]
-
-        Returns:
-            [type]: [description]
-            
-        """
-        if isinstance(component, Component):
-            instances_key = self._get_instances_key(component = component)
-            self.instances[instances_key] = component
-            subclasses_key = self._get_subclasses_key(component = component)
-            if subclasses_key not in self.subclasses:
-                self.subclasses[subclasses_key] = component.__class__
-        elif inspect.isclass(component) and issubclass(component, Component):
-            subclasses_key = self._get_subclasses_key(component = component)
-            self.subclasses[subclasses_key] = component
-        else:
-            raise TypeError(
-                f'component must be a Component subclass or instance')
-        return self
-    
-    def select(self, name: Union[str, Sequence[str]]) -> Component:
-        """Returns subclass of first match of 'name' in stored catalogs.
-        
-        The method prioritizes the 'subclasses' catalog over 'instances' and any
-        passed names in the order they are listed.
-        
-        Args:
-            name (Union[str, Sequence[str]]): [description]
-            
-        Raises:
-            KeyError: [description]
-            
-        Returns:
-            Component: [description]
-            
-        """
-        names = convert.iterify(name)
-        item = None
-        for key in names:
-            for catalog in ['subclasses', 'instances']:
-                try:
-                    item = getattr(self, catalog)[key]
-                    break
-                except KeyError:
-                    pass
-            if item is not None:
-                break
-        if item is None:
-            raise KeyError(f'No matching item for {name} was found') 
-        elif inspect.isclass(item):
-            component = item
-        else:
-            component = item.__class__  
-        return component 
-    
-    """ Private Methods """
-    
-    def _get_instances_key(self, 
-        component: Union[Component, Type[Component]]) -> str:
-        """Returns a snakecase key of the class name.
-        
-        Returns:
-            str: the snakecase name of the class.
-            
-        """
-        try:
-            key = component.name 
-        except AttributeError:
-            try:
-                key = modify.snakify(component.__name__) 
-            except AttributeError:
-                key = modify.snakify(component.__class__.__name__)
-        return key
-    
-    def _get_subclasses_key(self, 
-        component: Union[Component, Type[Component]]) -> str:
-        """Returns a snakecase key of the class name.
-        
-        Returns:
-            str: the snakecase name of the class.
-            
-        """
-        try:
-            key = modify.snakify(component.__name__) 
-        except AttributeError:
-            key = modify.snakify(component.__class__.__name__)
-        return key      
-
-@dataclasses.dataclass
 class Director(collections.abc.Iterator):
-    """Iterator for fiat Project instances.
+    """Iterator for amos Project instances.
     
     
     """
-    project: fiat.Project = None
+    project: amos.Project = None
     workshop: ModuleType = denovo.project.workshop
 
     """ Initialization Methods """
@@ -405,7 +170,7 @@ class Parameters(denovo.base.Lexicon):
     
     The use of Parameters is entirely optional, but it provides a handy tool
     for aggregating data from an array of sources, including those which only 
-    become apparent during execution of an fiat project, to create a unified 
+    become apparent during execution of an amos project, to create a unified 
     set of implementation parameters.
     
     Parameters can be unpacked with '**', which will turn the 'contents' 
@@ -413,23 +178,23 @@ class Parameters(denovo.base.Lexicon):
     replacement for a dict that would ordinarily be used for accumulating 
     keyword arguments.
     
-    If an fiat class uses a Parameters instance, the 'finalize' method should
+    If an amos class uses a Parameters instance, the 'finalize' method should
     be called before that instance's 'implement' method in order for each of the
     parameter types to be incorporated.
     
     Args:
-        contents (Mapping[str, Any]): keyword parameters for use by an fiat
+        contents (Mapping[str, Any]): keyword parameters for use by an amos
             classes' 'implement' method. The 'finalize' method should be called
             for 'contents' to be fully populated from all sources. Defaults to
             an empty dict.
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout fiat. To properly match parameters
+            internal referencing throughout amos. To properly match parameters
             in an Outline instance, 'name' should be the prefix to "_parameters"
             as a section name in an Outline instance. Defaults to None. 
         default (Mapping[str, Any]): default parameters that will be used if 
             they are not overridden. Defaults to an empty dict.
         implementation (Mapping[str, str]): parameters with values that can only 
-            be determined at runtime due to dynamic nature of fiat and its 
+            be determined at runtime due to dynamic nature of amos and its 
             workflows. The keys should be the names of the parameters and the 
             values should be attributes or items in 'contents' of 'project' 
             passed to the 'finalize' method. Defaults to an emtpy dict.
@@ -450,11 +215,11 @@ class Parameters(denovo.base.Lexicon):
       
     """ Public Methods """
 
-    def finalize(self, project: fiat.Project, **kwargs) -> None:
+    def finalize(self, project: amos.Project, **kwargs) -> None:
         """Combines and selects final parameters into 'contents'.
 
         Args:
-            project (fiat.Project): instance from which implementation and 
+            project (amos.Project): instance from which implementation and 
                 settings parameters can be derived.
             
         """
@@ -480,11 +245,11 @@ class Parameters(denovo.base.Lexicon):
     """ Private Methods """
      
     def _from_settings(self, 
-        settings: fiat.options.Outline) -> dict[str, Any]: 
+        settings: amos.options.Outline) -> dict[str, Any]: 
         """Returns any applicable parameters from 'settings'.
 
         Args:
-            settings (fiat.options.Outline): instance with possible 
+            settings (amos.options.Outline): instance with possible 
                 parameters.
 
         Returns:
@@ -505,11 +270,11 @@ class Parameters(denovo.base.Lexicon):
                     parameters = {}
         return parameters
    
-    def _at_runtime(self, project: fiat.Project) -> dict[str, Any]:
+    def _at_runtime(self, project: amos.Project) -> dict[str, Any]:
         """Adds implementation parameters to 'contents'.
 
         Args:
-            project (fiat.Project): instance from which implementation 
+            project (amos.Project): instance from which implementation 
                 parameters can be derived.
 
         Returns:
@@ -538,11 +303,11 @@ class Stage(denovo.framework.Keystone, abc.ABC):
 
 @dataclasses.dataclass
 class Worker(denovo.quirks.Element, collections.abc.Iterable, abc.ABC):
-    """Keystone class for parts of an fiat workflow.
+    """Keystone class for parts of an amos workflow.
 
     Args:
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout fiat. For example, if a fiat 
+            internal referencing throughout amos. For example, if an amos 
             instance needs settings from an Outline instance, 'name' should 
             match the appropriate section name in an Outline instance. Defaults 
             to None. 
@@ -572,15 +337,15 @@ class Worker(denovo.quirks.Element, collections.abc.Iterable, abc.ABC):
 
     """ Public Methods """  
     
-    def implement(self, project: fiat.Project, **kwargs) -> fiat.Project:
+    def implement(self, project: amos.Project, **kwargs) -> amos.Project:
         """Applies 'contents' to 'project'.
         
         Args:
-            project (fiat.Project): instance from which data needed for 
+            project (amos.Project): instance from which data needed for 
                 implementation should be derived and all results be added.
 
         Returns:
-            fiat.Project: with possible changes made.
+            amos.Project: with possible changes made.
             
         """
         return self._implement_in_serial(project = project, **kwargs)    
@@ -603,12 +368,12 @@ class Worker(denovo.quirks.Element, collections.abc.Iterable, abc.ABC):
     """ Private Methods """
 
     def _implement_in_serial(self, 
-                             project: fiat.Project,
-                             **kwargs) -> fiat.Project:
+                             project: amos.Project,
+                             **kwargs) -> amos.Project:
         """Applies stored nodes to 'project' in order.
 
         Args:
-            project (Project): fiat project to apply changes to and/or
+            project (Project): amos project to apply changes to and/or
                 gather needed data from.
                 
         Returns:

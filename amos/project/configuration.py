@@ -25,8 +25,7 @@ ToDo:
        
 """
 from __future__ import annotations
-from collections.abc import (
-    Hashable, Iterator, Mapping, MutableMapping, Sequence)
+from collections.abc import Hashable, Mapping, MutableMapping, Sequence
 import configparser
 import dataclasses
 import importlib
@@ -34,13 +33,14 @@ import importlib.util
 import pathlib
 from typing import Any, ClassVar, Optional, Type, Union
 
-from ..base import bunches
+from ..base import mappings
+from ..repair import convert
 
 
 """ Configuration System"""
 
 @dataclasses.dataclass
-class Settings(MutableMapping): # type: ignore
+class Settings(mappings.Dictionary): # type: ignore
     """Loads and stores configuration settings.
 
     To create settings instance, a user can pass as the 'contents' parameter a:
@@ -82,7 +82,8 @@ class Settings(MutableMapping): # type: ignore
     """
     contents: MutableMapping[Hashable, Any] = dataclasses.field(
         default_factory = dict)
-    default_factory: Any = dataclasses.field(default_factory = lambda: dict)
+    default_factory: Optional[Any] = dataclasses.field(
+        default_factory = dict)
     default: Mapping[Hashable, Any] = dataclasses.field(
         default_factory = dict)
     infer_types: bool = True
@@ -426,19 +427,7 @@ class Settings(MutableMapping): # type: ignore
         return new_contents
 
     """ Dunder Methods """
-    
-    def __getitem__(self, key: Hashable) -> Any:
-        """Returns value for 'key' in 'contents'.
 
-        Args:
-            key (Hashable): key in 'contents' for which a value is sought.
-
-        Returns:
-            Any: value stored in 'contents'.
-
-        """
-        return self.contents[key]
-    
     def __setitem__(self, key: str, value: Mapping[str, Any]) -> None:
         """Creates new key/value pair(s) in a section of the active dictionary.
 
@@ -460,32 +449,3 @@ class Settings(MutableMapping): # type: ignore
                 raise TypeError(
                     'key must be a str and value must be a dict type')
         return
-
-    def __delitem__(self, key: Hashable) -> None:
-        """Deletes 'key' in 'contents'.
-
-        Args:
-            key (Hashable): key in 'contents' to delete the key/value pair.
-
-        """
-        del self.contents[key]
-        return
-    
-    def __iter__(self) -> Iterator[Any]:
-        """Returns iterable of 'contents'.
-
-        Returns:
-            Iterator: of 'contents'.
-
-        """
-        return iter(self.contents)
-
-    def __len__(self) -> int:
-        """Returns length of 'contents'.
-
-        Returns:
-            int: length of 'contents'.
-
-        """
-        return len(self.contents)
-    

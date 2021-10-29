@@ -1,5 +1,5 @@
 """
-interface: primary access point and interface for a fiat project
+interface: primary access point and interface for an amos project
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2020-2021, Corey Rayburn Yung
 License: Apache-2.0
@@ -29,15 +29,22 @@ import pathlib
 from typing import Any, ClassVar, Optional, Type, Union
 import warnings
 
+import more_itertools
+
+from ..core import composites
+from . import configuration
+from . import filing
 from . import helpers
+from . import stages
+
 
 @dataclasses.dataclass
-class Project(denovo.quirks.Element, denovo.quirks.Factory):
-    """Interface for a fiat project.
+class Project(composites.Node):
+    """Interface for an amos project.
     
     Args:
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout fiat. For example, if a fiat 
+            internal referencing throughout amos. For example, if an amos 
             instance needs outline from an Outline instance, 'name' should 
             match the appropriate section name in an Outline instance. Defaults 
             to None. 
@@ -49,7 +56,7 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
         clerk (ClerkSources): a Clerk-compatible class or a str or pathlib.Path 
             containing the full path of where the root folder should be located 
             for file input and output. A 'clerk' must contain all file path and 
-            import/export methods for use throughout fiat. Defaults to the 
+            import/export methods for use throughout amos. Defaults to the 
             default Clerk instance.    
         stages (ClassVar[Sequence[Union[str, core.Stage]]]): a list of Stages or 
             strings corresponding to keys in 'core.library'. Defaults to a list 
@@ -57,7 +64,7 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
         data (object): any data object for the project to be applied. If it is 
             None, an instance will still execute its workflow, but it won't
             apply it to any external data. Defaults to None.
-        identification (str): a unique identification name for a fiat Project. 
+        identification (str): a unique identification name for an amos Project. 
             The name is used for creating file folders related to the project. 
             If it is None, a str will be created from 'name' and the date and 
             time. Defaults to None.   
@@ -74,43 +81,33 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
             
     """
     name: str = None
-    settings: fiat.shared.bases.settings = None
-    clerk: fiat.shared.bases.clerk = None
-    director: fiat.shared.bases.director = None
-    stages: Sequence[Union[str, fiat.shared.bases.stage]] = dataclasses.field(
-        default_factory = lambda: ['settings', 'outline', 'workflow', 'report'])
+    settings: Optional[configuration.Settings] = None
+    clerk: Optional[filing.Clerk] = None
+    director: Optional[helpers.Director] = None
+    outline: Optional[Union[Type[stages.Outline], stages.Outline]] = None
+    workflow: Optional[Union[Type[stages.Workflow], stages.Workflow]] = None
+    product: Optional[Union[Type[stages.Product], stages.Product]] = None
     library: helpers.ProjectLibrary = dataclasses.field(
         default_factory = helpers.ProjectLibrary)
-    data: object = None
-    identification: str = None
+    data: Optional[object] = None
+    identification: Optional[str] = None
     automatic: bool = True
-    sources: ClassVar[Mapping[Type, str]] = {(fiat.shared.bases.settings,
-                                              dict, 
-                                              pathlib.Path, 
-                                              str): 'settings'}
-    validations: ClassVar[MutableSequence[str]] = ['outline'
-                                                   'identification',
-                                                   'clerk',
-                                                   'stages',
-                                                   'director',
-                                                   'library',
-                                                   'workflow']
     
     """ Initialization Methods """
 
     def __post_init__(self) -> None:
         """Initializes class instance attributes."""
+        # Removes various python warnings from console output.
+        warnings.filterwarnings('ignore')
         # Calls parent and/or mixin initialization method(s).
         try:
             super().__post_init__()
         except AttributeError:
             pass
-        # Removes various python warnings from console output.
-        warnings.filterwarnings('ignore')
         # Calls validation methods.
         for validation in self._validations:
             try:
-                getattr(self, f'_validate{validation}')()
+                getattr(self, f'_validate_{validation}')()
             except AttributeError:
                 pass
         # Sets multiprocessing technique, if necessary.
@@ -123,7 +120,7 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
 
     @classmethod
     def from_settings(cls, 
-                      settings: fiat.shared.SettingsSources, 
+                      settings: amos.shared.SettingsSources, 
                       **kwargs) -> Project:
         """[summary]
 
@@ -135,14 +132,14 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
             
         """        
         
-        if isinstance(settings, fiat.shared.bases.settings):
-            outline = fiat.shared.bases.outline.create(source = settings)
+        if isinstance(settings, amos.shared.bases.settings):
+            outline = amos.shared.bases.outline.create(source = settings)
         elif (inspect.isclass(settings) 
-              and issubclass(settings, fiat.shared.bases.settings)):
-            outline = fiat.shared.bases.outline.create(source = settings())
+              and issubclass(settings, amos.shared.bases.settings)):
+            outline = amos.shared.bases.outline.create(source = settings())
         else:
-            settings = fiat.shared.bases.settings.create(source = settings)
-            outline = fiat.shared.bases.outline.create(source = settings)
+            settings = amos.shared.bases.settings.create(source = settings)
+            outline = amos.shared.bases.outline.create(source = settings)
         return cls(outline = outline, **kwargs)
         
     """ Public Methods """
@@ -166,13 +163,13 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
             [type]: [description]
             
         """
-        attributes = dir(fiat.shared)
+        attributes = dir(amos.shared)
         constants = [a.is_upper() for a in attributes]
-        relevant = ['general', 'denovo', 'fiat', self.name]
+        relevant = ['general', 'denovo', 'amos', self.name]
         sections = {k: v for k, v in self.settings.items() if k in relevant}
         constant_keys = [k for k in sections.keys() if k.upper() in constants]
         for key in constant_keys:
-            setattr(fiat.shared, key.upper(), sections[key])
+            setattr(amos.shared, key.upper(), sections[key])
         return self
                   
     def _validate_outline(self) -> None:
@@ -183,12 +180,12 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
         
         """
         if self.outline is None:
-            self.outline = fiat.shared.bases.outline()
+            self.outline = amos.shared.bases.outline()
         elif isinstance(self.outline, (str, pathlib.Path, dict)):
-            self.outline = fiat.create(source = self.outline)
-        elif isinstance(self.outline, fiat.shared.bases.settings):
-            if not isinstance(self.outline, fiat.shared.bases.outline):
-                self.outline = fiat.shared.bases.outline.create(
+            self.outline = amos.create(source = self.outline)
+        elif isinstance(self.outline, amos.shared.bases.settings):
+            if not isinstance(self.outline, amos.shared.bases.outline):
+                self.outline = amos.shared.bases.outline.create(
                     source = self.outline.contents)
         else:
             raise TypeError('outline must be a Settings, str, pathlib.Path, '
@@ -212,8 +209,8 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
     def _validate_clerk(self) -> None:
         """Creates or validates 'clerk'."""
         if isinstance(self.clerk, (str, pathlib.Path, type(None))):
-            self.clerk = fiat.shared.bases.clerk(settings = self.outline)
-        elif isinstance(self.clerk, fiat.shared.bases.clerk):
+            self.clerk = amos.shared.bases.clerk(settings = self.outline)
+        elif isinstance(self.clerk, amos.shared.bases.clerk):
             self.clerk.settings = self.outline
             self.clerk._add_settings()
         else:
@@ -224,22 +221,22 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
     def _validate_director(self) -> None:
         """Creates or validates 'director'."""
         if self.director is None:
-            self.director = fiat.shared.bases.director(project = self)
-        elif not isinstance(self.director, fiat.shared.bases.director):
+            self.director = amos.shared.bases.director(project = self)
+        elif not isinstance(self.director, amos.shared.bases.director):
             raise TypeError('director must be a Director or None type')
         return self
     
     def _validate_workflow(self) -> None:
         """Creates or validates 'library'."""
         if self.workflow is None:
-            self.workflow = fiat.shared.bases.workflow(project = self)
-        elif not isinstance(self.workflow, fiat.shared.bases.workflow):
+            self.workflow = amos.shared.bases.workflow(project = self)
+        elif not isinstance(self.workflow, amos.shared.bases.workflow):
             raise TypeError('workflow must be a Workflow or None type')
         return self
 
     def _set_parallelization(self) -> None:
         """Sets multiprocessing method based on 'outline'."""
-        if fiat.shared.PARALLELIZE and not globals()['multiprocessing']:
+        if amos.shared.PARALLELIZE and not globals()['multiprocessing']:
             import multiprocessing
             multiprocessing.set_start_method('spawn') 
         return self
@@ -265,11 +262,11 @@ class Project(denovo.quirks.Element, denovo.quirks.Factory):
 
 @dataclasses.dataclass
 class Director(collections.abc.Iterator):
-    """Iterator for fiat Project instances.
+    """Iterator for amos Project instances.
     
     
     """
-    project: fiat.Project = None
+    project: amos.Project = None
     workshop: ModuleType = denovo.project.workshop
 
     """ Initialization Methods """
@@ -402,7 +399,7 @@ class Parameters(denovo.base.Lexicon):
     
     The use of Parameters is entirely optional, but it provides a handy tool
     for aggregating data from an array of sources, including those which only 
-    become apparent during execution of an fiat project, to create a unified 
+    become apparent during execution of an amos project, to create a unified 
     set of implementation parameters.
     
     Parameters can be unpacked with '**', which will turn the 'contents' 
@@ -410,23 +407,23 @@ class Parameters(denovo.base.Lexicon):
     replacement for a dict that would ordinarily be used for accumulating 
     keyword arguments.
     
-    If an fiat class uses a Parameters instance, the 'finalize' method should
+    If an amos class uses a Parameters instance, the 'finalize' method should
     be called before that instance's 'implement' method in order for each of the
     parameter types to be incorporated.
     
     Args:
-        contents (Mapping[str, Any]): keyword parameters for use by an fiat
+        contents (Mapping[str, Any]): keyword parameters for use by an amos
             classes' 'implement' method. The 'finalize' method should be called
             for 'contents' to be fully populated from all sources. Defaults to
             an empty dict.
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout fiat. To properly match parameters
+            internal referencing throughout amos. To properly match parameters
             in an Outline instance, 'name' should be the prefix to "_parameters"
             as a section name in an Outline instance. Defaults to None. 
         default (Mapping[str, Any]): default parameters that will be used if 
             they are not overridden. Defaults to an empty dict.
         implementation (Mapping[str, str]): parameters with values that can only 
-            be determined at runtime due to dynamic nature of fiat and its 
+            be determined at runtime due to dynamic nature of amos and its 
             workflows. The keys should be the names of the parameters and the 
             values should be attributes or items in 'contents' of 'project' 
             passed to the 'finalize' method. Defaults to an emtpy dict.
@@ -447,11 +444,11 @@ class Parameters(denovo.base.Lexicon):
       
     """ Public Methods """
 
-    def finalize(self, project: fiat.Project, **kwargs) -> None:
+    def finalize(self, project: amos.Project, **kwargs) -> None:
         """Combines and selects final parameters into 'contents'.
 
         Args:
-            project (fiat.Project): instance from which implementation and 
+            project (amos.Project): instance from which implementation and 
                 settings parameters can be derived.
             
         """
@@ -477,11 +474,11 @@ class Parameters(denovo.base.Lexicon):
     """ Private Methods """
      
     def _from_settings(self, 
-        settings: fiat.options.Outline) -> dict[str, Any]: 
+        settings: amos.options.Outline) -> dict[str, Any]: 
         """Returns any applicable parameters from 'settings'.
 
         Args:
-            settings (fiat.options.Outline): instance with possible 
+            settings (amos.options.Outline): instance with possible 
                 parameters.
 
         Returns:
@@ -502,11 +499,11 @@ class Parameters(denovo.base.Lexicon):
                     parameters = {}
         return parameters
    
-    def _at_runtime(self, project: fiat.Project) -> dict[str, Any]:
+    def _at_runtime(self, project: amos.Project) -> dict[str, Any]:
         """Adds implementation parameters to 'contents'.
 
         Args:
-            project (fiat.Project): instance from which implementation 
+            project (amos.Project): instance from which implementation 
                 parameters can be derived.
 
         Returns:
@@ -535,11 +532,11 @@ class Stage(denovo.framework.Keystone, abc.ABC):
 
 @dataclasses.dataclass
 class Worker(denovo.quirks.Element, collections.abc.Iterable, abc.ABC):
-    """Keystone class for parts of an fiat workflow.
+    """Keystone class for parts of an amos workflow.
 
     Args:
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout fiat. For example, if a fiat 
+            internal referencing throughout amos. For example, if an amos 
             instance needs settings from an Outline instance, 'name' should 
             match the appropriate section name in an Outline instance. Defaults 
             to None. 
@@ -569,15 +566,15 @@ class Worker(denovo.quirks.Element, collections.abc.Iterable, abc.ABC):
 
     """ Public Methods """  
     
-    def implement(self, project: fiat.Project, **kwargs) -> fiat.Project:
+    def implement(self, project: amos.Project, **kwargs) -> amos.Project:
         """Applies 'contents' to 'project'.
         
         Args:
-            project (fiat.Project): instance from which data needed for 
+            project (amos.Project): instance from which data needed for 
                 implementation should be derived and all results be added.
 
         Returns:
-            fiat.Project: with possible changes made.
+            amos.Project: with possible changes made.
             
         """
         return self._implement_in_serial(project = project, **kwargs)    
@@ -600,12 +597,12 @@ class Worker(denovo.quirks.Element, collections.abc.Iterable, abc.ABC):
     """ Private Methods """
 
     def _implement_in_serial(self, 
-                             project: fiat.Project,
-                             **kwargs) -> fiat.Project:
+                             project: amos.Project,
+                             **kwargs) -> amos.Project:
         """Applies stored nodes to 'project' in order.
 
         Args:
-            project (Project): fiat project to apply changes to and/or
+            project (Project): amos project to apply changes to and/or
                 gather needed data from.
                 
         Returns:

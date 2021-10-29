@@ -35,9 +35,246 @@ import more_itertools
 
 
 
+@dataclasses.dataclass
+class ProjectLibrary(mappings.Library):
+    """Stores project classes and class instances.
+    
+    When searching for matches, instances are prioritized over classes.
+    
+    Args:
+        classes (Catalog): a catalog of stored classes. Defaults to any empty
+            Catalog.
+        instances (Catalog): a catalog of stored class instances. Defaults to an
+            empty Catalog.
+                 
+    """
+    classes: mappings.Catalog = dataclasses.field(
+        default_factory = mappings.Catalog)
+    instances: mappings.Catalog = dataclasses.field(
+        default_factory = mappings.Catalog)
+
+    """ Properties """
+    
+    @property
+    def suffixes(self) -> tuple[str]:
+        """Returns all stored names and naive plurals of those names.
+        
+        Returns:
+            tuple[str]: all names with an 's' added in order to create simple 
+                plurals combined with the stored keys.
+                
+        """
+        plurals = [key + 's' for key in self.instances.keys()]
+        return tuple(list(self.classes.keys()) + plurals)
+    
+    @property
+    def laborers(self) -> tuple[str]:
+        kind = configuration.bases.laborer
+        instances = [
+            k for k, v in self.instances.items() if isinstance(v, kind)]
+        subclasses = [
+            k for k, v in self.subclasses.items() if issubclass(v, kind)]
+        return tuple(instances + subclasses)   
+        
+    @property
+    def manager(self) -> tuple[str]:
+        kind = configuration.bases.manager
+        instances = [
+            k for k, v in self.instances.items() if isinstance(v, kind)]
+        subclasses = [
+            k for k, v in self.subclasses.items() if issubclass(v, kind)]
+        return tuple(instances + subclasses)   
+     
+    @property
+    def tasks(self) -> tuple[str]:
+        kind = configuration.bases.task
+        instances = [
+            k for k, v in self.instances.items() if isinstance(v, kind)]
+        subclasses = [
+            k for k, v in self.subclasses.items() if issubclass(v, kind)]
+        return tuple(instances + subclasses)
+
+    @property
+    def workers(self) -> tuple[str]:
+        kind = configuration.bases.worker
+        instances = [
+            k for k, v in self.instances.items() if isinstance(v, kind)]
+        subclasses = [
+            k for k, v in self.subclasses.items() if issubclass(v, kind)]
+        return tuple(instances + subclasses)
+
+    """ Public Methods """
+    
+    def classify(self, component: str) -> str:
+        """[summary]
+
+        Args:
+            component (str): [description]
+
+        Returns:
+            str: [description]
+            
+        """        
+        if component in self.laborers:
+            return 'laborer'
+        elif component in self.managers:
+            return 'manager'
+        elif component in self.tasks:
+            return 'task'
+        elif component in self.workers:
+            return 'worker'
+        else:
+            raise TypeError(f'{component} is not a recognized type')
+
+    def instance(self, name: Union[str, Sequence[str]], **kwargs) -> Component:
+        """Returns instance of first match of 'name' in stored catalogs.
+        
+        The method prioritizes the 'instances' catalog over 'subclasses' and any
+        passed names in the order they are listed.
+        
+        Args:
+            name (Union[str, Sequence[str]]): [description]
+            
+        Raises:
+            KeyError: [description]
+            
+        Returns:
+            Component: [description]
+            
+        """
+        names = convert.iterify(name)
+        primary = names[0]
+        item = None
+        for key in names:
+            for catalog in ['instances', 'subclasses']:
+                try:
+                    item = getattr(self, catalog)[key]
+                    break
+                except KeyError:
+                    pass
+            if item is not None:
+                break
+        if item is None:
+            raise KeyError(f'No matching item for {name} was found') 
+        elif inspect.isclass(item):
+            instance = item(name = primary, **kwargs)
+        else:
+            instance = copy.deepcopy(item)
+            for key, value in kwargs.items():
+                setattr(instance, key, value)  
+        return instance 
+
+    def parameterify(self, name: Union[str, Sequence[str]]) -> list[str]:
+        """[summary]
+
+        Args:
+            name (Union[str, Sequence[str]]): [description]
+
+        Returns:
+            list[str]: [description]
+            
+        """        
+        component = self.select(name = name)
+        return list(component.__annotations__.keys())
+       
+    def register(self, component: Union[Component, Type[Component]]) -> None:
+        """[summary]
+
+        Args:
+            component (Union[Component, Type[Component]]): [description]
+
+        Raises:
+            TypeError: [description]
+
+        Returns:
+            [type]: [description]
+            
+        """
+        if isinstance(component, Component):
+            instances_key = self._get_instances_key(component = component)
+            self.instances[instances_key] = component
+            subclasses_key = self._get_subclasses_key(component = component)
+            if subclasses_key not in self.subclasses:
+                self.subclasses[subclasses_key] = component.__class__
+        elif inspect.isclass(component) and issubclass(component, Component):
+            subclasses_key = self._get_subclasses_key(component = component)
+            self.subclasses[subclasses_key] = component
+        else:
+            raise TypeError(
+                f'component must be a Component subclass or instance')
+        return self
+    
+    def select(self, name: Union[str, Sequence[str]]) -> Component:
+        """Returns subclass of first match of 'name' in stored catalogs.
+        
+        The method prioritizes the 'subclasses' catalog over 'instances' and any
+        passed names in the order they are listed.
+        
+        Args:
+            name (Union[str, Sequence[str]]): [description]
+            
+        Raises:
+            KeyError: [description]
+            
+        Returns:
+            Component: [description]
+            
+        """
+        names = convert.iterify(name)
+        item = None
+        for key in names:
+            for catalog in ['subclasses', 'instances']:
+                try:
+                    item = getattr(self, catalog)[key]
+                    break
+                except KeyError:
+                    pass
+            if item is not None:
+                break
+        if item is None:
+            raise KeyError(f'No matching item for {name} was found') 
+        elif inspect.isclass(item):
+            component = item
+        else:
+            component = item.__class__  
+        return component 
+    
+    """ Private Methods """
+    
+    def _get_instances_key(self, 
+        component: Union[Component, Type[Component]]) -> str:
+        """Returns a snakecase key of the class name.
+        
+        Returns:
+            str: the snakecase name of the class.
+            
+        """
+        try:
+            key = component.name 
+        except AttributeError:
+            try:
+                key = modify.snakify(component.__name__) 
+            except AttributeError:
+                key = modify.snakify(component.__class__.__name__)
+        return key
+    
+    def _get_subclasses_key(self, 
+        component: Union[Component, Type[Component]]) -> str:
+        """Returns a snakecase key of the class name.
+        
+        Returns:
+            str: the snakecase name of the class.
+            
+        """
+        try:
+            key = modify.snakify(component.__name__) 
+        except AttributeError:
+            key = modify.snakify(component.__class__.__name__)
+        return key      
+
 
 @dataclasses.dataclass
-class Laborer(graph.Graph, fiat.base.Worker):
+class Laborer(graph.Graph, amos.base.Worker):
     """Keystone class for parts of an denovo workflow.
 
     Args:

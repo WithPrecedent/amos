@@ -20,23 +20,22 @@ Contents:
 
 """
 from __future__ import annotations
-import collections.abc
+from collections.abc import Mapping, MutableMapping, Set
 import copy
 import dataclasses
 import itertools
 from types import ModuleType
-from typing import (Any, Callable, ClassVar, dict, Hashable, Iterable, list, 
-                    Mapping, MutableMapping, MutableSequence, Optional, 
-                    Sequence, Set, tuple, Type, Union)
+from typing import Any, ClassVar, Optional, Type, Union
 
-import denovo
-import more_itertools
-
-import fiat
-
+from ..base import mappings
+from ..core import composites
+from ..core import graph
+from ..repair import convert
+from ..repair import modify
+from ..report import recap
 
 @dataclasses.dataclass
-class Section(denovo.quirks.Factory, denovo.containers.Lexicon):
+class Section(mappings.Dictionary):
     """Section of Outline with connections.
 
     Args:
@@ -49,8 +48,6 @@ class Section(denovo.quirks.Factory, denovo.containers.Lexicon):
     contents: dict[str, Any] = dataclasses.field(default_factory = dict)
     default_factory: Any = None
     name: str = None
-    sources: ClassVar[Mapping[Type, str]] = {
-        fiat.shared.bases.settings : 'settings'}
 
     """ Properties """
     
@@ -71,7 +68,7 @@ class Section(denovo.quirks.Factory, denovo.containers.Lexicon):
         key_nodes = list(self.connections.keys())
         value_nodes = list(
             itertools.chain.from_iterable(self.connections.values()))
-        return denovo.tools.deduplicate(item = key_nodes + value_nodes) 
+        return modify.deduplicate(item = key_nodes + value_nodes) 
 
     @property
     def other(self) -> dict[str, str]:
@@ -85,13 +82,13 @@ class Section(denovo.quirks.Factory, denovo.containers.Lexicon):
 
     @classmethod
     def from_settings(cls, 
-                      settings: fiat.shared.bases.settings,
+                      settings: amos.shared.bases.settings,
                       name: str,
                       **kwargs) -> Section:
         """[summary]
 
         Args:
-            settings (fiat.shared.bases.settings): [description]
+            settings (amos.shared.bases.settings): [description]
             name (str):
 
         Returns:
@@ -112,7 +109,7 @@ class Section(denovo.quirks.Factory, denovo.containers.Lexicon):
         bases = {}
         for key in self.connections.keys():
             prefix, suffix = denovo.tools.divide_string(key)
-            values = denovo.tools.listify(self[key])
+            values = convert.iterify(self[key])
             if suffix.endswith('s'):
                 base = suffix[:-1]
             else:
@@ -131,7 +128,7 @@ class Section(denovo.quirks.Factory, denovo.containers.Lexicon):
         keys = [k for k in self.keys() if k.endswith(self.suffixes)]
         for key in keys:
             prefix, suffix = denovo.tools.divide_string(key)
-            values = denovo.tools.listify(self[key])
+            values = convert.iterify(self[key])
             if prefix == suffix:
                 if prefix in connections:
                     connections[self.name].extend(values)
@@ -172,27 +169,20 @@ class Section(denovo.quirks.Factory, denovo.containers.Lexicon):
         
 
 @dataclasses.dataclass
-class Outline(denovo.quirks.Factory, denovo.containers.Lexicon):
-    """Organized fiat project settings with convenient accessors.
+class Outline(mappings.Dictionary):
+    """Organized amos project settings with convenient accessors.
 
     Args:
         contents (denovo.configuration.TwoLevel): a two-level nested dict for 
             storing configuration options. Defaults to en empty dict.
         default (Any): default value to return when the 'get' method is used.
             Defaults to an empty dict.
-        default (Mapping[str, Mapping[str]]): any default options that should
-            be used when a user does not provide the corresponding options in 
-            their configuration settings. Defaults to an empty dict.
-        infer_types (bool): whether values in 'contents' are converted to other 
-            datatypes (True) or left alone (False). If 'contents' was imported 
-            from an .ini file, all values will be strings. Defaults to True.
+
 
     """
     contents: MutableMapping[str, Section] = dataclasses.field(
         default_factory = dict)
     default_factory: Any = None
-    sources: ClassVar[Mapping[Type, str]] = {
-        fiat.shared.bases.settings : 'settings'}
     
     """ Properties """
     
@@ -227,7 +217,7 @@ class Outline(denovo.quirks.Factory, denovo.containers.Lexicon):
 
     @classmethod
     def from_settings(cls, 
-                      settings: fiat.shared.bases.settings,
+                      settings: amos.shared.bases.settings,
                       **kwargs) -> Outline:
         """[summary]
 
@@ -237,7 +227,7 @@ class Outline(denovo.quirks.Factory, denovo.containers.Lexicon):
             Outline: derived from 'settings'.
             
         """
-        return fiat.workshop.settings_to_outline(settings = settings, **kwargs)
+        return amos.workshop.settings_to_outline(settings = settings, **kwargs)
              
     """ Private Methods """
 
@@ -309,7 +299,7 @@ class Outline(denovo.quirks.Factory, denovo.containers.Lexicon):
 
 
 @dataclasses.dataclass
-class Workflow(denovo.structures.System):
+class Workflow(graph.System):
     """Project workflow implementation as a directed acyclic graph (DAG).
     
     Workflow stores its graph as an adjacency list. Despite being called an 
@@ -321,21 +311,22 @@ class Workflow(denovo.structures.System):
     value for a missing key. 
     
     Args:
-        contents (Adjacency): an adjacency list where the keys are nodes and the 
-            values are sets of hash keys of the nodes which the keys are 
-            connected to. Defaults to an empty a defaultdict described in 
-            '_DefaultAdjacency'.
+        contents (MutableMapping[composites.Node, Set[composites.Node]]): keys 
+            are nodes and values are sets of nodes (or hashable representations 
+            of nodes). Defaults to a defaultdict that has a set for its value 
+            format.
                   
     """  
-    contents: denovo.structures.Adjacency = dataclasses.field(
-        default_factory = lambda: collections.defaultdict(set))
+    contents: MutableMapping[composites.Node, Set[composites.Node]] = (
+        dataclasses.field(
+            default_factory = lambda: collections.defaultdict(set)))
     
     """ Properties """
     
     @property
-    def cookbook(self) -> fiat.base.Cookbook:
+    def cookbook(self) -> amos.base.Cookbook:
         """Returns the stored workflow as a Cookbook of Recipes."""
-        return fiat.workshop.workflow_to_cookbook(source = self)
+        return amos.workshop.workflow_to_cookbook(source = self)
             
     """ Dunder Methods """
 
@@ -347,4 +338,4 @@ class Workflow(denovo.structures.System):
                 adjacency list.
             
         """
-        return denovo.tools.beautify(item = self, package = 'fiat')
+        return recap.beautify(item = self, package = 'amos')

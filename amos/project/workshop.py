@@ -1,5 +1,5 @@
 """
-workshop: functions for converting fiat objects
+workshop: functions for converting amos objects
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2020-2021, Corey Rayburn Yung
 License: Apache-2.0
@@ -20,47 +20,49 @@ Contents:
 
 """
 from __future__ import annotations
-import itertools
-from typing import (Any, Callable, ClassVar, dict, Hashable, Iterable, list, 
-    Mapping, MutableMapping, MutableSequence, Optional, Sequence, Set, tuple, 
-    Type, Union)
+from collections.abc import (
+    Hashable, Iterable, Mapping, MutableMapping, MutableSequence, Sequence)
+import dataclasses
+from typing import Any, ClassVar, Optional, Type, Union
 
-import denovo
 import more_itertools
 
-import fiat
+from ..base import mappings
+from ..repair import modify
+from . import configuration
+from . import stages
 
 
 """ Configuration Parsing Functions """
 
-def settings_to_outline(settings: fiat.shared.bases.settings, 
-                        **kwargs) -> fiat.Outline:
+def settings_to_outline(
+    settings: configuration.Settings,**kwargs) -> stages.Outline:
     """[summary]
 
     Args:
-        settings (fiat.shared.bases.settings): [description]
+        settings (amos.shared.bases.settings): [description]
 
     Returns:
         Outline: derived from 'settings'.
         
     """
     suffixes = denovo.shared.library.subclasses.suffixes
-    outline = fiat.Outline(**kwargs)
-    section_base = fiat.stages.Section
+    outline = amos.Outline(**kwargs)
+    section_base = amos.stages.Section
     for name, section in settings.items():
         if any(k.endswith(suffixes) for k in section.keys()):
             outline[name] = section_base.from_settings(settings = settings,
                                                        name = name)
     return outline
     
-def create_workflow(project: fiat.Project, **kwargs) -> fiat.Workflow:
+def create_workflow(project: amos.Project, **kwargs) -> amos.Workflow:
     """[summary]
 
     Args:
-        project (fiat.Project): [description]
+        project (amos.Project): [description]
 
     Returns:
-        fiat.Workflow: [description]
+        amos.Workflow: [description]
         
     """
     workflow = outline_to_workflow(outline = project.outline,
@@ -68,40 +70,40 @@ def create_workflow(project: fiat.Project, **kwargs) -> fiat.Workflow:
                                    **kwargs)
     return workflow
 
-def outline_to_workflow(outline: fiat.Outline, **kwargs) -> fiat.Workflow:
+def outline_to_workflow(outline: amos.Outline, **kwargs) -> amos.Workflow:
     """[summary]
 
     Args:
-        outline (fiat.Outline): [description]
+        outline (amos.Outline): [description]
         library (denovo.containers.Library): [description]
 
     Returns:
-        fiat.Workflow: [description]
+        amos.Workflow: [description]
         
     """
     for name in outline.nodes:
         outline_to_component(name = name, outline = outline)
-    workflow = fiat.shared.bases.workflow
+    workflow = amos.shared.bases.workflow
     workflow = outline_to_system(outline = outline, **kwargs)
     return workflow 
  
-def outline_to_system(outline: fiat.Outline) -> fiat.Workflow:
+def outline_to_system(outline: amos.Outline) -> amos.Workflow:
     """[summary]
 
     Args:
-        outline (fiat.Outline): [description]
+        outline (amos.Outline): [description]
         library (nodes.Library, optional): [description]. Defaults to None.
         connections (dict[str, list[str]], optional): [description]. Defaults 
             to None.
 
     Returns:
-        fiat.structures.Graph: [description]
+        amos.structures.Graph: [description]
         
     """    
     connections = connections or outline_to_connections(
         outline = outline, 
         library = library)
-    graph = fiat.structures.Graph()
+    graph = amos.structures.Graph()
     for node in connections.keys():
         kind = library.classify(component = node)
         method = locals()[f'finalize_{kind}']
@@ -113,14 +115,14 @@ def outline_to_system(outline: fiat.Outline) -> fiat.Workflow:
     return graph
 
 def outline_to_component(name: str, 
-                         outline: fiat.Outline, 
-                         **kwargs) -> fiat.base.Component:
+                         outline: amos.Outline, 
+                         **kwargs) -> amos.base.Component:
     """[summary]
 
     Args:
         name (str): [description]
         section (str): [description]
-        outline (fiat.Outline): [description]
+        outline (amos.Outline): [description]
         library (nodes.Library, optional): [description]. Defaults to None.
         connections (dict[str, list[str]], optional): [description]. Defaults 
             to None.
@@ -153,7 +155,7 @@ def outline_to_initialization(
     name: str, 
     section: str,
     design: str,
-    outline: fiat.Outline,
+    outline: amos.Outline,
     library: nodes.Library) -> dict[Hashable, Any]:
     """Gets parameters for a specific Component from 'outline'.
 
@@ -161,7 +163,7 @@ def outline_to_initialization(
         name (str): [description]
         section (str): [description]
         design (str): [description]
-        outline (fiat.Outline): [description]
+        outline (amos.Outline): [description]
         library (nodes.Library): [description]
 
     Returns:
@@ -174,7 +176,7 @@ def outline_to_initialization(
     parameter_keys = [k for k in suboutline.keys() if k.endswith(possible)]
     kwargs = {}
     for key in parameter_keys:
-        prefix, suffix = fiat.tools.divide_string(key)
+        prefix, suffix = amos.tools.divide_string(key)
         if key.startswith(name) or (name == section and prefix == suffix):
             kwargs[suffix] = suboutline[key]
     return kwargs  
@@ -182,13 +184,13 @@ def outline_to_initialization(
 def outline_to_implementation(
     name: str, 
     design: str,
-    outline: fiat.Outline) -> dict[Hashable, Any]:
+    outline: amos.Outline) -> dict[Hashable, Any]:
     """[summary]
 
     Args:
         name (str): [description]
         design (str): [description]
-        outline (fiat.Outline): [description]
+        outline (amos.Outline): [description]
 
     Returns:
         dict[Hashable, Any]: [description]
@@ -207,17 +209,17 @@ def finalize_serial(
     node: str,
     connections: dict[str, list[str]],
     library: nodes.Library,
-    graph: fiat.structures.Graph) -> fiat.structures.Graph:
+    graph: amos.structures.Graph) -> amos.structures.Graph:
     """[summary]
 
     Args:
         node (str): [description]
         connections (dict[str, list[str]]): [description]
         library (nodes.Library): [description]
-        graph (fiat.structures.Graph): [description]
+        graph (amos.structures.Graph): [description]
 
     Returns:
-        fiat.structures.Graph: [description]
+        amos.structures.Graph: [description]
         
     """    
     connections = _serial_order(
@@ -260,11 +262,11 @@ def _serial_order(
 
 """ Workflow Executing Functions """
 
-def workflow_to_summary(project: fiat.Project, **kwargs) -> fiat.Project:
+def workflow_to_summary(project: amos.Project, **kwargs) -> amos.Project:
     """[summary]
 
     Args:
-        project (fiat.Project): [description]
+        project (amos.Project): [description]
 
     Returns:
         nodes.Component: [description]
@@ -287,7 +289,7 @@ def workflow_to_summary(project: fiat.Project, **kwargs) -> fiat.Project:
         
 def workflow_to_result(
     path: Sequence[str],
-    project: fiat.Project,
+    project: amos.Project,
     data: Any = None,
     library: nodes.Library = None,
     result: core.Result = None,
@@ -297,7 +299,7 @@ def workflow_to_result(
     Args:
         name (str): [description]
         path (Sequence[str]): [description]
-        project (fiat.Project): [description]
+        project (amos.Project): [description]
         data (Any, optional): [description]. Defaults to None.
         library (nodes.Library, optional): [description]. Defaults to None.
         result (core.Result, optional): [description]. Defaults to None.

@@ -12,78 +12,78 @@ from typing import (Any, Callable, ClassVar, Dict, Iterable, list, Mapping,
 
 import denovo
 
-import fiat
+import amos
 
 
 @dataclasses.dataclass
-class Parser(fiat.workers.Contest):
+class Parser(amos.workers.Contest):
 
     pass
 
 
 @dataclasses.dataclass
-class Search(fiat.workers.Step):
+class Search(amos.workers.Step):
 
     pass   
 
 
 @dataclasses.dataclass
-class Divide(fiat.workers.Step):
+class Divide(amos.workers.Step):
 
     pass   
     
     
 @dataclasses.dataclass
-class Destroy(fiat.workers.Step):
+class Destroy(amos.workers.Step):
 
     pass   
     
 
 @dataclasses.dataclass
-class Slice(fiat.workers.Technique):
+class Slice(amos.workers.Technique):
 
     pass  
 
 
 @dataclasses.dataclass
-class Dice(fiat.workers.Technique):
+class Dice(amos.workers.Technique):
 
     pass 
     
     
 @dataclasses.dataclass
-class Find(fiat.workers.Technique):
+class Find(amos.workers.Technique):
 
     pass 
 
     
 @dataclasses.dataclass
-class Locate(fiat.workers.Technique):
+class Locate(amos.workers.Technique):
 
     pass 
 
     
 @dataclasses.dataclass
-class Explode(fiat.workers.Technique):
+class Explode(amos.workers.Technique):
 
     pass 
 
     
 @dataclasses.dataclass
-class Dynamite(fiat.workers.Technique):
+class Dynamite(amos.workers.Technique):
     
     name: str = 'annihilate'
 
 
 def test_project():
-    project = fiat.Project.create(
+    project = amos.Project.create(
         name = 'cool_project',
         settings = pathlib.Path('tests') / 'project_settings.py',
         automatic = True)
     # Tests base libraries.
-    assert 'parser' in fiat.workers.Component.library.subclasses
+    assert 'parser' in amos.workers.Component.library.subclasses
     dynamite = Dynamite()
-    assert 'annihilate' in fiat.workers.Component.library.instances
+    assert 'annihilate' in amos.workers.Component.library.instances
     # Tests workflow construction.
     print('test project workflow', project.workflow)
     print('test workflow endpoints', str(project.workflow.endpoints))
@@ -92,6 +92,6 @@ def test_project():
 
 
 if __name__ == '__main__':
-    denovo.testing.testify(target_module = fiat.interface, 
+    denovo.testing.testify(target_module = amos.interface, 
                            testing_module = __name__)
     

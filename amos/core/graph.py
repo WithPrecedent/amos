@@ -169,13 +169,15 @@ class System(Adjacency):
     """Directed graph with unweighted edges.
     
     Args:
-        contents (MutableMapping[composites.Node, Set[composites.Node]]): keys are nodes and 
-            values are sets of nodes (or hashable representations of nodes). 
-            Defaults to a defaultdict that has a set for its value format.
+        contents (MutableMapping[composites.Node, Set[composites.Node]]): keys 
+            are nodes and values are sets of nodes (or hashable representations 
+            of nodes). Defaults to a defaultdict that has a set for its value 
+            format.
                   
     """  
-    contents: MutableMapping[composites.Node, Set[composites.Node]] = dataclasses.field(
-        default_factory = lambda: collections.defaultdict(set))
+    contents: MutableMapping[composites.Node, Set[composites.Node]] = (
+        dataclasses.field(
+            default_factory = lambda: collections.defaultdict(set)))
     
     """ Properties """
 
