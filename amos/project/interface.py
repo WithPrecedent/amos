@@ -119,9 +119,10 @@ class Project(composites.Node):
     """ Public Methods """
 
     @classmethod
-    def from_settings(cls, 
-                      settings: amos.shared.SettingsSources, 
-                      **kwargs) -> Project:
+    def from_settings(
+        cls, 
+        settings: configuration.Settings, 
+        **kwargs) -> Project:
         """[summary]
 
         Args:
@@ -180,7 +181,7 @@ class Project(composites.Node):
         
         """
         if self.outline is None:
-            self.outline = amos.shared.bases.outline()
+            self.outline = stages.Outline()
         elif isinstance(self.outline, (str, pathlib.Path, dict)):
             self.outline = amos.create(source = self.outline)
         elif isinstance(self.outline, amos.shared.bases.settings):

@@ -1,5 +1,5 @@
 """
-create: factory creation tools
+factories: factory creation tools
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2021, Corey Rayburn Yung
 License: Apache-2.0
@@ -25,21 +25,18 @@ ToDo:
 """
 from __future__ import annotations
 import abc
-import ast
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 import dataclasses
 from typing import Any, ClassVar, Optional, Type, Union
 
+from ..construct import factories
+from ..observe import traits
 from ..repair import modify
 
  
 @dataclasses.dataclass
 class BaseFactory(abc.ABC):
-    """Base class for instance factory mixins.
-
-    Namespaces: create   
-    
-    """
+    """Base class for instance factory mixins."""
     
     """ Required Subclass Methods """
 
@@ -56,7 +53,56 @@ class BaseFactory(abc.ABC):
         """
         pass
 
-          
+
+@dataclasses.dataclass
+class RegistrarFactory(factories.Registrar, abc.ABC):
+    """Mixin which automatically registers subclasses for use by a factory.
+    
+    Args:
+        registry (ClassVar[MutableMapping[str, Type[Any]]]): key names are str
+            names of a subclass (snake_case by default) and values are the 
+            subclasses. Defaults to an empty dict.  
+            
+    """
+    registry: ClassVar[MutableMapping[str, Type[Any]]] = {}
+    
+    """ Public Methods """
+
+    @classmethod
+    def create(cls, item: Any, *args: Any, **kwargs: Any) -> RegistrarFactory:
+        """Creates an instance of a RegistrarFactory subclass from 'item'.
+        
+        Args:
+            item (Any): any supported data structure which acts as a source for
+                creating a RegistrarFactory or a str which matches a key in 
+                'registry'.
+                                
+        Returns:
+            RegistrarFactory: a RegistrarFactory subclass instance created based 
+                on 'item' and any passed arguments.
+                
+        """
+        if isinstance(item, str):
+            try:
+                return cls.registry[item](*args, **kwargs)
+            except KeyError:
+                pass
+        try:
+            name = traits.get_name(item = item)
+            return cls.registry[name](item, *args, **kwargs)
+        except KeyError:
+            for name, kind in cls.registry.items():
+                if (
+                    abc.ABC not in kind.__bases__ 
+                    and kind.__instancecheck__(instance = item)):
+                    method = getattr(cls, f'from_{name}')
+                    return method(item, *args, **kwargs)       
+            raise ValueError(
+                f'Could not create {cls.__name__} from item because it '
+                f'is not one of these supported types: '
+                f'{str(list(cls.registry.keys()))}')
+            
+                      
 @dataclasses.dataclass
 class SourcesFactory(BaseFactory, abc.ABC):
     """Supports subclass creation using 'sources' class attribute.
@@ -65,9 +111,7 @@ class SourcesFactory(BaseFactory, abc.ABC):
         sources (str, str]]): keys are str names of the types of the data 
             sources for object creation. For the appropriate creation 
             classmethod to be called, the types need to match the type of the
-            first argument passed.
-    
-    Namespaces: create, sources, _get_create_method_name       
+            first argument passed.  
     
     """
     sources: ClassVar[Mapping[str, str]] = {}
@@ -116,15 +160,39 @@ class SourcesFactory(BaseFactory, abc.ABC):
                 
         """
         return f'from_{item}'
-          
+      
+
+@dataclasses.dataclass
+class SubclassFactory(BaseFactory, abc.ABC):
+    """Returns a subclass based on arguments passed to the 'create' method."""
+        
+    """ Public Methods """
+
+    @classmethod
+    def create(cls, item: str, *args: Any, **kwargs: Any) -> SubclassFactory:
+        """Returns subclass based on 'item'
+        
+        A subclass in the '__subclasses__' attribute is selected based on the
+        snake-case name of the subclass.
+        
+        Raises:
+            KeyError: If a corresponding subclass does not exist for 'item.'
+
+        Returns:
+            SubclassFactory: instance of a SubclassFactory subclass.
+            
+        """
+        options = {
+            modify.snakify(item = s.__name__): s for s in cls.__subclasses__}
+        try:
+            return options[item](*args, **kwargs)
+        except KeyError:
+            raise KeyError(f'No subclass {item} was found')
+                 
           
 @dataclasses.dataclass
 class TypeFactory(BaseFactory, abc.ABC):
-    """Supports subclass creation using str name of item type passed.
-
-    Namespaces: create, _get_create_method_name       
-    
-    """
+    """Supports subclass creation using str name of item type passed."""
     
     """ Public Methods """
 
@@ -165,32 +233,5 @@ class TypeFactory(BaseFactory, abc.ABC):
                 
         """
         return f'from_{item}'
-      
 
-@dataclasses.dataclass
-class SubclassFactory(BaseFactory, abc.ABC):
-    """Returns a subclass based on arguments passed to the 'create' method."""
-        
-    """ Public Methods """
-
-    @classmethod
-    def create(cls, item: str, *args: Any, **kwargs: Any) -> SubclassFactory:
-        """Returns subclass based on 'item'
-        
-        A subclass in the '__subclasses__' attribute is selected based on the
-        snake-case name of the subclass.
-        
-        Raises:
-            KeyError: If a corresponding subclass does not exist for 'item.'
-
-        Returns:
-            SubclassFactory: instance of a SubclassFactory subclass.
-            
-        """
-        options = {
-            modify.snakify(item = s.__name__): s for s in cls.__subclasses__}
-        try:
-            return options[item](*args, **kwargs)
-        except KeyError:
-            raise KeyError(f'No subclass {item} was found')
  

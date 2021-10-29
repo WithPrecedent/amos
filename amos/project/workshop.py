@@ -36,7 +36,7 @@ from . import stages
 """ Configuration Parsing Functions """
 
 def settings_to_outline(
-    settings: configuration.Settings,**kwargs) -> stages.Outline:
+    settings: configuration.Settings, **kwargs) -> stages.Outline:
     """[summary]
 
     Args:

@@ -56,7 +56,7 @@ __author__ = 'Corey Rayburn Yung'
 from .base.bunches import *
 from .base.mappings import *
 from .base.sequences import *
-from .construct.create import *
+from .construct.factories import *
 from .construct.lazy import *
 from .core.check import *
 from .core.composites import *

@@ -1,5 +1,5 @@
 """
-configuration: easy, flexible system for configuration
+configuration: easy, flexible system for project configuration
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2021, Corey Rayburn Yung
 License: Apache-2.0
@@ -30,17 +30,20 @@ import configparser
 import dataclasses
 import importlib
 import importlib.util
+import itertools
 import pathlib
 from typing import Any, ClassVar, Optional, Type, Union
 
 from ..base import mappings
+from ..construct import factories
 from ..repair import convert
+from ..repair import modify
 
 
 """ Configuration System"""
 
 @dataclasses.dataclass
-class Settings(mappings.Dictionary): # type: ignore
+class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
     """Loads and stores configuration settings.
 
     To create settings instance, a user can pass as the 'contents' parameter a:
@@ -400,11 +403,11 @@ class Settings(mappings.Dictionary): # type: ignore
         for key, value in contents.items():
             if isinstance(value, dict):
                 inner_bundle = {
-                    inner_key: utilities.typify(inner_value)
+                    inner_key: convert.typify(inner_value)
                     for inner_key, inner_value in value.items()}
                 new_contents[key] = inner_bundle
             else:
-                new_contents[key] = utilities.typify(value)
+                new_contents[key] = convert.typify(value)
         return new_contents
 
     def _add_default(
@@ -449,3 +452,128 @@ class Settings(mappings.Dictionary): # type: ignore
                 raise TypeError(
                     'key must be a str and value must be a dict type')
         return
+
+
+@dataclasses.dataclass
+class Section(mappings.Dictionary):
+    """Section of Outline with connections.
+
+    Args:
+        contents (MutableMapping[Hashable, Any]]): stored dictionary. Defaults 
+            to an empty dict.
+        default_factory (Any): default value to return when the 'get' method is 
+            used. Defaults to None.
+                          
+    """
+    contents: MutableMapping[Hashable, Any] = dataclasses.field(
+        default_factory = dict)
+    default_factory: Optional[Any] = None
+    name: str = None
+
+    """ Properties """
+    
+    @property
+    def bases(self) -> dict[str, str]:
+        """[summary]
+
+        Returns:
+            dict[str, str]: [description]
+            
+        """
+        bases = {}
+        for key in self.connections.keys():
+            _, suffix = modify.cleave_str(key)
+            values = convert.iterify(self[key])
+            if suffix.endswith('s'):
+                base = suffix[:-1]
+            else:
+                base = suffix            
+            bases.update(dict.fromkeys(values, base))
+        return bases
+    
+    @property
+    def connections(self) -> dict[str, list[str]]:
+        """[summary]
+
+        Returns:
+            dict[str, list[str]]: [description]
+            
+        """
+        connections = {}
+        keys = [k for k in self.keys() if k.endswith(self.suffixes)]
+        for key in keys:
+            prefix, suffix = modify.cleave_str(key)
+            values = convert.iterify(self[key])
+            if prefix == suffix:
+                if prefix in connections:
+                    connections[self.name].extend(values)
+                else:
+                    connections[self.name] = values
+            else:
+                if prefix in connections:
+                    connections[prefix].extend(values)
+                else:
+                    connections[prefix] = values
+        return connections
+
+    @property
+    def designs(self) -> dict[str, str]:
+        """[summary]
+
+        Returns:
+            dict[str, str]: [description]
+            
+        """
+        designs = {}
+        design_keys = [k for k in self.keys() if k.endswith('_design')]
+        for key in design_keys:
+            prefix, _ = modify.cleave_str(key)
+            designs[prefix] = self[key]
+        return designs
+
+    @property
+    def nodes(self) -> list[str]:
+        """[summary]
+
+        Returns:
+            list[str]: [description]
+            
+        """
+        key_nodes = list(self.connections.keys())
+        value_nodes = list(
+            itertools.chain.from_iterable(self.connections.values()))
+        return modify.deduplicate(item = key_nodes + value_nodes) 
+
+    @property
+    def other(self) -> dict[str, str]:
+        """[summary]
+
+        Returns:
+            dict[str, str]: [description]
+            
+        """
+        design_keys = [k for k in self.keys() if k.endswith('_design')]
+        connection_keys = [k for k in self.keys() if k.endswith(self.suffixes)]
+        exclude = design_keys + connection_keys
+        return {k: v for k, v in self.contents.items() if k not in exclude}
+
+    """ Public Methods """
+
+    @classmethod
+    def from_settings(
+        cls, 
+        settings: configuration.Settings,
+        name: str,
+        **kwargs) -> Section:
+        """[summary]
+
+        Args:
+            settings (amos.shared.bases.settings): [description]
+            name (str):
+
+        Returns:
+            Section: derived from 'settings'.
+            
+        """        
+        return cls(contents = settings[name], name = name, **kwargs)    
+      
