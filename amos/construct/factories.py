@@ -29,7 +29,8 @@ from collections.abc import Mapping, MutableMapping
 import dataclasses
 from typing import Any, ClassVar, Optional, Type, Union
 
-from ..construct import factories
+from ..base import mappings
+from ..observe import registries
 from ..observe import traits
 from ..repair import modify
 
@@ -53,9 +54,9 @@ class BaseFactory(abc.ABC):
         """
         pass
 
-
+            
 @dataclasses.dataclass
-class RegistrarFactory(factories.Registrar, abc.ABC):
+class RegistrarFactory(registries.Registrar, abc.ABC):
     """Mixin which automatically registers subclasses for use by a factory.
     
     Args:

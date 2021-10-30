@@ -63,7 +63,7 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
     the types of the stored python dict).
 
     Because settings uses ConfigParser for .ini files, by default it stores 
-    a 2-level dict. The desire for accessibility and simplicity denovoted this 
+    a 2-level dict. The desire for accessibility and simplicity amosted this 
     limitation. A greater number of levels can be achieved by having separate
     sections with names corresponding to the strings in the values of items in 
     other sections. 
@@ -320,7 +320,7 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
         """Injects appropriate items into 'instance' from 'contents'.
 
         Args:
-            instance (object): denovo class instance to be modified.
+            instance (object): amos class instance to be modified.
             additional (Union[Sequence[str], str]]): other section(s) in 
                 'contents' to inject into 'instance'. Defaults to None.
             overwrite (bool]): whether to overwrite a local attribute in 
@@ -328,7 +328,7 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
                 Defaults to False.
 
         Returns:
-            instance (object): denovo class instance with modifications made.
+            instance (object): amos class instance with modifications made.
 
         """
         sections = []
@@ -381,7 +381,7 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
         self, 
         contents: MutableMapping[Hashable, Any]) -> (
             MutableMapping[Hashable, Any]):
-        """Creates a backup set of mappings for denovo settings lookup.
+        """Creates a backup set of mappings for amos settings lookup.
 
 
         Args:

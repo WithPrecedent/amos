@@ -184,8 +184,8 @@ def from_importables(
     which outlines how the decision to incorporate '__getattr__' functions to 
     modules allows lazy loading. Rather than place this function solely within
     '__getattr__', it is included here seprately so that it can easily be called 
-    by '__init__.py' files throughout denovo and by users (as 
-    'denovo.load.from_dict').
+    by '__init__.py' files throughout amos and by users (as 
+    'amos.load.from_dict').
     
     To effectively use 'from_dict' in an '__init__.py' file, the user needs to 
     pass a 'importables' dict which indicates how users should accesss imported 

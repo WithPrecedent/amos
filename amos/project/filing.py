@@ -1,5 +1,5 @@
 """
-options: base configuration and file management classes for denovo projects
+options: base configuration and file management classes for amos projects
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2021, Corey Rayburn Yung
 License: Apache-2.0
@@ -22,7 +22,7 @@ Contents:
     formats (dict): a dictionary of the out-of-the-box supported file formats.
     default_parameters (dict): a dictionary with default shared parameters for
         various disk-related tasks.
-    Clerk (object): interface for denovo file management classes and methods.
+    Clerk (object): interface for amos file management classes and methods.
      
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ class FileFormat(object):
         name (Optional[str]): the format name which should match the key when a 
             FileFormat instance is stored.
         module (Optional[str]): name of module where object to incorporate is, 
-            which can either be a denovo or non-denovo module. Defaults to 
+            which can either be a amos or non-amos module. Defaults to 
             None.
         extension (Optional[str]): str file extension to use. Defaults to None.
         load_method (Optional[Union[str, types.FunctionType]]): if a str, it is
@@ -79,7 +79,7 @@ class FileFormat(object):
             
     #     """
     #     return (subclass in cls.__subclasses__() 
-    #             or denovo.unit.has_attributes(
+    #             or amos.unit.has_attributes(
     #                 item = subclass,
     #                 methods = [
     #                     'name', 'module', 'extension', 'load_method',
@@ -178,11 +178,11 @@ default_parameters: MutableMapping[str, Any] = {
    
 @dataclasses.dataclass
 class Clerk(object):
-    """File and folder management for denovo.
+    """File and folder management for amos.
 
     Creates and stores dynamic and static file paths, properly formats files
     for import and export, and provides methods for loading and saving
-    denovo, pandas, and numpy objects.
+    amos, pandas, and numpy objects.
 
     Args:
         settings (MutableMapping[Hashable, Any]): a Settings instance of other 
@@ -201,9 +201,9 @@ class Clerk(object):
             name or a complete path if the 'output_folder' is not off of
             'root_folder'. Defaults to 'output'.
         formats (MutableMapping[str, FileFormat]): a dictionary of file_formats
-            and keys with the denovo str names of those formats. Defaults to the
+            and keys with the amos str names of those formats. Defaults to the
             global 'formats' variable.
-        parameters (MutableMapping[str, str]): keys are the denovo names of 
+        parameters (MutableMapping[str, str]): keys are the amos names of 
             parameters and values are the values which should be passed to the
             Distributor instances when loading or savings files. Defaults to the
             global 'default_parameters' variable.

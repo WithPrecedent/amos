@@ -10,7 +10,7 @@ import pathlib
 from typing import (Any, Callable, ClassVar, Dict, Iterable, list, Mapping, 
                     Optional, Sequence, tuple, Type, Union)
 
-import denovo
+import amos
 
 import amos
 
@@ -92,6 +92,6 @@ def test_project():
 
 
 if __name__ == '__main__':
-    denovo.testing.testify(target_module = amos.interface, 
+    amos.testing.testify(target_module = amos.interface, 
                            testing_module = __name__)
     

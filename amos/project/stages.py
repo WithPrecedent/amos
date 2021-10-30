@@ -28,30 +28,33 @@ import collections
 from collections.abc import Collection, Hashable, MutableMapping, Set
 import dataclasses
 import itertools
-from typing import Any, ClassVar, Optional, Type, Union
+from typing import Any, ClassVar, Optional, Type, TYPE_CHECKING, Union
 
 from ..base import mappings
-from ..construct import factories
 from ..core import composites
 from ..core import graph
 from ..core import hybrid
 from ..repair import modify
-from . import configuration
+from . import options
 from . import workshop
+
+if TYPE_CHECKING:
+    from . import interface
 
 
 @dataclasses.dataclass
-class Stage(factories.RegistrarFactory):
-    """Base classes for project stages.
+class Stage(workshop.LibraryFactory):
+    """Base classes for project 
 
     Args:
         contents (Optional[Collection]): collection of data at a project stage.
-        registry (ClassVar[MutableMapping[str, Type[Any]]]): key names are str
-            names of a subclass (snake_case by default) and values are the 
-            subclasses. Defaults to an empty dict.  
+        library (ClassVar[WorkshopLibrary]): project library of classes, 
+            instances, and base classes. 
+            
     """
     contents: Optional[Collection] = None
-    registry: ClassVar[MutableMapping[str, Type[Any]]] = {}
+    library: ClassVar[workshop.ProjectLibrary] = dataclasses.field(
+        default_factory = workshop.ProjectLibrary)
     
 
 @dataclasses.dataclass
@@ -158,7 +161,7 @@ class Outline(mappings.Dictionary, Stage):
     """ Public Methods """
 
     @classmethod
-    def from_settings(cls, item: configuration.Settings, **kwargs) -> Outline:
+    def from_settings(cls, item: options.SETTINGS, **kwargs) -> Outline:
         """[summary]
 
         Args:
@@ -167,7 +170,7 @@ class Outline(mappings.Dictionary, Stage):
             Outline: derived from 'settings'.
             
         """
-        return workshop.settings_to_outline(item = item, **kwargs)
+        return settings_to_outline(item = item, **kwargs)
 
 
 @dataclasses.dataclass
@@ -209,7 +212,8 @@ class Workflow(graph.System, Stage):
             Workflow: derived from 'item'.
             
         """
-        return workshop.outline_to_workflow(item = item, **kwargs)
+        return outline_to_workflow(item = item, **kwargs)
+
 
 @dataclasses.dataclass
 class Product(graph.System, Stage):
@@ -238,39 +242,44 @@ class Product(graph.System, Stage):
             Product: derived from 'item'.
             
         """
-        return workshop.workflow_to_product(item = item, **kwargs)
+        return workflow_to_product(item = item, **kwargs)
     
 
+def create_outline(project: interface.Project) -> Outline:
+    return settings_to_outline(
+        settings = project.settings,
+        library = project.library)
 
 def settings_to_outline(
     settings: options.SETTINGS, 
-    **kwargs) -> stages.Outline:
+    library: options.LIBRARY, 
+    base: Optional[Type[Any]] = None,
+    **kwargs) -> Outline:
     """[summary]
 
     Args:
-        settings (amos.shared.bases.settings): [description]
+        settings (options.Settings): [description]
 
     Returns:
         Outline: derived from 'settings'.
         
     """
-    suffixes = denovo.shared.library.subclasses.suffixes
-    outline = stages.Outline(**kwargs)
-    section_base = amos.stages.Section
+    base = base or Outline
+    suffixes = library.suffixes
+    outline = base(**kwargs)
     for name, section in settings.items():
         if any(k.endswith(suffixes) for k in section.keys()):
-            outline[name] = section_base.from_settings(settings = settings,
-                                                       name = name)
+            outline[name] = section
     return outline
     
-def create_workflow(project: interface.Project, **kwargs) -> stages.Workflow:
+def create_workflow(project: interface.Project, **kwargs) -> Workflow:
     """[summary]
 
     Args:
         project (interface.Project): [description]
 
     Returns:
-        stages.Workflow: [description]
+        Workflow: [description]
         
     """
     workflow = outline_to_workflow(
@@ -279,28 +288,119 @@ def create_workflow(project: interface.Project, **kwargs) -> stages.Workflow:
         **kwargs)
     return workflow
 
-def outline_to_workflow(outline: stages.Outline, **kwargs) -> stages.Workflow:
+def outline_to_workflow(
+    outline: Outline,
+    library: options.LIBRARY, 
+    base: Optional[Type[Any]] = None,
+    **kwargs) -> Workflow:
     """[summary]
 
     Args:
-        outline (stages.Outline): [description]
-        library (denovo.containers.Library): [description]
+        outline (Outline): [description]
+        library (options.LIBRARY): [description]
 
     Returns:
-        stages.Workflow: [description]
+        Workflow: [description]
         
     """
-    for name in outline.nodes:
-        outline_to_component(name = name, outline = outline)
-    workflow = amos.shared.bases.workflow
-    workflow = outline_to_system(outline = outline, **kwargs)
+    base = base or Workflow
+    components = {}
+    for name in outline.keys():
+        components[name] = outline_to_component(
+            name = name,
+            outline = outline,
+            library = library)
+    workflow = outline_to_system(
+        outline = outline, 
+        components = components,
+        **kwargs)
     return workflow 
- 
-def outline_to_system(outline: stages.Outline) -> stages.Workflow:
+
+def outline_to_component(
+    name: str, 
+    outline: Outline,
+    library: options.LIBRARY, 
+    **kwargs) -> options.NODE:
     """[summary]
 
     Args:
-        outline (stages.Outline): [description]
+
+    Returns:
+        Options.NODE: [description]
+    
+    """
+    design = outline.designs[name] or None
+    initialization = outline_to_initialization(
+        name = name, 
+        design = design,
+        outline = outline)
+    initialization.update(kwargs)
+    if 'parameters' not in initialization:
+        initialization['parameters'] = outline_to_implementation(
+            name = name, 
+            design = design,
+            outline = outline)
+    component = library.instance(name = [name, design], **initialization)
+    return component
+
+def outline_to_initialization(
+    name: str, 
+    outline: Outline,
+    library: options.LIBRARY, 
+    **kwargs) -> options.NODE:
+    """Gets parameters for a specific Component from 'outline'.
+
+    Args:
+
+    Returns:
+        dict[Hashable, Any]: [description]
+        
+    """
+    suboutline = outline[name]
+    parameters = library.parameterify(name = [name, design])
+    possible = tuple(i for i in parameters if i not in ['name', 'contents'])
+    parameter_keys = [k for k in suboutline.keys() if k.endswith(possible)]
+    kwargs = {}
+    for key in parameter_keys:
+        prefix, suffix = amos.tools.divide_string(key)
+        if key.startswith(name) or (name == section and prefix == suffix):
+            kwargs[suffix] = suboutline[key]
+    return kwargs  
+       
+def outline_to_parameters(
+    name: str, 
+    outline: Outline,
+    library: options.LIBRARY, 
+    base: Optional[Type[Any]] = None,
+    **kwargs) -> options.PARAMETERS:
+    """Gets parameters for a specific Component from 'outline'.
+
+    Args:
+
+
+    Returns:
+        dict[Hashable, Any]: [description]
+        
+    """
+    base = base or options.PARAMETERS
+
+    parameters = base(name = name)
+    suboutline = outline[section]
+    parameters = library.parameterify(name = [name, design])
+    possible = tuple(i for i in parameters if i not in ['name', 'contents'])
+    parameter_keys = [k for k in suboutline.keys() if k.endswith(possible)]
+    kwargs = {}
+    for key in parameter_keys:
+        prefix, suffix = amos.tools.divide_string(key)
+        if key.startswith(name) or (name == section and prefix == suffix):
+            kwargs[suffix] = suboutline[key]
+    return kwargs  
+
+def outline_to_system(outline: Outline) -> Workflow:
+    """[summary]
+
+    Args:
+        outline (Outline): [description]
         library (nodes.Library, optional): [description]. Defaults to None.
         connections (dict[str, list[str]], optional): [description]. Defaults 
             to None.
@@ -323,48 +423,11 @@ def outline_to_system(outline: stages.Outline) -> stages.Workflow:
             graph = graph)     
     return graph
 
-def outline_to_component(name: str, 
-                         outline: stages.Outline, 
-                         **kwargs) -> amos.base.Component:
-    """[summary]
-
-    Args:
-        name (str): [description]
-        section (str): [description]
-        outline (stages.Outline): [description]
-        library (nodes.Library, optional): [description]. Defaults to None.
-        connections (dict[str, list[str]], optional): [description]. Defaults 
-            to None.
-        design (str, optional): [description]. Defaults to None.
-        recursive (bool, optional): [description]. Defaults to True.
-        overwrite (bool, optional): [description]. Defaults to False.
-
-    Returns:
-        nodes.Component: [description]
-    
-    """
-    design = outline.designs[name] or None
-    base = outline.bases[name]
-    initialization = outline_to_initialization(
-        name = name, 
-        design = design,
-        section = section, 
-        outline = outline,
-        library = library)
-    initialization.update(kwargs)
-    if 'parameters' not in initialization:
-        initialization['parameters'] = outline_to_implementation(
-            name = name, 
-            design = design,
-            outline = outline)
-    component = library.instance(name = [name, design], **initialization)
-    return component
-
 def outline_to_initialization(
     name: str, 
     section: str,
     design: str,
-    outline: stages.Outline,
+    outline: Outline,
     library: nodes.Library) -> dict[Hashable, Any]:
     """Gets parameters for a specific Component from 'outline'.
 
@@ -372,7 +435,7 @@ def outline_to_initialization(
         name (str): [description]
         section (str): [description]
         design (str): [description]
-        outline (stages.Outline): [description]
+        outline (Outline): [description]
         library (nodes.Library): [description]
 
     Returns:
@@ -393,13 +456,13 @@ def outline_to_initialization(
 def outline_to_implementation(
     name: str, 
     design: str,
-    outline: stages.Outline) -> dict[Hashable, Any]:
+    outline: Outline) -> dict[Hashable, Any]:
     """[summary]
 
     Args:
         name (str): [description]
         design (str): [description]
-        outline (stages.Outline): [description]
+        outline (Outline): [description]
 
     Returns:
         dict[Hashable, Any]: [description]

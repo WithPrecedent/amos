@@ -389,8 +389,10 @@ class Library(MutableMapping):
             empty Catalog.
                  
     """
-    classes: Catalog = dataclasses.field(default_factory = Catalog)
-    instances: Catalog = dataclasses.field(default_factory = Catalog)
+    classes: Catalog[str, Type[Any]] = dataclasses.field(
+        default_factory = Catalog)
+    instances: Catalog[str, object] = dataclasses.field(
+        default_factory = Catalog)
         
     """ Public Methods """
     

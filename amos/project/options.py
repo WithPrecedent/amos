@@ -34,13 +34,13 @@ CONVERTERS: types.ModuleType = stages
 DIRECTOR: Type[Any] = workshop.Director
 LIBRARY: Type[Any] = nodes.ProjectLibrary
 NODE: Type[Any] = nodes.Component
+PARAMETERS: Type[Any] = nodes.Parameters
 SETTINGS: Type[Any] = workshop.ProjectSettings
 STAGE: Type[Any] = stages.Stage
 
 
 def get_base(base_type: str) -> None:
     return globals()[base_type.upper()]
-    return
 
 def set_base(base_type: str, base: Type[Any]) -> None:
     globals()[base_type.upper()] = base

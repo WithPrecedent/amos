@@ -20,9 +20,12 @@ Contents:
 
 """
 from __future__ import annotations
+import abc
 from collections.abc import (
     Hashable, Iterable, Iterator, Mapping, MutableMapping, Sequence)
+import copy
 import dataclasses
+import inspect
 import itertools
 import pathlib
 import types
@@ -30,6 +33,7 @@ from typing import Any, ClassVar, Optional, Type, TYPE_CHECKING, Union
 
 from ..base import mappings
 from ..construct import configuration
+from ..observe import traits
 from ..repair import convert
 from ..repair import modify
 from . import options
@@ -61,7 +65,7 @@ class ProjectSettings(configuration.Settings):
     the types of the stored python dict).
 
     Because settings uses ConfigParser for .ini files, by default it stores 
-    a 2-level dict. The desire for accessibility and simplicity denovoted this 
+    a 2-level dict. The desire for accessibility and simplicity amosted this 
     limitation. A greater number of levels can be achieved by having separate
     sections with names corresponding to the strings in the values of items in 
     other sections. 
@@ -258,6 +262,8 @@ class Director(Iterator):
             pass
         # Sets index for iteration.
         self.index = 0
+        # Validate stages
+        self._validate_stages()
         
     """ Properties """
     
@@ -296,6 +302,28 @@ class Director(Iterator):
             self.advance()
         return self    
 
+    """ Private Methods """
+    
+    def _validate_stages(self) -> None:
+        new_stages = []
+        for stage in self.project.stages:
+            new_stages.append(self._validate_stage(stage = stage))
+        self.project.stages = new_stages
+        return
+
+    def _validate_stage(self, stage: Any) -> object:
+        if isinstance(stage, str):
+            try:
+                stage = options.STAGE.create(stage)
+            except KeyError:
+                raise KeyError(f'{stage} was not found in Stage registry')
+        if inspect.isclass(stage):
+            stage = stage()
+        return stage
+            
+        
+    """ Dunder Methods """
+    
     def __iter__(self) -> Iterable:
         """Returns iterable of 'stages'.
         
@@ -310,7 +338,7 @@ class Director(Iterator):
         if self.index < len(self.stages):
             source = self.previous or 'settings'
             product = self.stages[self.current]
-            converter = getattr(globals(), f'create_{product}')
+            converter = getattr(self.converters, f'create_{product}')
             if self.project.settings['general']['verbose']:
                 print(f'Creating {product} from {source}')
             kwargs = {'project': self.project}
@@ -321,3 +349,199 @@ class Director(Iterator):
         else:
             raise StopIteration
         return self
+
+
+@dataclasses.dataclass
+class ProjectLibrary(mappings.Library):
+    """Stores project classes and class instances.
+    
+    When searching for matches, instances are prioritized over classes.
+    
+    Args:
+        classes (Catalog): a catalog of stored classes. Defaults to any empty
+            Catalog.
+        instances (Catalog): a catalog of stored class instances. Defaults to an
+            empty Catalog.
+        bases (Catalog): base types of nodes. Defaults to an empty Catalog.
+                 
+    """
+    classes: mappings.Catalog[str, Type[Any]] = dataclasses.field(
+        default_factory = mappings.Catalog)
+    instances: mappings.Catalog[str, object] = dataclasses.field(
+        default_factory = mappings.Catalog)
+    bases: mappings.Catalog[str, Type[Any]] = dataclasses.field(
+        default_factory = mappings.Catalog)
+
+    """ Public Methods """
+    
+    def classify(
+        self,
+        item: Union[str, Type[options.NODE], options.NODE]) -> str:
+        """[summary]
+
+        Args:
+            item (str): [description]
+
+        Returns:
+            str: [description]
+            
+        """
+        for name, _ in self.bases.items():
+            if self.is_base(item = item, base = name):
+                return name
+        raise KeyError('item was not found in the project library')
+
+    def instance(
+        self, 
+        name: Union[str, Sequence[str]], 
+        *args, 
+        **kwargs) -> object:
+        """Returns instance of first match of 'name' in stored catalogs.
+        
+        The method prioritizes the 'instances' catalog over 'classes' and any
+        passed names in the order they are listed.
+        
+        Args:
+            name (Union[str, Sequence[str]]): [description]
+            
+        Raises:
+            KeyError: [description]
+            
+        Returns:
+            object: [description]
+            
+        """
+        names = convert.iterify(name)
+        primary = names[0]
+        item = None
+        for key in names:
+            for catalog in ['instances', 'classes']:
+                try:
+                    item = getattr(self, catalog)[key]
+                    break
+                except KeyError:
+                    pass
+            if item is not None:
+                break
+        if item is None:
+            raise KeyError(f'No matching item for {name} was found') 
+        elif inspect.isclass(item):
+            instance = item(primary, *args, **kwargs)
+        else:
+            instance = copy.deepcopy(item)
+            for key, value in kwargs.items():
+                setattr(instance, key, value)  
+        return instance 
+
+    def is_base(
+        self, 
+        item: Union[str, Type[options.NODE], options.NODE],
+        base: str) -> bool:
+        """[summary]
+
+        Args:
+            item (Union[str, Type[options.NODE], options.NODE]): [description]
+            base (str): [description]
+
+        Returns:
+            bool: [description]
+            
+        """
+        if isinstance(item, str):
+            item = self[item]
+        elif isinstance(item, options.NODE):
+            item = item.__class__
+        return issubclass(item, self.bases[base])        
+        
+    def parameterify(self, name: Union[str, Sequence[str]]) -> list[str]:
+        """[summary]
+
+        Args:
+            name (Union[str, Sequence[str]]): [description]
+
+        Returns:
+            list[str]: [description]
+            
+        """        
+        item = self.select(name = name)
+        return list(item.__annotations__.keys())  
+
+
+@dataclasses.dataclass
+class LibraryFactory(abc.ABC):
+    """Mixin which registers subclasses, instances, and bases.
+    
+    Args:
+        library (ClassVar[ProjectLibrary]): project library of classes, 
+            instances, and base classes. 
+            
+    """
+    library: ClassVar[ProjectLibrary] = dataclasses.field(
+        default_factory = ProjectLibrary)
+    
+    """ Initialization Methods """
+    
+    @classmethod
+    def __init_subclass__(cls, *args: Any, **kwargs: Any):
+        """Automatically registers subclass."""
+        # Because LibraryFactory is used as a mixin, it is important to
+        # call other base class '__init_subclass__' methods, if they exist.
+        try:
+            super().__init_subclass__(*args, **kwargs) # type: ignore
+        except AttributeError:
+            pass
+        key = traits.get_name(item = cls)
+        if abc.ABC in cls.__bases__:
+            cls.library.bases[key] = cls
+        else:
+            cls.library.classes[key] = cls
+            
+    def __post_init__(self) -> None:
+        try:
+            super().__post_init__(*args, **kwargs) # type: ignore
+        except AttributeError:
+            pass
+        key = traits.get_name(item = self)
+        self.__class__.library[key] = self 
+    
+    """ Public Methods """
+
+    @classmethod
+    def create(
+        cls, 
+        item: Union[str, Sequence[str]], 
+        *args: Any, 
+        **kwargs: Any) -> LibraryFactory:
+        """Creates an instance of a LibraryFactory subclass from 'item'.
+        
+        Args:
+            item (Any): any supported data structure which acts as a source for
+                creating a LibraryFactory or a str which matches a key in 
+                'library'.
+                                
+        Returns:
+            LibraryFactory: a LibraryFactory subclass instance created based 
+                on 'item' and any passed arguments.
+                
+        """
+        return cls.library.instance(item, *args, **kwargs)
+        # if isinstance(item, str):
+        #     try:
+        #         return cls.library[item](*args, **kwargs)
+        #     except KeyError:
+        #         pass
+        # try:
+        #     name = traits.get_name(item = item)
+        #     return cls.library[name](item, *args, **kwargs)
+        # except KeyError:
+        #     for name, kind in cls.library.items():
+        #         if (
+        #             abc.ABC not in kind.__bases__ 
+        #             and kind.__instancecheck__(instance = item)):
+        #             method = getattr(cls, f'from_{name}')
+        #             return method(item, *args, **kwargs)       
+        #     raise ValueError(
+        #         f'Could not create {cls.__name__} from item because it '
+        #         f'is not one of these supported types: '
+        #         f'{str(list(cls.library.keys()))}')
+            

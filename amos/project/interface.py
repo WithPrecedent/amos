@@ -82,8 +82,6 @@ class Project(composites.Node):
         default_factory = options.DIRECTOR)
     stages: Sequence[Union[str, Type[options.STAGE], options.STAGE]] = (
         dataclasses.field(default_factory = list))
-    library: options.LIBRARY = dataclasses.field(
-        default_factory = options.LIBRARY)
     data: Optional[object] = None
     identification: Optional[str] = None
     automatic: bool = True

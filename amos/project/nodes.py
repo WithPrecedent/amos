@@ -46,16 +46,19 @@ import more_itertools
 from ..base import mappings
 from ..core import composites
 from ..core import graph
+from ..observe import traits
 from ..repair import convert
 from ..repair import modify
+from . import options
 from . import stages
+from . import workshop
 
 if TYPE_CHECKING:
     from . import interface
 
 
 @dataclasses.dataclass
-class ProjectLibrary(mappings.Library):
+class NodeLibrary(workshop.ProjectLibrary):
     """Stores project classes and class instances.
     
     When searching for matches, instances are prioritized over classes.
@@ -65,13 +68,14 @@ class ProjectLibrary(mappings.Library):
             Catalog.
         instances (Catalog): a catalog of stored class instances. Defaults to an
             empty Catalog.
+        bases (Catalog): base types of nodes. Defaults to an empty Catalog.
                  
     """
-    classes: mappings.Catalog = dataclasses.field(
+    classes: mappings.Catalog[str, Type[Any]] = dataclasses.field(
         default_factory = mappings.Catalog)
-    instances: mappings.Catalog = dataclasses.field(
+    instances: mappings.Catalog[str, object] = dataclasses.field(
         default_factory = mappings.Catalog)
-    bases: mappings.Catalog = dataclasses.field(
+    bases: mappings.Catalog[str, Type[Any]] = dataclasses.field(
         default_factory = mappings.Catalog)
 
     """ Properties """
@@ -85,48 +89,50 @@ class ProjectLibrary(mappings.Library):
                 plurals combined with the stored keys.
                 
         """
-        plurals = [key + 's' for key in self.instances.keys()]
-        return tuple(list(self.classes.keys()) + plurals)
+        plurals = [key + 's' for key in self.instances.keys()] 
+        return tuple(plurals + [key + 's' for key in self.classes.keys()])
     
     @property
     def laborers(self) -> tuple[str]:
         kind = self.bases['laborer']
         instances = [
             k for k, v in self.instances.items() if isinstance(v, kind)]
-        subclasses = [
-            k for k, v in self.subclasses.items() if issubclass(v, kind)]
-        return tuple(instances + subclasses)   
+        classes = [
+            k for k, v in self.classes.items() if issubclass(v, kind)]
+        return tuple(instances + classes)   
         
     @property
     def manager(self) -> tuple[str]:
         kind = self.bases['manager']
         instances = [
             k for k, v in self.instances.items() if isinstance(v, kind)]
-        subclasses = [
-            k for k, v in self.subclasses.items() if issubclass(v, kind)]
-        return tuple(instances + subclasses)   
+        classes = [
+            k for k, v in self.classes.items() if issubclass(v, kind)]
+        return tuple(instances + classes)   
      
     @property
     def tasks(self) -> tuple[str]:
         kind = self.bases['task']
         instances = [
             k for k, v in self.instances.items() if isinstance(v, kind)]
-        subclasses = [
-            k for k, v in self.subclasses.items() if issubclass(v, kind)]
-        return tuple(instances + subclasses)
+        classes = [
+            k for k, v in self.classes.items() if issubclass(v, kind)]
+        return tuple(instances + classes)
 
     @property
     def workers(self) -> tuple[str]:
         kind = self.bases['worker']
         instances = [
             k for k, v in self.instances.items() if isinstance(v, kind)]
-        subclasses = [
-            k for k, v in self.subclasses.items() if issubclass(v, kind)]
-        return tuple(instances + subclasses)
+        classes = [
+            k for k, v in self.classes.items() if issubclass(v, kind)]
+        return tuple(instances + classes)
 
     """ Public Methods """
     
-    def classify(self, component: str) -> str:
+    def classify(
+        self,
+        component: Union[str, Type[options.NODE], options.NODE]) -> str:
         """[summary]
 
         Args:
@@ -135,22 +141,40 @@ class ProjectLibrary(mappings.Library):
         Returns:
             str: [description]
             
-        """        
-        if component in self.laborers:
-            return 'laborer'
-        elif component in self.managers:
-            return 'manager'
-        elif component in self.tasks:
-            return 'task'
-        elif component in self.workers:
-            return 'worker'
-        else:
-            raise TypeError(f'{component} is not a recognized type')
+        """
+        for name, _ in self.bases.items():
+            if self.is_base(component = component, base = name):
+                return name
+        raise KeyError('component was not found in the project library')
 
-    def instance(self, name: Union[str, Sequence[str]], **kwargs) -> Component:
+    def is_base(
+        self, 
+        component: Union[str, Type[options.NODE], options.NODE],
+        base: str) -> bool:
+        """[summary]
+
+        Args:
+            component (Union[str, Type[options.NODE], options.NODE]): [description]
+            base (str): [description]
+
+        Returns:
+            bool: [description]
+            
+        """
+        if isinstance(component, str):
+            component = self[component]
+        elif isinstance(component, options.NODE):
+            component = component.__class__
+        return issubclass(component, self.bases[base])        
+        
+    def instance(
+        self, 
+        name: Union[str, Sequence[str]], 
+        *args, 
+        **kwargs) -> Component:
         """Returns instance of first match of 'name' in stored catalogs.
         
-        The method prioritizes the 'instances' catalog over 'subclasses' and any
+        The method prioritizes the 'instances' catalog over 'classes' and any
         passed names in the order they are listed.
         
         Args:
@@ -167,7 +191,7 @@ class ProjectLibrary(mappings.Library):
         primary = names[0]
         item = None
         for key in names:
-            for catalog in ['instances', 'subclasses']:
+            for catalog in ['instances', 'classes']:
                 try:
                     item = getattr(self, catalog)[key]
                     break
@@ -178,7 +202,7 @@ class ProjectLibrary(mappings.Library):
         if item is None:
             raise KeyError(f'No matching item for {name} was found') 
         elif inspect.isclass(item):
-            instance = item(name = primary, **kwargs)
+            instance = item(primary, *args, **kwargs)
         else:
             instance = copy.deepcopy(item)
             for key, value in kwargs.items():
@@ -215,11 +239,11 @@ class ProjectLibrary(mappings.Library):
             instances_key = self._get_instances_key(component = component)
             self.instances[instances_key] = component
             subclasses_key = self._get_subclasses_key(component = component)
-            if subclasses_key not in self.subclasses:
-                self.subclasses[subclasses_key] = component.__class__
+            if subclasses_key not in self.classes:
+                self.classes[subclasses_key] = component.__class__
         elif inspect.isclass(component) and issubclass(component, Component):
             subclasses_key = self._get_subclasses_key(component = component)
-            self.subclasses[subclasses_key] = component
+            self.classes[subclasses_key] = component
         else:
             raise TypeError(
                 f'component must be a Component subclass or instance')
@@ -228,7 +252,7 @@ class ProjectLibrary(mappings.Library):
     def select(self, name: Union[str, Sequence[str]]) -> Component:
         """Returns subclass of first match of 'name' in stored catalogs.
         
-        The method prioritizes the 'subclasses' catalog over 'instances' and any
+        The method prioritizes the 'classes' catalog over 'instances' and any
         passed names in the order they are listed.
         
         Args:
@@ -244,7 +268,7 @@ class ProjectLibrary(mappings.Library):
         names = convert.iterify(name)
         item = None
         for key in names:
-            for catalog in ['subclasses', 'instances']:
+            for catalog in ['classes', 'instances']:
                 try:
                     item = getattr(self, catalog)[key]
                     break
@@ -420,10 +444,10 @@ class Parameters(mappings.Dictionary):
                 except (KeyError, AttributeError):
                     pass
         return self
-
-
+    
+            
 @dataclasses.dataclass
-class Component(composites.Node):
+class Component(composites.Node, workshop.LibraryFactory):
     """Base class for nodes in a project workflow.
 
     Args:
@@ -439,7 +463,10 @@ class Component(composites.Node):
             should  be called. If 'iterations' is 'infinite', the 'implement' 
             method will continue indefinitely unless the method stops further 
             iteration. Defaults to 1.
-
+        library (ClassVar[MutableMapping[str, Type[Any]]]): key names are str
+            names of a subclass (snake_case by default) and values are the 
+            subclasses. Defaults to an empty dict.  
+            
     Attributes:
         library (ClassVar[Library]): library that stores concrete (non-abstract) 
             subclasses and instances of Component. 
@@ -450,6 +477,7 @@ class Component(composites.Node):
     parameters: MutableMapping[Hashable, Any] = dataclasses.field(
         default_factory = Parameters)
     iterations: Union[int, str] = 1
+    library: ClassVar[NodeLibrary] = NodeLibrary()
 
     """ Initialization Methods """
     
@@ -645,11 +673,11 @@ class Worker(Component, abc.ABC):
     
 @dataclasses.dataclass
 class Laborer(graph.Graph, Worker):
-    """Keystone class for parts of an denovo workflow.
+    """Keystone class for parts of an amos workflow.
 
     Args:
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout denovo. For example, if an denovo 
+            internal referencing throughout amos. For example, if an amos 
             instance needs settings from an Outline instance, 'name' should 
             match the appropriate section name in an Outline instance. Defaults 
             to None. 
@@ -717,7 +745,7 @@ class Laborer(graph.Graph, Worker):
         """Applies stored nodes to 'project' in order.
 
         Args:
-            project (Project): denovo project to apply changes to and/or
+            project (Project): amos project to apply changes to and/or
                 gather needed data from.
                 
         Returns:
@@ -764,7 +792,7 @@ class Manager(Worker, abc.ABC):
         
     Args:
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout denovo. For example, if an denovo 
+            internal referencing throughout amos. For example, if an amos 
             instance needs settings from an Outline instance, 'name' should 
             match the appropriate section name in an Outline instance. Defaults 
             to None. 
@@ -840,7 +868,7 @@ class Manager(Worker, abc.ABC):
         """Applies 'implementation' to 'project' using multiple cores.
 
         Args:
-            project (Project): denovo project to apply changes to and/or
+            project (Project): amos project to apply changes to and/or
                 gather needed data from.
                 
         Returns:
@@ -864,7 +892,7 @@ class Contest(Manager):
         
     Args:
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout denovo. For example, if an denovo 
+            internal referencing throughout amos. For example, if an amos 
             instance needs settings from an Outline instance, 'name' should 
             match the appropriate section name in an Outline instance. Defaults 
             to None. 
@@ -907,7 +935,7 @@ class Study(Manager):
         
     Args:
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout denovo. For example, if an denovo 
+            internal referencing throughout amos. For example, if an amos 
             instance needs settings from an Outline instance, 'name' should 
             match the appropriate section name in an Outline instance. Defaults 
             to None. 
@@ -950,7 +978,7 @@ class Survey(Manager):
         
     Args:
         name (str): designates the name of a class instance that is used for 
-            internal referencing throughout denovo. For example, if an denovo 
+            internal referencing throughout amos. For example, if an amos 
             instance needs settings from an Outline instance, 'name' should 
             match the appropriate section name in an Outline instance. Defaults 
             to None. 

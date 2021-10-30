@@ -7,25 +7,25 @@ License: Apache-2.0 (https://www.apache.org/licenses/LICENSE-2.0)
 
 import dataclasses
 
-import denovo
+import amos
 
 import amos
 
 
 @dataclasses.dataclass
-class Something(denovo.structures.Node):
+class Something(amos.structures.Node):
     
     pass
 
 
 @dataclasses.dataclass
-class AnotherThing(denovo.structures.Node):
+class AnotherThing(amos.structures.Node):
     
     pass
 
 
 @dataclasses.dataclass
-class EvenAnother(denovo.structures.Node):
+class EvenAnother(amos.structures.Node):
     
     pass
 
@@ -34,14 +34,14 @@ def test_workflow():
     # Tests adjacency matrix constructor
     matrix = tuple([[[0, 0, 1], [1, 0, 0], [0, 0, 0]],
                     ['scorpion', 'frog', 'river']])
-    workflow = denovo.Workflow.from_matrix(matrix = matrix)
+    workflow = amos.Workflow.from_matrix(matrix = matrix)
     assert 'scorpion' in workflow['frog']
     assert 'river' not in workflow['frog']
     # Tests adjacency list constructor
     adjacency = {'grumpy': {'sleepy'},
                  'doc': {},
                  'sneezy': {'grumpy', 'bashful'}}
-    workflow = denovo.Workflow.from_adjacency(adjacency = adjacency)
+    workflow = amos.Workflow.from_adjacency(adjacency = adjacency)
     assert 'sleepy' in workflow['grumpy']
     assert 'bashful' in workflow['sneezy']
     assert 'bashful' not in workflow['doc']
@@ -50,12 +50,12 @@ def test_workflow():
              ('camera', 'man'), 
              ('person', 'man'), 
              ('tv', 'person')]
-    workflow_edges = denovo.Workflow.from_edges(edges = edges)
+    workflow_edges = amos.Workflow.from_edges(edges = edges)
     assert 'woman' in workflow_edges['camera']
     assert 'man' in workflow_edges['camera']
     assert 'tv' not in workflow_edges['person']
     # Tests manual construction
-    workflow = denovo.Workflow()
+    workflow = amos.Workflow()
     workflow.add('bonnie')
     workflow.add('clyde')
     workflow.add('butch')
@@ -79,7 +79,7 @@ def test_workflow():
     assert ['bonnie', 'clyde'] in all_paths
     assert ['bonnie', 'henchman'] in all_paths
     workflow.merge(item = workflow_edges)
-    new_workflow = denovo.Workflow()
+    new_workflow = amos.Workflow()
     something = Something()
     another_thing = AnotherThing()
     even_another = EvenAnother()
@@ -95,6 +95,6 @@ def test_workflow():
 
 
 if __name__ == '__main__':
-    denovo.testing.testify(target_module = amos.structures, 
+    amos.testing.testify(target_module = amos.structures, 
                            testing_module = __name__)
     
