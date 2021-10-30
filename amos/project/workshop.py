@@ -1,5 +1,5 @@
 """
-workshop: functions for converting amos objects
+workshop: helper classes for projects
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2020-2021, Corey Rayburn Yung
 License: Apache-2.0
@@ -21,305 +21,303 @@ Contents:
 """
 from __future__ import annotations
 from collections.abc import (
-    Hashable, Iterable, Mapping, MutableMapping, MutableSequence, Sequence)
+    Hashable, Iterable, Iterator, Mapping, MutableMapping, Sequence)
 import dataclasses
+import itertools
+import pathlib
+import types
 from typing import Any, ClassVar, Optional, Type, TYPE_CHECKING, Union
 
-import more_itertools
-
 from ..base import mappings
+from ..construct import configuration
+from ..repair import convert
 from ..repair import modify
-from . import configuration
-from . import interface
-from . import stages
+from . import options
 
-    
-""" Configuration Parsing Functions """
+if TYPE_CHECKING:
+    from . import interface
 
-def settings_to_outline(
-    settings: configuration.Settings, 
-    **kwargs) -> stages.Outline:
-    """[summary]
+
+@dataclasses.dataclass
+class ProjectSettings(configuration.Settings):
+    """Loads and stores project configuration settings.
+
+    To create settings instance, a user can pass as the 'contents' parameter a:
+        1) pathlib file path of a compatible file type;
+        2) string containing a a file path to a compatible file type;
+                                or,
+        3) 2-level nested dict.
+
+    If 'contents' is imported from a file, settings creates a dict and can 
+    convert the dict values to appropriate datatypes. Currently, supported file 
+    types are: ini, json, toml, yaml, and python. If you want to use toml, yaml, 
+    or json, the identically named packages must be available in your python
+    environment.
+
+    If 'infer_types' is set to True (the default option), str dict values are 
+    automatically converted to appropriate datatypes (str, list, float, bool, 
+    and int are currently supported). Type conversion is automatically disabled
+    if the source file is a python module (assuming the user has properly set
+    the types of the stored python dict).
+
+    Because settings uses ConfigParser for .ini files, by default it stores 
+    a 2-level dict. The desire for accessibility and simplicity denovoted this 
+    limitation. A greater number of levels can be achieved by having separate
+    sections with names corresponding to the strings in the values of items in 
+    other sections. 
 
     Args:
-        settings (amos.shared.bases.settings): [description]
+        contents (MutableMapping[Hashable, Any]): a dict for storing 
+            configuration options. Defaults to en empty dict.
+        default (Any): default value to return when the 'get' method is used.
+            Defaults to an empty dict.
+        default (Mapping[str, Mapping[str]]): any default options that should
+            be used when a user does not provide the corresponding options in 
+            their configuration settings. Defaults to an empty dict.
+        infer_types (bool): whether values in 'contents' are converted to other 
+            datatypes (True) or left alone (False). If 'contents' was imported 
+            from an .ini file, all values will be strings. Defaults to True.
 
-    Returns:
-        Outline: derived from 'settings'.
-        
     """
-    suffixes = denovo.shared.library.subclasses.suffixes
-    outline = stages.Outline(**kwargs)
-    section_base = amos.stages.Section
-    for name, section in settings.items():
-        if any(k.endswith(suffixes) for k in section.keys()):
-            outline[name] = section_base.from_settings(settings = settings,
-                                                       name = name)
-    return outline
-    
-def create_workflow(project: interface.Project, **kwargs) -> stages.Workflow:
-    """[summary]
+    contents: MutableMapping[Hashable, Any] = dataclasses.field(
+        default_factory = dict)
+    default_factory: Optional[Any] = dataclasses.field(
+        default_factory = dict)
+    default: Mapping[Hashable, Any] = dataclasses.field(
+        default_factory = dict)
+    infer_types: bool = True
+    sources: ClassVar[Mapping[Type[Any], str]] = {
+        MutableMapping: 'dictionary', 
+        pathlib.Path: 'path',  
+        str: 'path'}
 
-    Args:
-        project (interface.Project): [description]
+    """ Initialization Methods """
 
-    Returns:
-        stages.Workflow: [description]
-        
-    """
-    workflow = outline_to_workflow(
-        outline = project.outline,
-        library = project.library,
-        **kwargs)
-    return workflow
-
-def outline_to_workflow(outline: stages.Outline, **kwargs) -> stages.Workflow:
-    """[summary]
-
-    Args:
-        outline (stages.Outline): [description]
-        library (denovo.containers.Library): [description]
-
-    Returns:
-        stages.Workflow: [description]
-        
-    """
-    for name in outline.nodes:
-        outline_to_component(name = name, outline = outline)
-    workflow = amos.shared.bases.workflow
-    workflow = outline_to_system(outline = outline, **kwargs)
-    return workflow 
- 
-def outline_to_system(outline: stages.Outline) -> stages.Workflow:
-    """[summary]
-
-    Args:
-        outline (stages.Outline): [description]
-        library (nodes.Library, optional): [description]. Defaults to None.
-        connections (dict[str, list[str]], optional): [description]. Defaults 
-            to None.
-
-    Returns:
-        amos.structures.Graph: [description]
-        
-    """    
-    connections = connections or outline_to_connections(
-        outline = outline, 
-        library = library)
-    graph = amos.structures.Graph()
-    for node in connections.keys():
-        kind = library.classify(component = node)
-        method = locals()[f'finalize_{kind}']
-        graph = method(
-            node = node, 
-            connections = connections,
-            library = library, 
-            graph = graph)     
-    return graph
-
-def outline_to_component(name: str, 
-                         outline: stages.Outline, 
-                         **kwargs) -> amos.base.Component:
-    """[summary]
-
-    Args:
-        name (str): [description]
-        section (str): [description]
-        outline (stages.Outline): [description]
-        library (nodes.Library, optional): [description]. Defaults to None.
-        connections (dict[str, list[str]], optional): [description]. Defaults 
-            to None.
-        design (str, optional): [description]. Defaults to None.
-        recursive (bool, optional): [description]. Defaults to True.
-        overwrite (bool, optional): [description]. Defaults to False.
-
-    Returns:
-        nodes.Component: [description]
-    
-    """
-    design = outline.designs[name] or None
-    base = outline.bases[name]
-    initialization = outline_to_initialization(
-        name = name, 
-        design = design,
-        section = section, 
-        outline = outline,
-        library = library)
-    initialization.update(kwargs)
-    if 'parameters' not in initialization:
-        initialization['parameters'] = outline_to_implementation(
-            name = name, 
-            design = design,
-            outline = outline)
-    component = library.instance(name = [name, design], **initialization)
-    return component
-
-def outline_to_initialization(
-    name: str, 
-    section: str,
-    design: str,
-    outline: stages.Outline,
-    library: nodes.Library) -> dict[Hashable, Any]:
-    """Gets parameters for a specific Component from 'outline'.
-
-    Args:
-        name (str): [description]
-        section (str): [description]
-        design (str): [description]
-        outline (stages.Outline): [description]
-        library (nodes.Library): [description]
-
-    Returns:
-        dict[Hashable, Any]: [description]
-        
-    """
-    suboutline = outline[section]
-    parameters = library.parameterify(name = [name, design])
-    possible = tuple(i for i in parameters if i not in ['name', 'contents'])
-    parameter_keys = [k for k in suboutline.keys() if k.endswith(possible)]
-    kwargs = {}
-    for key in parameter_keys:
-        prefix, suffix = amos.tools.divide_string(key)
-        if key.startswith(name) or (name == section and prefix == suffix):
-            kwargs[suffix] = suboutline[key]
-    return kwargs  
-        
-def outline_to_implementation(
-    name: str, 
-    design: str,
-    outline: stages.Outline) -> dict[Hashable, Any]:
-    """[summary]
-
-    Args:
-        name (str): [description]
-        design (str): [description]
-        outline (stages.Outline): [description]
-
-    Returns:
-        dict[Hashable, Any]: [description]
-        
-    """
-    try:
-        parameters = outline[f'{name}_parameters']
-    except KeyError:
+    def __post_init__(self) -> None:
+        """Initializes class instance attributes."""
+        # Calls parent and/or mixin initialization method(s).
         try:
-            parameters = outline[f'{design}_parameters']
-        except KeyError:
-            parameters = {}
-    return parameters
-
-def finalize_serial(
-    node: str,
-    connections: dict[str, list[str]],
-    library: nodes.Library,
-    graph: amos.structures.Graph) -> amos.structures.Graph:
-    """[summary]
-
-    Args:
-        node (str): [description]
-        connections (dict[str, list[str]]): [description]
-        library (nodes.Library): [description]
-        graph (amos.structures.Graph): [description]
-
-    Returns:
-        amos.structures.Graph: [description]
-        
-    """    
-    connections = _serial_order(
-        name = node, 
-        connections = connections)
-    nodes = list(more_itertools.collapse(connections))
-    if nodes:
-        graph.extend(nodes = nodes)
-    return graph      
-
-def _serial_order(
-    name: str,
-    connections: dict[str, list[str]]) -> list[Hashable]:
-    """[summary]
-
-    Args:
-        name (str): [description]
-        directive (core.Directive): [description]
-
-    Returns:
-        list[Hashable]: [description]
-        
-    """   
-    organized = []
-    components = connections[name]
-    for item in components:
-        organized.append(item)
-        if item in connections:
-            organized_connections = []
-            connections = _serial_order(
-                name = item, 
-                connections = connections)
-            organized_connections.append(connections)
-            if len(organized_connections) == 1:
-                organized.append(organized_connections[0])
-            else:
-                organized.append(organized_connections)
-    return organized   
-
-
-""" Workflow Executing Functions """
-
-def workflow_to_summary(project: interface.Project, **kwargs) -> interface.Project:
-    """[summary]
-
-    Args:
-        project (interface.Project): [description]
-
-    Returns:
-        nodes.Component: [description]
-        
-    """
-    # summary = None
-    # print('test workflow', project.workflow)
-    # print('test paths', project.workflow.paths)
-    # print('test parser contents', library.instances['parser'].contents)
-    # print('test parser paths', library.instances['parser'].paths)
-    summary = configuration.SUMMARY()
-    print('test project paths', project.workflow.paths)
-    # for path in enumerate(project.workflow.paths):
-    #     name = f'{summary.prefix}_{i + 1}'
-    #     summary.add({name: workflow_to_result(
-    #         path = path,
-    #         project = project,
-    #         data = project.data)})
-    return summary
-        
-def workflow_to_result(
-    path: Sequence[str],
-    project: interface.Project,
-    data: Any = None,
-    library: nodes.Library = None,
-    result: core.Result = None,
-    **kwargs) -> object:
-    """[summary]
-
-    Args:
-        name (str): [description]
-        path (Sequence[str]): [description]
-        project (interface.Project): [description]
-        data (Any, optional): [description]. Defaults to None.
-        library (nodes.Library, optional): [description]. Defaults to None.
-        result (core.Result, optional): [description]. Defaults to None.
-
-    Returns:
-        object: [description]
-        
-    """    
-    library = library or configuration.LIBRARY
-    result = result or configuration.RESULT
-    data = data or project.data
-    result = result()
-    for node in path:
-        print('test node in path', node)
-        try:
-            component = library.instance(name = node)
-            result.add(component.execute(project = project, **kwargs))
-        except (KeyError, AttributeError):
+            super().__post_init__()
+        except AttributeError:
             pass
-    return result
+        # Converts sections in 'contents' to Section types.
+        self._sectionify()
+        
+    """" Private Methods """
+    
+    def _sectionify(self) -> None:
+        new_contents = {}
+        for key, value in self.contents.items():
+            section = Section(contents = value, name = key)
+            new_contents[key] = section
+        self.contents = new_contents
+        return
+
+
+@dataclasses.dataclass
+class Section(mappings.Dictionary):
+    """Section of Outline with connections.
+
+    Args:
+        contents (MutableMapping[Hashable, Any]]): stored dictionary. Defaults 
+            to an empty dict.
+        default_factory (Any): default value to return when the 'get' method is 
+            used. Defaults to None.
+                          
+    """
+    contents: MutableMapping[Hashable, Any] = dataclasses.field(
+        default_factory = dict)
+    default_factory: Optional[Any] = None
+    name: Optional[str] = None
+
+    """ Properties """
+    
+    @property
+    def bases(self) -> dict[str, str]:
+        """[summary]
+
+        Returns:
+            dict[str, str]: [description]
+            
+        """
+        bases = {}
+        for key in self.connections.keys():
+            _, suffix = modify.cleave_str(key)
+            values = convert.iterify(self[key])
+            if suffix.endswith('s'):
+                base = suffix[:-1]
+            else:
+                base = suffix            
+            bases.update(dict.fromkeys(values, base))
+        return bases
+    
+    @property
+    def connections(self) -> dict[str, list[str]]:
+        """[summary]
+
+        Returns:
+            dict[str, list[str]]: [description]
+            
+        """
+        connections = {}
+        keys = [k for k in self.keys() if k.endswith(self.suffixes)]
+        for key in keys:
+            prefix, suffix = modify.cleave_str(key)
+            values = convert.iterify(self[key])
+            if prefix == suffix:
+                if prefix in connections:
+                    connections[self.name].extend(values)
+                else:
+                    connections[self.name] = values
+            else:
+                if prefix in connections:
+                    connections[prefix].extend(values)
+                else:
+                    connections[prefix] = values
+        return connections
+
+    @property
+    def designs(self) -> dict[str, str]:
+        """[summary]
+
+        Returns:
+            dict[str, str]: [description]
+            
+        """
+        designs = {}
+        design_keys = [k for k in self.keys() if k.endswith('_design')]
+        for key in design_keys:
+            prefix, _ = modify.cleave_str(key)
+            designs[prefix] = self[key]
+        return designs
+
+    @property
+    def nodes(self) -> list[str]:
+        """[summary]
+
+        Returns:
+            list[str]: [description]
+            
+        """
+        key_nodes = list(self.connections.keys())
+        value_nodes = list(
+            itertools.chain.from_iterable(self.connections.values()))
+        return modify.deduplicate(item = key_nodes + value_nodes) 
+
+    @property
+    def other(self) -> dict[str, str]:
+        """[summary]
+
+        Returns:
+            dict[str, str]: [description]
+            
+        """
+        design_keys = [k for k in self.keys() if k.endswith('_design')]
+        connection_keys = [k for k in self.keys() if k.endswith(self.suffixes)]
+        exclude = design_keys + connection_keys
+        return {k: v for k, v in self.contents.items() if k not in exclude}
+
+    """ Public Methods """
+
+    @classmethod
+    def from_settings(
+        cls, 
+        settings: configuration.Settings,
+        name: str,
+        **kwargs) -> Section:
+        """[summary]
+
+        Args:
+            settings (amos.shared.bases.settings): [description]
+            name (str):
+
+        Returns:
+            Section: derived from 'settings'.
+            
+        """        
+        return cls(contents = settings[name], name = name, **kwargs)    
+      
+
+@dataclasses.dataclass
+class Director(Iterator):
+    """Iterator for amos Project instances.
+    
+    
+    """
+    project: interface.Project = None
+    converters: types.ModuleType = options.CONVERTERS
+    
+    """ Initialization Methods """
+
+    def __post_init__(self) -> None:
+        """Initializes class instance attributes."""
+        # Calls parent and/or mixin initialization method(s).
+        try:
+            super().__post_init__()
+        except AttributeError:
+            pass
+        # Sets index for iteration.
+        self.index = 0
+        
+    """ Properties """
+    
+    @property
+    def current(self) -> str:
+        return list(self.stages.keys())[self.index]
+    
+    @property
+    def previous(self) -> str:
+        try:
+            return list(self.stages.keys())[self.index -1]
+        except IndexError:
+            return None
+          
+    @property
+    def stages(self) -> (
+        Sequence[Union[str, Type[options.STAGE], options.STAGE]]):
+        return self.project.stages
+    
+    @property
+    def subsequent(self) -> str:
+        try:
+            return list(self.stages.keys())[self.index + 1]
+        except IndexError:
+            return None
+       
+    """ Public Methods """
+    
+    def advance(self) -> None:
+        """Iterates through next stage."""
+        return self.__next__()
+
+    def complete(self) -> None:
+        """Iterates through all stages."""
+        for stage in self.stages:
+            self.advance()
+        return self    
+
+    def __iter__(self) -> Iterable:
+        """Returns iterable of 'stages'.
+        
+        Returns:
+            Iterable: of 'stages'.
+            
+        """
+        return self
+ 
+    def __next__(self) -> None:
+        """Completes a Stage instance."""
+        if self.index < len(self.stages):
+            source = self.previous or 'settings'
+            product = self.stages[self.current]
+            converter = getattr(globals(), f'create_{product}')
+            if self.project.settings['general']['verbose']:
+                print(f'Creating {product} from {source}')
+            kwargs = {'project': self.project}
+            setattr(self.project, product, converter(**kwargs))
+            self.index += 1
+            if self.project.settings['general']['verbose']:
+                print(f'Completed {product}')
+        else:
+            raise StopIteration
+        return self

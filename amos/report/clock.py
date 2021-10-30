@@ -35,6 +35,11 @@ from typing import Any, Optional, Type, Union
 
 """ General Tools """
 
+def datetime_string(
+    prefix: str = '', 
+    time_format: str = '%Y-%m-%d_%H-%M') -> str:
+    return ''.join([prefix, datetime.datetime.now().strftime(time_format)])
+
 def how_soon_is_now(
     prefix: Optional[str] = None,
     time_format: str = '%Y-%m-%d_%H-%M') -> str:

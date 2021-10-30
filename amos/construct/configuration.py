@@ -30,14 +30,12 @@ import configparser
 import dataclasses
 import importlib
 import importlib.util
-import itertools
 import pathlib
 from typing import Any, ClassVar, Optional, Type, Union
 
 from ..base import mappings
 from ..construct import factories
 from ..repair import convert
-from ..repair import modify
 
 
 """ Configuration System"""
@@ -313,28 +311,7 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
         except KeyError:
             self[section] = contents
         return
-
-    def get(self, key: Hashable) -> Any: # type: ignore
-        """Returns value in 'contents' or value in 'default_factory' attribute.
         
-        Args:
-            key (Hashable): key for value in 'contents'.
-                
-        Returns:
-            Any: value matching key in 'contents' or 'default_factory' value. 
-            
-        """
-        try:
-            return[key]
-        except (KeyError, TypeError):
-            if self.default_factory is None:
-                raise KeyError(f'{key} is not in {self.__class__}')
-            else:
-                try:
-                    return self.default_factory()
-                except TypeError:
-                    return self.default_factory
-                
     def inject(
         self, 
         instance: object,
@@ -354,7 +331,7 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
             instance (object): denovo class instance with modifications made.
 
         """
-        sections = ['general']
+        sections = []
         try:
             sections.append(instance.name)
         except AttributeError:
@@ -371,16 +348,6 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
             except KeyError:
                 pass
         return instance
-
-    def setdefault(self, value: Any) -> None: # type: ignore
-        """sets default value to return when 'get' method is used.
-        
-        Args:
-            value (Any): default value to return.
-            
-        """
-        self.default_factory = value 
-        return
        
     """ Private Methods """
 
@@ -453,127 +420,3 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
                     'key must be a str and value must be a dict type')
         return
 
-
-@dataclasses.dataclass
-class Section(mappings.Dictionary):
-    """Section of Outline with connections.
-
-    Args:
-        contents (MutableMapping[Hashable, Any]]): stored dictionary. Defaults 
-            to an empty dict.
-        default_factory (Any): default value to return when the 'get' method is 
-            used. Defaults to None.
-                          
-    """
-    contents: MutableMapping[Hashable, Any] = dataclasses.field(
-        default_factory = dict)
-    default_factory: Optional[Any] = None
-    name: Optional[str] = None
-
-    """ Properties """
-    
-    @property
-    def bases(self) -> dict[str, str]:
-        """[summary]
-
-        Returns:
-            dict[str, str]: [description]
-            
-        """
-        bases = {}
-        for key in self.connections.keys():
-            _, suffix = modify.cleave_str(key)
-            values = convert.iterify(self[key])
-            if suffix.endswith('s'):
-                base = suffix[:-1]
-            else:
-                base = suffix            
-            bases.update(dict.fromkeys(values, base))
-        return bases
-    
-    @property
-    def connections(self) -> dict[str, list[str]]:
-        """[summary]
-
-        Returns:
-            dict[str, list[str]]: [description]
-            
-        """
-        connections = {}
-        keys = [k for k in self.keys() if k.endswith(self.suffixes)]
-        for key in keys:
-            prefix, suffix = modify.cleave_str(key)
-            values = convert.iterify(self[key])
-            if prefix == suffix:
-                if prefix in connections:
-                    connections[self.name].extend(values)
-                else:
-                    connections[self.name] = values
-            else:
-                if prefix in connections:
-                    connections[prefix].extend(values)
-                else:
-                    connections[prefix] = values
-        return connections
-
-    @property
-    def designs(self) -> dict[str, str]:
-        """[summary]
-
-        Returns:
-            dict[str, str]: [description]
-            
-        """
-        designs = {}
-        design_keys = [k for k in self.keys() if k.endswith('_design')]
-        for key in design_keys:
-            prefix, _ = modify.cleave_str(key)
-            designs[prefix] = self[key]
-        return designs
-
-    @property
-    def nodes(self) -> list[str]:
-        """[summary]
-
-        Returns:
-            list[str]: [description]
-            
-        """
-        key_nodes = list(self.connections.keys())
-        value_nodes = list(
-            itertools.chain.from_iterable(self.connections.values()))
-        return modify.deduplicate(item = key_nodes + value_nodes) 
-
-    @property
-    def other(self) -> dict[str, str]:
-        """[summary]
-
-        Returns:
-            dict[str, str]: [description]
-            
-        """
-        design_keys = [k for k in self.keys() if k.endswith('_design')]
-        connection_keys = [k for k in self.keys() if k.endswith(self.suffixes)]
-        exclude = design_keys + connection_keys
-        return {k: v for k, v in self.contents.items() if k not in exclude}
-
-    """ Public Methods """
-
-    @classmethod
-    def from_settings(
-        cls, 
-        settings: configuration.Settings,
-        name: str,
-        **kwargs) -> Section:
-        """[summary]
-
-        Args:
-            settings (amos.shared.bases.settings): [description]
-            name (str):
-
-        Returns:
-            Section: derived from 'settings'.
-            
-        """        
-        return cls(contents = settings[name], name = name, **kwargs)    
-      

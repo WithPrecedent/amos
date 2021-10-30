@@ -56,6 +56,7 @@ __author__ = 'Corey Rayburn Yung'
 from .base.bunches import *
 from .base.mappings import *
 from .base.sequences import *
+from .construct.configuration import *
 from .construct.factories import *
 from .construct.lazy import *
 from .core.check import *
@@ -69,7 +70,7 @@ from .observe.module import *
 from .observe.package import *
 from .observe.registries import *
 from .observe.traits import *
-from .project.configuration import *
+from .project.settings import *
 from .project.filing import *
 from .repair.convert import *
 from .repair.modify import *

@@ -20,12 +20,28 @@ Contents:
 
 """
 from __future__ import annotations
+import types
 from typing import Any, Type
 
+from . import filing
+from . import nodes
+from . import stages
+from . import workshop
 
-settings: Type[Any] = configuration.Settings
-outline:
+
+CLERK: Type[Any] = filing.Clerk
+CONVERTERS: types.ModuleType = stages
+DIRECTOR: Type[Any] = workshop.Director
+LIBRARY: Type[Any] = nodes.ProjectLibrary
+NODE: Type[Any] = nodes.Component
+SETTINGS: Type[Any] = workshop.ProjectSettings
+STAGE: Type[Any] = stages.Stage
 
 
+def get_base(base_type: str) -> None:
+    return globals()[base_type.upper()]
+    return
 
-  
+def set_base(base_type: str, base: Type[Any]) -> None:
+    globals()[base_type.upper()] = base
+    return

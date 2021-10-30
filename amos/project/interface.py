@@ -21,21 +21,14 @@ Contents:
 
 """
 from __future__ import annotations
-from collections.abc import (
-    Hashable, Iterable, Iterator, MutableMapping, MutableSequence, Sequence)
+from collections.abc import Iterable, Sequence
 import dataclasses
-import inspect
-import pathlib
 from typing import Any, ClassVar, Optional, Type, Union
 import warnings
 
-import more_itertools
-
 from ..core import composites
-from . import configuration
-from . import filing
-from . import helpers
-from . import stages
+from ..report import clock
+from . import options
 
 
 @dataclasses.dataclass
@@ -81,14 +74,16 @@ class Project(composites.Node):
             
     """
     name: Optional[str] = None
-    settings: Optional[configuration.Settings] = None
-    clerk: Optional[filing.Clerk] = None
-    director: Optional[helpers.Director] = None
-    outline: Optional[Union[Type[stages.Outline], stages.Outline]] = None
-    workflow: Optional[Union[Type[stages.Workflow], stages.Workflow]] = None
-    product: Optional[Union[Type[stages.Product], stages.Product]] = None
-    library: helpers.ProjectLibrary = dataclasses.field(
-        default_factory = helpers.ProjectLibrary)
+    settings: options.SETTINGS = dataclasses.field(
+        default_factory = options.SETTINGS)
+    clerk: options.CLERK = dataclasses.field(
+        default_factory = options.CLERK)
+    director: options.DIRECTOR = dataclasses.field(
+        default_factory = options.DIRECTOR)
+    stages: Sequence[Union[str, Type[options.STAGE], options.STAGE]] = (
+        dataclasses.field(default_factory = list))
+    library: options.LIBRARY = dataclasses.field(
+        default_factory = options.LIBRARY)
     data: Optional[object] = None
     identification: Optional[str] = None
     automatic: bool = True
@@ -104,44 +99,16 @@ class Project(composites.Node):
             super().__post_init__()
         except AttributeError:
             pass
-        # Calls validation methods.
-        for validation in self._validations:
-            try:
-                getattr(self, f'_validate_{validation}')()
-            except AttributeError:
-                pass
+        self._validate_settings()
+        self._validate_identification
+        self._validate_clerk()
+        self._validate_director()
+        self._validate_data()
         # Sets multiprocessing technique, if necessary.
         self._set_parallelization()
         # Calls 'complete' if 'automatic' is True.
         if self.automatic:
             self.complete()
-
-    """ Public Methods """
-
-    @classmethod
-    def from_settings(
-        cls, 
-        settings: configuration.Settings, 
-        **kwargs) -> Project:
-        """[summary]
-
-        Args:
-            settings (SettingsSources): [description]
-
-        Returns:
-            Project: [description]
-            
-        """        
-        
-        if isinstance(settings, amos.shared.bases.settings):
-            outline = amos.shared.bases.outline.create(source = settings)
-        elif (inspect.isclass(settings) 
-              and issubclass(settings, amos.shared.bases.settings)):
-            outline = amos.shared.bases.outline.create(source = settings())
-        else:
-            settings = amos.shared.bases.settings.create(source = settings)
-            outline = amos.shared.bases.outline.create(source = settings)
-        return cls(outline = outline, **kwargs)
         
     """ Public Methods """
     
@@ -156,42 +123,10 @@ class Project(composites.Node):
         return self
                      
     """ Private Methods """
-    
-    def _store_shared_settings(self) -> None:
-        """[summary]
 
-        Returns:
-            [type]: [description]
-            
-        """
-        attributes = dir(amos.shared)
-        constants = [a.is_upper() for a in attributes]
-        relevant = ['general', 'denovo', 'amos', self.name]
-        sections = {k: v for k, v in self.settings.items() if k in relevant}
-        constant_keys = [k for k in sections.keys() if k.upper() in constants]
-        for key in constant_keys:
-            setattr(amos.shared, key.upper(), sections[key])
-        return self
-                  
-    def _validate_outline(self) -> None:
-        """Validates the 'outline' attribute.
-        
-        If 'outline' is None, the default 'outline' in 'configuration' is
-        used.
-        
-        """
-        if self.outline is None:
-            self.outline = stages.Outline()
-        elif isinstance(self.outline, (str, pathlib.Path, dict)):
-            self.outline = amos.create(source = self.outline)
-        elif isinstance(self.outline, amos.shared.bases.settings):
-            if not isinstance(self.outline, amos.shared.bases.outline):
-                self.outline = amos.shared.bases.outline.create(
-                    source = self.outline.contents)
-        else:
-            raise TypeError('outline must be a Settings, str, pathlib.Path, '
-                            'dict, or None type')
-        return self      
+    def _validate_settings(self) -> None:
+        """Creates or validates 'settings'."""
+        options.SETTINGS.create(item = self.settings)
     
     def _validate_identification(self) -> None:
         """Creates unique 'identification' if one doesn't exist.
@@ -201,44 +136,31 @@ class Project(composites.Node):
         
         """
         if self.identification is None:
-            self.identification = (
-                denovo.tools.datetime_string(prefix = self.name))
+            prefix = self.name + '_'
+            self.identification = clock.datetime_string(prefix = prefix)
         elif not isinstance(self.identification, str):
             raise TypeError('identification must be a str or None type')
         return self
-    
+          
     def _validate_clerk(self) -> None:
         """Creates or validates 'clerk'."""
-        if isinstance(self.clerk, (str, pathlib.Path, type(None))):
-            self.clerk = amos.shared.bases.clerk(settings = self.outline)
-        elif isinstance(self.clerk, amos.shared.bases.clerk):
-            self.clerk.settings = self.outline
-            self.clerk._add_settings()
-        else:
-            raise TypeError('clerk must be a Clerk, str, pathlib.Path, or None '
-                            'type')
+        options.CLERK.create(item = self.clerk, settings = self.settings)
         return self
 
     def _validate_director(self) -> None:
         """Creates or validates 'director'."""
-        if self.director is None:
-            self.director = amos.shared.bases.director(project = self)
-        elif not isinstance(self.director, amos.shared.bases.director):
-            raise TypeError('director must be a Director or None type')
+        options.DIRECTOR.create(project = self)
         return self
     
-    def _validate_workflow(self) -> None:
-        """Creates or validates 'library'."""
-        if self.workflow is None:
-            self.workflow = amos.shared.bases.workflow(project = self)
-        elif not isinstance(self.workflow, amos.shared.bases.workflow):
-            raise TypeError('workflow must be a Workflow or None type')
+    def _validate_director(self) -> None:
+        """Creates or validates 'data'."""
         return self
 
     def _set_parallelization(self) -> None:
-        """Sets multiprocessing method based on 'outline'."""
-        if amos.shared.PARALLELIZE and not globals()['multiprocessing']:
-            import multiprocessing
+        """Sets multiprocessing method based on 'settings'."""
+        if self.settings['general']['parallelize']:
+            if not globals()['multiprocessing']:
+                import multiprocessing
             multiprocessing.set_start_method('spawn') 
         return self
          
@@ -259,269 +181,4 @@ class Project(composites.Node):
             next(self.director)
         except StopIteration:
             pass
-        return self
-
-@dataclasses.dataclass
-class Director(collections.abc.Iterator):
-    """Iterator for amos Project instances.
-    
-    
-    """
-    project: amos.Project = None
-    workshop: ModuleType = denovo.project.workshop
-
-    """ Initialization Methods """
-
-    def __post_init__(self) -> None:
-        """Initializes class instance attributes."""
-        # Calls parent and/or mixin initialization method(s).
-        try:
-            super().__post_init__()
-        except AttributeError:
-            pass
-        # Sets index for iteration.
-        self.index = 0
-        
-    """ Properties """
-    
-    @property
-    def current(self) -> str:
-        return list(self.stages.keys())[self.index]
-    
-    @property
-    def subsequent(self) -> str:
-        try:
-            return list(self.stages.keys())[self.index + 1]
-        except IndexError:
-            return None
-       
-    """ Public Methods """
-    
-    def advance(self) -> None:
-        """Iterates through next stage."""
-        return self.__next__()
-
-    def complete(self) -> None:
-        """Iterates through all stages."""
-        for stage in self.project.stages:
-            self.advance()
-        return self
-        
-    # def functionify(self, source: str, product: str) -> str:
-    #     """[summary]
-
-    #     Args:
-    #         source (str): [description]
-    #         product (str): [description]
-
-    #     Returns:
-    #         str: [description]
-            
-    #     """        
-    #     name = f'{source}_to_{product}'
-    #     return getattr(self.workshop, name)
-
-    # def kwargify(self, func: Callable) -> dict[Hashable, Any]:
-    #     """[summary]
-
-    #     Args:
-    #         func (Callable): [description]
-
-    #     Returns:
-    #         dict[Hashable, Any]: [description]
-            
-    #     """        
-    #     parameters = inspect.signature(func).parameters.keys()
-    #     kwargs = {}
-    #     for parameter in parameters:
-    #         try:
-    #             kwargs[parameter] = getattr(self.project, parameter)
-    #         except AttributeError:
-    #             pass
-    #     return kwargs
-    
-    """ Dunder Methods """
-
-    # def __getattr__(self, attribute: str) -> Any:
-    #     """[summary]
-
-    #     Args:
-    #         attribute (str): [description]
-
-    #     Raises:
-    #         IndexError: [description]
-
-    #     Returns:
-    #         Any: [description]
-            
-    #     """
-    #     if attribute in self.stages:
-    #         if attribute == self.subsequent:
-    #             self.__next__()
-    #         else:
-    #             raise IndexError(
-    #                 f'You cannot call {attribute} because the current stage is '
-    #                 f'{self.current} and the next callable stage is '
-    #                 f'{self.subsequent}')  
-    #     else:
-    #         raise KeyError(f'{attribute} is not in {self.__class__.__name__}')             
-            
-    def __iter__(self) -> Iterable:
-        """Returns iterable of a Project instance.
-        
-        Returns:
-            Iterable: of the Project instance.
-            
-        """
-        return self
- 
-    def __next__(self) -> None:
-        """Completes a Stage instance."""
-        if self.index + 1 < len(self.stages):
-            source = self.stages[self.current]
-            product = self.stages[self.subsequent]
-            # director = self.functionify(source = source, product = product)
-            director = getattr(self.workshop, f'create_{product}')
-            if hasattr(configuration, 'VERBOSE') and configuration.VERBOSE:
-                print(f'Creating {product}')
-            kwargs = {'project': self.project}
-            setattr(self.project, product, director(**kwargs))
-            self.index += 1
-            if hasattr(configuration, 'VERBOSE') and configuration.VERBOSE:
-                print(f'Completed {product}')
-        else:
-            raise StopIteration
-        return self
-
-
-@dataclasses.dataclass
-class Director(Iterator):
-    """Iterator for amos Project instances.
-    
-    
-    """
-    project: Project = None
-    workshop: ModuleType = denovo.project.workshop
-
-    """ Initialization Methods """
-
-    def __post_init__(self) -> None:
-        """Initializes class instance attributes."""
-        # Calls parent and/or mixin initialization method(s).
-        try:
-            super().__post_init__()
-        except AttributeError:
-            pass
-        # Sets index for iteration.
-        self.index = 0
-        
-    """ Properties """
-    
-    @property
-    def current(self) -> str:
-        return list(self.stages.keys())[self.index]
-    
-    @property
-    def subsequent(self) -> str:
-        try:
-            return list(self.stages.keys())[self.index + 1]
-        except IndexError:
-            return None
-       
-    """ Public Methods """
-    
-    def advance(self) -> None:
-        """Iterates through next stage."""
-        return self.__next__()
-
-    def complete(self) -> None:
-        """Iterates through all stages."""
-        for stage in self.project.stages:
-            self.advance()
-        return self
-        
-    # def functionify(self, source: str, product: str) -> str:
-    #     """[summary]
-
-    #     Args:
-    #         source (str): [description]
-    #         product (str): [description]
-
-    #     Returns:
-    #         str: [description]
-            
-    #     """        
-    #     name = f'{source}_to_{product}'
-    #     return getattr(self.workshop, name)
-
-    # def kwargify(self, func: Callable) -> dict[Hashable, Any]:
-    #     """[summary]
-
-    #     Args:
-    #         func (Callable): [description]
-
-    #     Returns:
-    #         dict[Hashable, Any]: [description]
-            
-    #     """        
-    #     parameters = inspect.signature(func).parameters.keys()
-    #     kwargs = {}
-    #     for parameter in parameters:
-    #         try:
-    #             kwargs[parameter] = getattr(self.project, parameter)
-    #         except AttributeError:
-    #             pass
-    #     return kwargs
-    
-    """ Dunder Methods """
-
-    # def __getattr__(self, attribute: str) -> Any:
-    #     """[summary]
-
-    #     Args:
-    #         attribute (str): [description]
-
-    #     Raises:
-    #         IndexError: [description]
-
-    #     Returns:
-    #         Any: [description]
-            
-    #     """
-    #     if attribute in self.stages:
-    #         if attribute == self.subsequent:
-    #             self.__next__()
-    #         else:
-    #             raise IndexError(
-    #                 f'You cannot call {attribute} because the current stage is '
-    #                 f'{self.current} and the next callable stage is '
-    #                 f'{self.subsequent}')  
-    #     else:
-    #         raise KeyError(f'{attribute} is not in {self.__class__.__name__}')             
-            
-    def __iter__(self) -> Iterable:
-        """Returns iterable of a Project instance.
-        
-        Returns:
-            Iterable: of the Project instance.
-            
-        """
-        return self
- 
-    def __next__(self) -> None:
-        """Completes a Stage instance."""
-        if self.index + 1 < len(self.stages):
-            source = self.stages[self.current]
-            product = self.stages[self.subsequent]
-            # director = self.functionify(source = source, product = product)
-            director = getattr(self.workshop, f'create_{product}')
-            if hasattr(configuration, 'VERBOSE') and configuration.VERBOSE:
-                print(f'Creating {product}')
-            kwargs = {'project': self.project}
-            setattr(self.project, product, director(**kwargs))
-            self.index += 1
-            if hasattr(configuration, 'VERBOSE') and configuration.VERBOSE:
-                print(f'Completed {product}')
-        else:
-            raise StopIteration
         return self
