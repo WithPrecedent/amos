@@ -22,13 +22,16 @@ Contents:
     Catalog (Dictionary): wildcard-accepting dict which is primarily intended 
         for storing different options and strategies. It also returns lists of 
         matches if a list of keys is provided.
- 
+    Library (MutableMapping): a chained mapping used to registering subclasses
+        and instances.
+        
 ToDo:
 
        
 """
 from __future__ import annotations
-from collections.abc import Hashable, Iterator, Mapping, MutableMapping, Sequence
+from collections.abc import (
+    Hashable, Iterator, Mapping, MutableMapping, Sequence)
 import copy
 import dataclasses
 import inspect

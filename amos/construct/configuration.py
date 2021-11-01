@@ -83,8 +83,7 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
     """
     contents: MutableMapping[Hashable, Any] = dataclasses.field(
         default_factory = dict)
-    default_factory: Optional[Any] = dataclasses.field(
-        default_factory = dict)
+    default_factory: Optional[Any] = dict
     default: Mapping[Hashable, Any] = dataclasses.field(
         default_factory = dict)
     infer_types: bool = True
