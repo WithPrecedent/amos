@@ -27,7 +27,9 @@ ToDo:
 
 """
 from __future__ import annotations
+import importlib
 import inspect
+import sys
 import types
 from typing import Any, Optional, Type, Union
 
@@ -37,12 +39,12 @@ from ..repair import modify
 """ Introspection Tools """
           
 def get_classes(
-    item: types.ModuleType, 
+    item: Union[types.ModuleType, str], 
     include_private: bool = False) -> list[Type[Any]]:
     """Returns list of classes in 'item'.
     
     Args:
-        item (types.ModuleType): module to inspect.
+        item (Union[types.ModuleType, str]): module or its name to inspect.
         include_private (bool): whether to include items that begin with '_'
             (True) or to exclude them (False). Defauls to False.
         
@@ -50,6 +52,8 @@ def get_classes(
         list[Type[Any]]: list of classes in 'item'.
         
     """
+    if isinstance(item, str):
+        item = sys.modules[item]
     classes = [
         m[1] for m in inspect.getmembers(item, inspect.isclass)
         if m[1].__module__ == item.__name__]
@@ -58,12 +62,12 @@ def get_classes(
     return classes
         
 def get_functions(
-    item: types.ModuleType, 
+    item: Union[types.ModuleType, str], 
     include_private: bool = False) -> list[types.FunctionType]:
     """Returns list of functions in 'item'.
     
     Args:
-        item (types.ModuleType): module to inspect.
+        item (Union[types.ModuleType, str]): module or its name to inspect.
         include_private (bool): whether to include items that begin with '_'
             (True) or to exclude them (False). Defauls to False.
         
@@ -71,6 +75,8 @@ def get_functions(
         list[Type[types.FunctionType]]: list of functions in 'item'.
         
     """
+    if isinstance(item, str):
+        item = sys.modules[item]
     functions = [
         m[1] for m in inspect.getmembers(item, inspect.isfunction)
         if m[1].__module__ == item.__name__]
@@ -79,12 +85,12 @@ def get_functions(
     return functions 
    
 def name_classes(
-    item: types.ModuleType, 
+    item: Union[types.ModuleType, str], 
     include_private: bool = False) -> list[str]:
     """Returns list of string names of classes in 'item'.
     
     Args:
-        item (types.ModuleType): module to inspect.
+        item (Union[types.ModuleType, str]): module or its name to inspect.
         include_private (bool): whether to include items that begin with '_'
             (True) or to exclude them (False). Defauls to False.
         
@@ -92,21 +98,22 @@ def name_classes(
         list[Type[types.FunctionType]]: list of functions in 'item'.
         
     """
-    names = [
+    if isinstance(item, str):
+        item = sys.modules[item]
+    names = [    
         m[0] for m in inspect.getmembers(item, inspect.isclass)
         if m[1].__module__ == item.__name__]
     if not include_private:
         names = modify.drop_privates(item = names)
-    print('test class', names)
     return names
        
 def name_functions(
-    item: types.ModuleType, 
+    item: Union[types.ModuleType, str], 
     include_private: bool = False) -> list[str]:
     """Returns list of string names of functions in 'item'.
     
     Args:
-        item (types.ModuleType): module to inspect.
+        item (Union[types.ModuleType, str]): module or its name to inspect.
         include_private (bool): whether to include items that begin with '_'
             (True) or to exclude them (False). Defauls to False.
         
@@ -114,6 +121,8 @@ def name_functions(
         list[Type[types.FunctionType]]: list of functions in 'item'.
         
     """
+    if isinstance(item, str):
+        item = sys.modules[item]
     names = [
         m[0] for m in inspect.getmembers(item, inspect.isfunction)
         if m[1].__module__ == item.__name__]

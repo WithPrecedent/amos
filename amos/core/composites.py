@@ -35,7 +35,8 @@ import inspect
 from typing import Any, ClassVar, Optional, Type, TYPE_CHECKING, Union
 
 from ..base import bunches
-from ..observe import registries
+from ..construct import factories
+from ..observe import traits
 from . import check
 
 
@@ -281,7 +282,7 @@ def nodify(item: Union[Type[Any], object]) -> Union[Type[Node], Node]:
 
            
 @dataclasses.dataclass
-class Composite(registries.RegistrarFactory, abc.ABC):
+class Composite(factories.RegistrarFactory, abc.ABC):
     """Base class for composite data structures.
     
     Args:

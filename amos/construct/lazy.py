@@ -76,7 +76,9 @@ def from_file_path(
     if spec is None:
         raise ImportError(f'Failed to create spec from {path}')
     else:
-        return importlib.util.module_from_spec(spec)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
     
 def from_import_path(path: str, package: Optional[str] = None) -> Any:
     """[summary]
