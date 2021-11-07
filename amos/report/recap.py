@@ -63,34 +63,6 @@ INCOMPLETE: str = '...'
 VERTICAL: bool = True
 
 
-def get_name(item: Any, default: Optional[str] = None) -> Optional[str]:
-    """Returns str name representation of 'item'.
-    
-    Args:
-        item (Any): item to determine a str name.
-        default(Optional[str]): default name to return if other methods at name
-            creation fail.
-
-    Returns:
-        str: a name representation of 'item.'
-        
-    """        
-    if isinstance(item, str):
-        return item
-    else:
-        if hasattr(item, 'name') and isinstance(item.name, str):
-            return item.name
-        else:
-            try:
-                return snakify(item.__name__) # type: ignore
-            except AttributeError:
-                if item.__class__.__name__ is not None:
-                    return snakify( # type: ignore
-                        item.__class__.__name__) 
-                else:
-                    return default
-
-
 @dataclasses.dataclass
 class Representation(object):
     """Contains formating information for different data types.
