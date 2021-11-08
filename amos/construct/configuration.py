@@ -71,8 +71,8 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
     Args:
         contents (MutableMapping[Hashable, Any]): a dict for storing 
             configuration options. Defaults to en empty dict.
-        default (Any): default value to return when the 'get' method is used.
-            Defaults to an empty dict.
+        default_factory (Optional[Any]): default value to return when the 'get' 
+            method is used. Defaults to an empty dict.
         default (Mapping[str, Mapping[str]]): any default options that should
             be used when a user does not provide the corresponding options in 
             their configuration settings. Defaults to an empty dict.
