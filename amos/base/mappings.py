@@ -450,7 +450,7 @@ class Library(MutableMapping):
     def withdraw(
         self, 
         item: Union[Hashable, Sequence[Hashable]], 
-        kwargs: Optional[MutableMapping[Hashable, Any]] = None) -> (
+        parameters: Optional[MutableMapping[Hashable, Any]] = None) -> (
             Union[Type[Any], object]):
         """Returns instance or class of first match of 'item' from catalogs.
         
@@ -460,23 +460,23 @@ class Library(MutableMapping):
         Args:
             item (Union[Hashable, Sequence[Hashable]]): key name(s) of stored 
                 item(s) sought.
-            kwargs (Optional[MutableMapping[Hashable, Any]]]): keyword arguments 
-                to pass to a newly created instance or, if the stored item is 
-                already an instance to be manually added as attributes. If not
-                passed, the found item will be returned unaltered. Defaults to
-                None.
+            parameters (Optional[MutableMapping[Hashable, Any]]]): keyword 
+                arguments to pass to a newly created instance or, if the stored 
+                item is already an instance to be manually added as attributes. 
+                If not passed, the found item will be returned unaltered. 
+                Defaults to None.
             
         Raises:
             KeyError: if 'item' does not match a key to a stored item in either
                 'instances' or 'classes'.
             
         Returns:
-            Union[Type[Any], object]: returns a class or instance if 'kwargs' 
+            Union[Type[Any], object]: returns a class or instance if 'parameters' 
                 are None, depending upon with Catalog the matching item is 
-                found. If 'kwargs' are passed, an instance is always returned.
+                found. If 'parameters' are passed, an instance is always returned.
             
         """
-        items = convert.iterify(item)
+        items = list(convert.iterify(item))
         item = None
         for key in items:
             for catalog in ['instances', 'classes']:
@@ -489,14 +489,17 @@ class Library(MutableMapping):
                 break
         if item is None:
             raise KeyError(f'No matching item for {item} was found')
-        if kwargs is not None:
-            if 'item' in item.__annotations__.keys() and 'item' not in kwargs:
-                kwargs[item] = items[0]
+        if parameters is not None:
+            if ('name' in item.__annotations__.keys() 
+                    and 'name' not in parameters):
+                parameters['name'] = items[0]
             if inspect.isclass(item):
-                item = item(**kwargs)
+                return item(**parameters)
             else:
-                for key, value in kwargs.items():
-                    setattr(item, key, value)  
+                instance = copy.deepcopy(item)
+                for key, value in parameters.items():
+                    setattr(instance, key, value)
+                return instance
         return item # type: ignore
     
     """ Dunder Methods """
