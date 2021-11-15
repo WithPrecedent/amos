@@ -25,7 +25,7 @@ ToDo:
 """
 from __future__ import annotations
 import abc
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping, Sequence
 import dataclasses
 from typing import Any, ClassVar, Optional, Type, Union
 
@@ -42,7 +42,7 @@ class BaseFactory(abc.ABC):
     """ Required Subclass Methods """
 
     @abc.abstractclassmethod
-    def create(cls, item: Any, *args: Any, **kwargs: Any) -> BaseFactory:
+    def create(cls, item: Any, **kwargs: Any) -> BaseFactory:
         """Implements technique for creating a (sub)class instance.
 
         Args:
@@ -54,7 +54,62 @@ class BaseFactory(abc.ABC):
         """
         pass
 
+   
+@dataclasses.dataclass
+class LibraryFactory(BaseFactory):
+    """Mixin which automatically registers subclasses and instances.
+    
+    Args:
+        library (ClassVar[mappings.Library]): project library of classes, 
+            instances, and base classes. 
             
+    """
+    library: ClassVar[mappings.Library] = mappings.Library()
+    
+    """ Initialization Methods """
+    
+    @classmethod
+    def __init_subclass__(cls, *args: Any, **kwargs: Any):
+        """Automatically registers subclass."""
+        # Because LibraryFactory is used as a mixin, it is important to
+        # call other base class '__init_subclass__' methods, if they exist.
+        try:
+            super().__init_subclass__(*args, **kwargs) # type: ignore
+        except AttributeError:
+            pass
+        name = traits.get_name(item = cls)
+        cls.library.deposit(item = cls, name = name)
+            
+    def __post_init__(self) -> None:
+        try:
+            super().__post_init__(*args, **kwargs) # type: ignore
+        except AttributeError:
+            pass
+        key = traits.get_name(item = self)
+        self.__class__.library.deposit(item = self, name = key)
+    
+    """ Public Methods """
+
+    @classmethod
+    def create(
+        cls, 
+        item: Union[str, Sequence[str]], 
+        **kwargs: Any) -> LibraryFactory:
+        """Creates an instance of a LibraryFactory subclass from 'item'.
+        
+        Args:
+            item (Any): any supported data structure which acts as a source for
+                creating a LibraryFactory or a str which matches a key in 
+                'library'.
+                                
+        Returns:
+            LibraryFactory: a LibraryFactory subclass instance created based 
+                on 'item' and any passed arguments.
+                
+        """
+        return cls.library.withdraw(item, **kwargs)
+
+             
 @dataclasses.dataclass
 class RegistrarFactory(registries.Registrar, abc.ABC):
     """Mixin which automatically registers subclasses for use by a factory.
@@ -70,7 +125,7 @@ class RegistrarFactory(registries.Registrar, abc.ABC):
     """ Public Methods """
 
     @classmethod
-    def create(cls, item: Any, *args: Any, **kwargs: Any) -> RegistrarFactory:
+    def create(cls, item: Any, **kwargs: Any) -> RegistrarFactory:
         """Creates an instance of a RegistrarFactory subclass from 'item'.
         
         Args:
@@ -85,19 +140,19 @@ class RegistrarFactory(registries.Registrar, abc.ABC):
         """
         if isinstance(item, str):
             try:
-                return cls.registry[item](*args, **kwargs)
+                return cls.registry[item](**kwargs)
             except KeyError:
                 pass
         try:
             name = traits.get_name(item = item)
-            return cls.registry[name](item, *args, **kwargs)
+            return cls.registry[name](item, **kwargs)
         except KeyError:
             for name, kind in cls.registry.items():
                 if (
                     abc.ABC not in kind.__bases__ 
                     and kind.__instancecheck__(instance = item)):
                     method = getattr(cls, f'from_{name}')
-                    return method(item, *args, **kwargs)       
+                    return method(item, **kwargs)       
             raise ValueError(
                 f'Could not create {cls.__name__} from item because it '
                 f'is not one of these supported types: '
@@ -120,7 +175,7 @@ class SourcesFactory(BaseFactory, abc.ABC):
     """ Public Methods """
 
     @classmethod
-    def create(cls, item: Any, *args: Any, **kwargs: Any) -> SourcesFactory:
+    def create(cls, item: Any, **kwargs: Any) -> SourcesFactory:
         """Calls corresponding creation class method to instance a class.
         
         For create to work properly, there should be a corresponding classmethod
@@ -145,7 +200,7 @@ class SourcesFactory(BaseFactory, abc.ABC):
                     method = getattr(cls, method_name)
                 except AttributeError:
                     raise AttributeError(f'{method_name} does not exist')
-                return method(item, *args, **kwargs)
+                return method(item, **kwargs)
         raise KeyError(
             f'item does not match any recognized types in sources attribute')
 
@@ -170,7 +225,7 @@ class SubclassFactory(BaseFactory, abc.ABC):
     """ Public Methods """
 
     @classmethod
-    def create(cls, item: str, *args: Any, **kwargs: Any) -> SubclassFactory:
+    def create(cls, item: str, **kwargs: Any) -> SubclassFactory:
         """Returns subclass based on 'item'
         
         A subclass in the '__subclasses__' attribute is selected based on the
@@ -186,7 +241,7 @@ class SubclassFactory(BaseFactory, abc.ABC):
         options = {
             modify.snakify(item = s.__name__): s for s in cls.__subclasses__}
         try:
-            return options[item](*args, **kwargs)
+            return options[item](**kwargs)
         except KeyError:
             raise KeyError(f'No subclass {item} was found')
                  
@@ -198,7 +253,7 @@ class TypeFactory(BaseFactory, abc.ABC):
     """ Public Methods """
 
     @classmethod
-    def create(cls, item: Any, *args: Any, **kwargs: Any) -> TypeFactory:
+    def create(cls, item: Any, **kwargs: Any) -> TypeFactory:
         """Calls construction method based on type of 'item'.
         
         For create to work properly, there should be a corresponding classmethod
@@ -220,7 +275,7 @@ class TypeFactory(BaseFactory, abc.ABC):
             method = getattr(cls, method_name)
         except AttributeError:
             raise AttributeError(f'{method_name} does not exist')
-        return method(item, *args, **kwargs)
+        return method(item, **kwargs)
 
     """ Private Methods """
     
@@ -234,5 +289,3 @@ class TypeFactory(BaseFactory, abc.ABC):
                 
         """
         return f'from_{item}'
-
- 
