@@ -135,23 +135,23 @@ class Dictionary(bunches.Bunch, MutableMapping):  # type: ignore
             else:
                 return default
                 
-    # def items(self) -> tuple[tuple[Hashable, Any], ...]: # type: ignore
-    #     """Emulates python dict 'items' method.
+    def items(self) -> tuple[tuple[Hashable, Any], ...]: # type: ignore
+        """Emulates python dict 'items' method.
         
-    #     Returns:
-    #         tuple[tuple[Hashable], Any]: a tuple equivalent to dict.items(). 
+        Returns:
+            tuple[tuple[Hashable], Any]: a tuple equivalent to dict.items(). 
             
-    #     """
-    #     return tuple(zip(self.keys(), self.values()))
+        """
+        return tuple(zip(self.keys(), self.values()))
 
-    # def keys(self) -> tuple[Hashable, ...]: # type: ignore
-    #     """Returns 'contents' keys as a tuple.
+    def keys(self) -> tuple[Hashable, ...]: # type: ignore
+        """Returns 'contents' keys as a tuple.
         
-    #     Returns:
-    #         tuple[Hashable, ...]: a tuple equivalent to dict.keys().
+        Returns:
+            tuple[Hashable, ...]: a tuple equivalent to dict.keys().
             
-    #     """
-    #     return tuple(self.contents.keys())
+        """
+        return tuple(self.contents.keys())
 
     def setdefault(self, value: Any) -> None: # type: ignore
         """sets default value to return when 'get' method is used.
@@ -205,14 +205,14 @@ class Dictionary(bunches.Bunch, MutableMapping):  # type: ignore
             new_dictionary.contents = contents
         return new_dictionary
       
-    # def values(self) -> tuple[Any, ...]: # type: ignore
-    #     """Returns 'contents' values as a tuple.
+    def values(self) -> tuple[Any, ...]: # type: ignore
+        """Returns 'contents' values as a tuple.
         
-    #     Returns:
-    #         tuple[Any, ...]: a tuple equivalent to dict.values().
+        Returns:
+            tuple[Any, ...]: a tuple equivalent to dict.values().
             
-    #     """
-    #     return tuple(self.contents.values())
+        """
+        return tuple(self.contents.values())
 
     """ Dunder Methods """
 
