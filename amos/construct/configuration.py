@@ -38,8 +38,6 @@ from ..construct import factories
 from ..repair import convert
 
 
-""" Configuration System"""
-
 @dataclasses.dataclass
 class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
     """Loads and stores configuration settings.
@@ -63,7 +61,7 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
     the types of the stored python dict).
 
     Because settings uses ConfigParser for .ini files, by default it stores 
-    a 2-level dict. The desire for accessibility and simplicity amosted this 
+    a 2-level dict. The desire for accessibility and simplicity dictated this 
     limitation. A greater number of levels can be achieved by having separate
     sections with names corresponding to the strings in the values of items in 
     other sections. 
@@ -418,4 +416,3 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
                 raise TypeError(
                     'key must be a str and value must be a dict type')
         return
-
