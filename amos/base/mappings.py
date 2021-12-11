@@ -381,7 +381,7 @@ class Catalog(Dictionary):
 
 @dataclasses.dataclass  # type: ignore
 class Library(MutableMapping):
-    """Stores classes and class instances.
+    """Stores classes instances and classes in a chained mapping.
     
     When searching for matches, instances are prioritized over classes.
     
@@ -406,20 +406,25 @@ class Library(MutableMapping):
         """Adds 'item' to 'classes' and/or 'instances'.
 
         If 'item' is a class, it is added to 'classes.' If it is an object, it
-        is added to 'instances' and its class is added to 'classes'.
+        is added to 'instances' and its class is added to 'classes'. The key
+        used to store instances and classes are different if the instance has
+        a 'name' attribute (which is used as the key for the instance).
         
         Args:
-            item (Union[Type, object]): class or instance to add to the Library
-                instance.
+            item (Union[Type[Any], object]): class or instance to add to the 
+                Library instance.
             name (Optional[Hashable]): key to use to store 'item'. If not
                 passed, a key will be created using the 'get_name' method.
+                Defaults to None
                 
         """
         key = name or traits.get_name(item = item)
         if inspect.isclass(item):
             self.classes[key] = item
         elif isinstance(item, object):
-            self.instances[key] = item
+            self.instances[key] = copy.deepcopy(item)
+            # Key for the class will be different because it is inferred from
+            # the class and not any attributes.
             self.deposit(item = item.__class__)
         else:
             raise TypeError(f'item must be a class or a class instance')
@@ -456,6 +461,8 @@ class Library(MutableMapping):
         
         The method prioritizes the 'instances' catalog over 'classes' and any
         passed names in the order they are listed.
+        
+        An instance will be returned so long as 'parameters' is not None. 
         
         Args:
             item (Union[Hashable, Sequence[Hashable]]): key name(s) of stored 
