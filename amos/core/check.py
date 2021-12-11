@@ -185,19 +185,19 @@ def is_pipeline(item: object) -> bool:
         and all(is_node(item = i) for i in item))
 
 def is_pipelines(item: object) -> bool:
-    """Returns whether 'item' is a dict of pipelines.
+    """Returns whether 'item' is a sequence of pipelines.
 
     Args:
         item (object): instance to test.
 
     Returns:
-        bool: whether 'item' is a dict of pipelines.
+        bool: whether 'item' is a sequence of pipelines.
     
     """
     return (
-        isinstance(item, MutableMapping)
-        and all(isinstance(i, Hashable) for i in item.keys())
-        and all(is_pipeline(item = i) for i in item.values())) 
+        isinstance(item, Sequence)
+        and not isinstance(item, str)
+        and all(is_pipeline(item = i) for i in item)) 
     
 """ Tree Type-Checkers """
 

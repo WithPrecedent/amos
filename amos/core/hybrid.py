@@ -39,8 +39,8 @@ from . import check
  
  
 @dataclasses.dataclass # type: ignore
-class Pipeline(sequences.Hybrid, composites.Composite, abc.ABC):
-    """composites class for pipeline data structures.
+class Pipeline(sequences.Hybrid, composites.Composite):
+    """Base class for pipeline data structures.
     
     Args:
         contents (MutableSequence[Node]): list of stored Node instances. 
@@ -74,7 +74,7 @@ class Pipeline(sequences.Hybrid, composites.Composite, abc.ABC):
         """
         self.__delitem__(item)
   
-    def merge(self, item: composites.Composite, *args: Any, **kwargs: Any) -> None:
+    def merge(item: composites.Composite, *args: Any, **kwargs: Any) -> None:
         """Combines 'item' with the stored composite object.
 
         Args:
@@ -127,17 +127,16 @@ class Pipeline(sequences.Hybrid, composites.Composite, abc.ABC):
      
  
 @dataclasses.dataclass # type: ignore
-class Pipelines(mappings.Dictionary, composites.Composite, abc.ABC):
-    """composites class a collection of Pipeline instances.
+class Pipelines(sequences.Hybrid, composites.Composite):
+    """Base class a collection of Pipeline instances.
         
     Args:
-        contents (MutableMapping[Hashable, Pipeline]): keys are the name or 
-            other identifier for the stored Pipeline instances and values are 
-            Pipeline instances. Defaults to an empty dict.
+        contents (MutableSequence[Node]): list of stored Pipeline instances. 
+            Defaults to an empty list.
 
     """
-    contents: MutableMapping[Hashable, Pipeline] = dataclasses.field(
-        default_factory = dict)
+    contents: MutableSequence[Pipeline] = dataclasses.field(
+        default_factory = list)
 
     """ Properties """
 
@@ -150,42 +149,6 @@ class Pipelines(mappings.Dictionary, composites.Composite, abc.ABC):
         self.contents[list(self.contents.keys())[0]]
     
     """ Public Methods """
-    
-    def add(self, item: Pipeline, name: Optional[Hashable] = None) -> None:
-        """Adds 'node' to the stored composite object.
-        
-        Args:
-            node (Node): a node to add to the stored composite object.
-                
-        """
-        name = name or traits.get_name(item = item)
-        if name in self.contents:
-            name = modify.uniquify(key = name, dictionary = self.contents)            
-        self.contents[name] = item
-        return
-
-    def append(self, item: Pipeline, name: Optional[Hashable] = None) -> None:
-        """Appends 'item' to the endpoint(s) of the stored composite object.
-
-        Args:
-            item (Union[Node, Composite]): a single Node or other Composite
-                object to add to the stored composite object.
-                
-        """
-        self.add(item = item, name = name)
-        return
-        
-    def delete(self, item: Any) -> None:
-        """Deletes node from the stored composite object.
-        
-        Args:
-            item (Any): node or key to the a node to delete.
-        
-        Raises:
-            KeyError: if 'item' is not in 'contents'.
-            
-        """
-        self.__delitem__(item)
   
     def merge(item: composites.Composite, *args: Any, **kwargs: Any) -> None:
         """Combines 'item' with the stored composite object.
@@ -193,16 +156,6 @@ class Pipelines(mappings.Dictionary, composites.Composite, abc.ABC):
         Args:
             item (Composite): another Composite object to add to the stored 
                 composite object.
-                
-        """
-        pass
-    
-    def prepend(self, item: Pipeline, name: Optional[Hashable] = None) -> None:
-        """Prepends 'item' to the root(s) of the stored composite object.
-
-        Args:
-            item (Union[Node, Composite]): a single Node or other Composite
-                object to add to the stored composite object.
                 
         """
         pass
