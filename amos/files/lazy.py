@@ -1,5 +1,5 @@
 """
-lazy: lazy importing utilities
+lazy: lazy importing and loading classes and functions
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2021, Corey Rayburn Yung
 License: Apache-2.0
@@ -267,8 +267,8 @@ class Importer(object):
 class Delayed(object):
     """Mixin that converts str attributes to imported items when accessed.
     
-    Only str values of attributes with a '.' in them are assumed to be import
-    paths.
+    # Only str values of attributes with a '.' in them are assumed to be import
+    # paths.
     
     After an item is imported, it is assigned to the formerly str attribute so
     that it does not need to be reloaded.
@@ -279,7 +279,7 @@ class Delayed(object):
     
     def __getattribute__(self, name: str) -> Any:
         item = super().__getattribute__(name)
-        if isinstance(item, str) and '.' in item:
+        if isinstance(item, str):
             imported = from_import_path(item = name)
             super().__setattr__(name, imported)
             return imported

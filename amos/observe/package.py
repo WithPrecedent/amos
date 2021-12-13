@@ -36,7 +36,7 @@ import pathlib
 import types
 from typing import Any, Optional, Union
 
-from ..construct import lazy
+from ..io import lazy
 from ..repair import convert
 
 

@@ -58,13 +58,15 @@ from .base.mappings import *
 from .base.sequences import *
 from .construct.configuration import *
 from .construct.factories import *
-from .construct.lazy import *
 from .core.check import *
 from .core.composites import *
 from .core.transform import *
 from .core.graph import *
 from .core.hybrid import *
 from .core.tree import *
+from .files.lazy import *
+from .files.manager import *
+from .files.formats import *
 from .observe.examine import *
 from .observe.module import *
 from .observe.package import *
