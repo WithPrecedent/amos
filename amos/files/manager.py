@@ -64,9 +64,9 @@ class Clerk(object):
         output_folder (Union[str, pathlib.Path]]): the output_folder subfolder
             name or a complete path if the 'output_folder' is not off of
             'root_folder'. Defaults to 'output'.
-        formats (MutableMapping[str, FileFormat]): a dictionary of file_formats
+        formats (MutableMapping[str, FileFormat]): a dictionary of file formats
             and keys with the amos str names of those formats. Defaults to 
-            the global 'file_formats' variable.
+            the global 'formats.options' variable.
         parameters (MutableMapping[str, str]): keys are the amos names of 
             parameters and values are the values which should be passed to the
             Distributor instances when loading or savings files. Defaults to the
@@ -77,7 +77,7 @@ class Clerk(object):
     input_folder: Union[str, pathlib.Path] = 'input'
     output_folder: Union[str, pathlib.Path] = 'output'
     formats: MutableMapping[str, formats.FileFormat] = dataclasses.field(
-        default_factory = lambda: formats.file_formats)
+        default_factory = lambda: formats.options)
     parameters: MutableMapping[str, str] = dataclasses.field(
         default_factory = lambda: default_parameters) 
     
@@ -317,10 +317,10 @@ def prepare_transfer(
         file_path = amos.pathlibify(item = file_path)
         if not file_format:
             try:
-                file_format = [f for f in formats.file_formats.values()
+                file_format = [f for f in formats.options.values()
                                if f.extension == file_path.suffix[1:]][0]
             except IndexError:
-                file_format = [f for f in formats.file_formats.values()
+                file_format = [f for f in formats.options.values()
                                if f.extension == file_path.suffix][0]           
     file_format = formats.validate_file_format(file_format = file_format)
     extension = file_format.extension
