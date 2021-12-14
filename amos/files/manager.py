@@ -19,19 +19,24 @@ License: Apache-2.0
 Contents:
     default_parameters (dict): a dictionary with default shared parameters for
         various disk-related tasks.
+    formats (amos.Dictionary): a dictionary of the out-of-the-box supported file 
+        formats.
     Clerk (object): interface for amos file management classes and methods.
      
 """
 from __future__ import annotations
 from collections.abc import Hashable, MutableMapping
 import dataclasses
+import inspect
 import pathlib
 from typing import Any, Optional, Union
 
-import amos
+from ..base import mappings
+from ..repair import convert
+from . import template
 
-from . import formats
 
+""" Default Parameters for Clerk """
     
 default_parameters: MutableMapping[str, Any] = {
     'file_encoding': 'windows-1252',
@@ -42,6 +47,86 @@ default_parameters: MutableMapping[str, Any] = {
     'threads': -1,
     'visual_tightness': 'tight', 
     'visual_format': 'png'}
+
+""" Included File Formats """
+
+formats: mappings.Dictionary[str, template.FileFormat] = mappings.Dictionary(
+    contents = {
+        'csv': template.FileFormat(
+            name = 'csv',
+            module =  'pandas',
+            extension = '.csv',
+            loader = 'read_csv',
+            saver = 'to_csv',
+            parameters = {
+                'encoding': 'file_encoding',
+                'index_col': 'index_column',
+                'header': 'include_header',
+                'low_memory': 'conserve_memory',
+                'nrows': 'test_size'}),
+        'excel': template.FileFormat(
+            name = 'excel',
+            module =  'pandas',
+            extension = '.xlsx',
+            loader = 'read_excel',
+            saver = 'to_excel',
+            parameters = {
+                'index_col': 'index_column',
+                'header': 'include_header',
+                'nrows': 'test_size'}),
+        'feather': template.FileFormat(
+            name = 'feather',
+            module =  'pandas',
+            extension = '.feather',
+            loader = 'read_feather',
+            saver = 'to_feather',
+            parameters = {'nthreads': 'threads'}),
+        'hdf': template.FileFormat(
+            name = 'hdf',
+            module =  'pandas',
+            extension = '.hdf',
+            loader = 'read_hdf',
+            saver = 'to_hdf',
+            parameters = {
+                'columns': 'included_columns',
+                'chunksize': 'test_size'}),
+        'json': template.FileFormat(
+            name = 'json',
+            module =  'pandas',
+            extension = '.json',
+            loader = 'read_json',
+            saver = 'to_json',
+            parameters = {
+                'encoding': 'file_encoding',
+                'columns': 'included_columns',
+                'chunksize': 'test_size'}),
+        'stata': template.FileFormat(
+            name = 'stata',
+            module =  'pandas',
+            extension = '.dta',
+            loader = 'read_stata',
+            saver = 'to_stata',
+            parameters = {'chunksize': 'test_size'}),
+        'text': template.FileFormat(
+            name = 'text',
+            module =  None,
+            extension = '.txt',
+            loader = template.load_text,
+            saver = template.save_text),
+        'png': template.FileFormat(
+            name = 'png',
+            module =  'seaborn',
+            extension = '.png',
+            saver = 'save_fig',
+            parameters = {
+                'bbox_inches': 'visual_tightness', 
+                'format': 'visual_format'}),
+        'pickle': template.FileFormat(
+            name = 'pickle',
+            module =  None,
+            extension = '.pickle',
+            loader = template.pickle_object,
+            saver = template.unpickle_object)})
 
    
 @dataclasses.dataclass
@@ -66,7 +151,7 @@ class Clerk(object):
             'root_folder'. Defaults to 'output'.
         formats (MutableMapping[str, FileFormat]): a dictionary of file formats
             and keys with the amos str names of those formats. Defaults to 
-            the global 'formats.options' variable.
+            the global 'formats' variable.
         parameters (MutableMapping[str, str]): keys are the amos names of 
             parameters and values are the values which should be passed to the
             Distributor instances when loading or savings files. Defaults to the
@@ -76,8 +161,8 @@ class Clerk(object):
     root_folder: Union[str, pathlib.Path] = pathlib.Path('..')
     input_folder: Union[str, pathlib.Path] = 'input'
     output_folder: Union[str, pathlib.Path] = 'output'
-    formats: MutableMapping[str, formats.FileFormat] = dataclasses.field(
-        default_factory = lambda: formats.options)
+    formats: MutableMapping[str, template.FileFormat] = dataclasses.field(
+        default_factory = lambda: formats)
     parameters: MutableMapping[str, str] = dataclasses.field(
         default_factory = lambda: default_parameters) 
     
@@ -98,7 +183,7 @@ class Clerk(object):
         file_path: Union[str, pathlib.Path] = None,
         folder: Union[str, pathlib.Path] = None,
         file_name: Optional[str] = None,
-        file_format: Union[str, formats.FileFormat] = None,
+        file_format: Union[str, template.FileFormat] = None,
         **kwargs: Any) -> Any:
         """Imports file by calling appropriate method based on file_format.
 
@@ -141,7 +226,7 @@ class Clerk(object):
         file_path: Optional[Union[str, pathlib.Path]] = None,
         folder: Optional[Union[str, pathlib.Path]] = None,
         file_name: Optional[str] = None,
-        file_format: Optional[Union[str, formats.FileFormat]] = None,
+        file_format: Optional[Union[str, template.FileFormat]] = None,
         **kwargs: Any) -> None:
         """Exports file by calling appropriate method based on file_format.
 
@@ -269,7 +354,7 @@ def combine_path(
         return pathlib.Path(folder)
 
 def get_transfer_parameters(
-    file_format: formats.FileFormat, 
+    file_format: template.FileFormat, 
     shared: MutableMapping[str, str],
     **kwargs: Any) -> MutableMapping[Hashable, Any]:
     """Creates complete parameters for a file input/output method.
@@ -294,8 +379,8 @@ def prepare_transfer(
     file_path: Union[str, pathlib.Path],
     folder: Union[str, pathlib.Path],
     file_name: str,
-    file_format: Union[str, formats.FileFormat]) -> (
-        tuple[pathlib.Path, formats.FileFormat]):
+    file_format: Union[str, template.FileFormat]) -> (
+        tuple[pathlib.Path, template.FileFormat]):
     """Prepares file path related arguments for loading or saving a file.
 
     Args:
@@ -314,15 +399,15 @@ def prepare_transfer(
 
     """
     if file_path:
-        file_path = amos.pathlibify(item = file_path)
+        file_path = convert.pathlibify(item = file_path)
         if not file_format:
             try:
-                file_format = [f for f in formats.options.values()
+                file_format = [f for f in formats.values()
                                if f.extension == file_path.suffix[1:]][0]
             except IndexError:
-                file_format = [f for f in formats.options.values()
+                file_format = [f for f in formats.values()
                                if f.extension == file_path.suffix][0]           
-    file_format = formats.validate_file_format(file_format = file_format)
+    file_format = _validate_file_format(file_format = file_format)
     extension = file_format.extension
     if not file_path:
         file_path = combine_path(
@@ -330,3 +415,32 @@ def prepare_transfer(
             file_name = file_name,
             extension = extension)
     return file_path, file_format
+
+
+""" Private Functions """
+
+def _validate_file_format(
+    file_format: Union[str, template.FileFormat]) -> template.FileFormat:
+    """Selects 'file_format' or returns FileFormat instance intact.
+
+    Args:
+        file_format (Union[str, FileFormat]): name of file format or a
+            FileFormat instance.
+
+    Raises:
+        TypeError: if 'file_format' is neither a str nor FileFormat type.
+
+    Returns:
+        FileFormat: appropriate instance.
+
+    """
+    if file_format in formats:
+        return formats[file_format]
+    elif isinstance(file_format, template.FileFormat):
+        return file_format
+    elif (
+        inspect.isclass(file_format) 
+            and issubclass(file_format, template.FileFormat)):
+        return file_format()
+    else:
+        raise TypeError(f'{file_format} is not a recognized file format')

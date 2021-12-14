@@ -66,7 +66,7 @@ from .core.hybrid import *
 from .core.tree import *
 from .files.lazy import *
 from .files.manager import *
-from .files.formats import *
+from .files.template import *
 from .observe.examine import *
 from .observe.module import *
 from .observe.package import *

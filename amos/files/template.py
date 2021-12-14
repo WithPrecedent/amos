@@ -1,5 +1,5 @@
 """
-formats: base file formats
+template: file format class and helper functions
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2021, Corey Rayburn Yung
 License: Apache-2.0
@@ -19,18 +19,15 @@ License: Apache-2.0
 Contents:
     FileFormat (object): contains data needed for a Clerk-compatible file 
         format.
-    formats (dict): a dictionary of the out-of-the-box supported file formats.
      
 """
 from __future__ import annotations
 from collections.abc import Mapping, MutableMapping
 import dataclasses
-import inspect
 import pathlib
 import types
 from typing import Any, Optional, Type, Union
 
-from ..base import mappings
 from ..observe import traits
 from . import lazy
  
@@ -147,39 +144,20 @@ class FileFormat(object):
         """
         return (
             subclass in cls.__subclasses__() 
-            or traits.has_attributes(
-                item = subclass,
-                methods = [
-                    'name', 'module', 'extension', 'loader',
-                    'saver', 'parameters']))
+            or (
+                traits.has_attributes(
+                    item = subclass,
+                    attributes = [
+                        'name', 'module', 'extension', 'loader',
+                        'saver', 'parameters'])
+                and traits.has_methods(
+                    item = subclass,
+                    methods = ['load', 'save'])))
 
 
-def validate_file_format(file_format: Union[str, FileFormat]) -> FileFormat:
-    """Selects 'file_format' or returns FileFormat instance intact.
+""" Public Functions """
 
-    Args:
-        file_format (Union[str, FileFormat]): name of file format or a
-            FileFormat instance.
-
-    Raises:
-        TypeError: if 'file_format' is neither a str nor FileFormat type.
-
-    Returns:
-        FileFormat: appropriate instance.
-
-    """
-    if file_format in options:
-        return options[file_format]
-    elif isinstance(file_format, FileFormat):
-        return file_format
-    elif inspect.isclass(file_format) and issubclass(file_format, FileFormat):
-        return file_format()
-    else:
-        raise TypeError(f'{file_format} is not a recognized file format')
-
-""" Private Functions """
-
-def _load_text(path: Union[str, pathlib.Path], **kwargs) -> str:
+def load_text(path: Union[str, pathlib.Path], **kwargs) -> str:
     """[summary]
 
     Args:
@@ -194,7 +172,7 @@ def _load_text(path: Union[str, pathlib.Path], **kwargs) -> str:
     _file.close()
     return loaded
 
-def _save_text(item: Any, path: Union[str, pathlib.Path], **kwargs) -> None:
+def save_text(item: Any, path: Union[str, pathlib.Path], **kwargs) -> None:
     """[summary]
 
     Args:
@@ -207,7 +185,7 @@ def _save_text(item: Any, path: Union[str, pathlib.Path], **kwargs) -> None:
     _file.close()
     return
 
-def _pickle_object(path: Union[str, pathlib.Path], **kwargs) -> str:
+def pickle_object(path: Union[str, pathlib.Path], **kwargs) -> str:
     """[summary]
 
     Args:
@@ -223,7 +201,7 @@ def _pickle_object(path: Union[str, pathlib.Path], **kwargs) -> str:
     _file.close()
     return loaded
 
-def _unpickle_object(
+def unpickle_object(
     item: Any, 
     path: Union[str, pathlib.Path], 
     **kwargs) -> None:
@@ -239,82 +217,3 @@ def _unpickle_object(
     pickle.dump(item, _file)
     _file.close()
     return
-
-""" Included File Formats """
-
-options: mappings.Dictionary[str, FileFormat] = mappings.Dictionary(contents = {
-    'csv': FileFormat(
-        name = 'csv',
-        module =  'pandas',
-        extension = '.csv',
-        loader = 'read_csv',
-        saver = 'to_csv',
-        parameters = {
-            'encoding': 'file_encoding',
-            'index_col': 'index_column',
-            'header': 'include_header',
-            'low_memory': 'conserve_memory',
-            'nrows': 'test_size'}),
-    'excel': FileFormat(
-        name = 'excel',
-        module =  'pandas',
-        extension = '.xlsx',
-        loader = 'read_excel',
-        saver = 'to_excel',
-        parameters = {
-            'index_col': 'index_column',
-            'header': 'include_header',
-            'nrows': 'test_size'}),
-    'feather': FileFormat(
-        name = 'feather',
-        module =  'pandas',
-        extension = '.feather',
-        loader = 'read_feather',
-        saver = 'to_feather',
-        parameters = {'nthreads': 'threads'}),
-    'hdf': FileFormat(
-        name = 'hdf',
-        module =  'pandas',
-        extension = '.hdf',
-        loader = 'read_hdf',
-        saver = 'to_hdf',
-        parameters = {
-            'columns': 'included_columns',
-            'chunksize': 'test_size'}),
-    'json': FileFormat(
-        name = 'json',
-        module =  'pandas',
-        extension = '.json',
-        loader = 'read_json',
-        saver = 'to_json',
-        parameters = {
-            'encoding': 'file_encoding',
-            'columns': 'included_columns',
-            'chunksize': 'test_size'}),
-    'stata': FileFormat(
-        name = 'stata',
-        module =  'pandas',
-        extension = '.dta',
-        loader = 'read_stata',
-        saver = 'to_stata',
-        parameters = {'chunksize': 'test_size'}),
-    'text': FileFormat(
-        name = 'text',
-        module =  None,
-        extension = '.txt',
-        loader = _load_text,
-        saver = _save_text),
-    'png': FileFormat(
-        name = 'png',
-        module =  'seaborn',
-        extension = '.png',
-        saver = 'save_fig',
-        parameters = {
-            'bbox_inches': 'visual_tightness', 
-            'format': 'visual_format'}),
-    'pickle': FileFormat(
-        name = 'pickle',
-        module =  None,
-        extension = '.pickle',
-        loader = _pickle_object,
-        saver = _unpickle_object)})
