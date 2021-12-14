@@ -17,8 +17,8 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-    FileFormat (object): contains data needed for a Clerk-compatible file 
-        format.
+    FileFormat (factories.InstanceFactory): contains data needed for a Clerk-
+        compatible file format.
      
 """
 from __future__ import annotations
@@ -26,14 +26,16 @@ from collections.abc import Mapping, MutableMapping
 import dataclasses
 import pathlib
 import types
-from typing import Any, Optional, Type, Union
+from typing import Any, ClassVar, Optional, Type, Union
 
+from ..base import mappings
+from ..construct import factories
 from ..observe import traits
 from . import lazy
  
       
 @dataclasses.dataclass
-class FileFormat(object):
+class FileFormat(factories.InstanceFactory):
     """File format information.
 
     Args:
@@ -53,7 +55,8 @@ class FileFormat(object):
             configuration settings where the key is the parameter name that the 
             load or save method should use and the value is the key for the 
             argument in the shared parameters. Defaults to an empty dict. 
-
+        instances (ClassVar[mappings.Catalog]): project catalog of instances.
+        
     """
     name: Optional[str] = None
     module: Optional[str] = None
@@ -61,6 +64,7 @@ class FileFormat(object):
     loader: Optional[Union[str, types.FunctionType]] = None
     saver: Optional[Union[str, types.FunctionType]] = None
     parameters: Mapping[str, str] = dataclasses.field(default_factory = dict)
+    instances: ClassVar[mappings.Catalog] = mappings.Catalog()
     
     """ Public Methods """
     

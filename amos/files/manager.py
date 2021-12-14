@@ -52,44 +52,6 @@ default_parameters: MutableMapping[str, Any] = {
 
 formats: mappings.Dictionary[str, template.FileFormat] = mappings.Dictionary(
     contents = {
-        'csv': template.FileFormat(
-            name = 'csv',
-            module =  'pandas',
-            extension = '.csv',
-            loader = 'read_csv',
-            saver = 'to_csv',
-            parameters = {
-                'encoding': 'file_encoding',
-                'index_col': 'index_column',
-                'header': 'include_header',
-                'low_memory': 'conserve_memory',
-                'nrows': 'test_size'}),
-        'excel': template.FileFormat(
-            name = 'excel',
-            module =  'pandas',
-            extension = '.xlsx',
-            loader = 'read_excel',
-            saver = 'to_excel',
-            parameters = {
-                'index_col': 'index_column',
-                'header': 'include_header',
-                'nrows': 'test_size'}),
-        'feather': template.FileFormat(
-            name = 'feather',
-            module =  'pandas',
-            extension = '.feather',
-            loader = 'read_feather',
-            saver = 'to_feather',
-            parameters = {'nthreads': 'threads'}),
-        'hdf': template.FileFormat(
-            name = 'hdf',
-            module =  'pandas',
-            extension = '.hdf',
-            loader = 'read_hdf',
-            saver = 'to_hdf',
-            parameters = {
-                'columns': 'included_columns',
-                'chunksize': 'test_size'}),
         'json': template.FileFormat(
             name = 'json',
             module =  'pandas',
@@ -100,33 +62,18 @@ formats: mappings.Dictionary[str, template.FileFormat] = mappings.Dictionary(
                 'encoding': 'file_encoding',
                 'columns': 'included_columns',
                 'chunksize': 'test_size'}),
-        'stata': template.FileFormat(
-            name = 'stata',
-            module =  'pandas',
-            extension = '.dta',
-            loader = 'read_stata',
-            saver = 'to_stata',
-            parameters = {'chunksize': 'test_size'}),
-        'text': template.FileFormat(
-            name = 'text',
-            module =  None,
-            extension = '.txt',
-            loader = template.load_text,
-            saver = template.save_text),
-        'png': template.FileFormat(
-            name = 'png',
-            module =  'seaborn',
-            extension = '.png',
-            saver = 'save_fig',
-            parameters = {
-                'bbox_inches': 'visual_tightness', 
-                'format': 'visual_format'}),
         'pickle': template.FileFormat(
             name = 'pickle',
             module =  None,
             extension = '.pickle',
             loader = template.pickle_object,
-            saver = template.unpickle_object)})
+            saver = template.unpickle_object),
+        'text': template.FileFormat(
+            name = 'text',
+            module =  None,
+            extension = '.txt',
+            loader = template.load_text,
+            saver = template.save_text)})
 
    
 @dataclasses.dataclass
@@ -149,9 +96,6 @@ class Clerk(object):
         output_folder (Union[str, pathlib.Path]]): the output_folder subfolder
             name or a complete path if the 'output_folder' is not off of
             'root_folder'. Defaults to 'output'.
-        formats (MutableMapping[str, FileFormat]): a dictionary of file formats
-            and keys with the amos str names of those formats. Defaults to 
-            the global 'formats' variable.
         parameters (MutableMapping[str, str]): keys are the amos names of 
             parameters and values are the values which should be passed to the
             Distributor instances when loading or savings files. Defaults to the
@@ -161,8 +105,6 @@ class Clerk(object):
     root_folder: Union[str, pathlib.Path] = pathlib.Path('..')
     input_folder: Union[str, pathlib.Path] = 'input'
     output_folder: Union[str, pathlib.Path] = 'output'
-    formats: MutableMapping[str, template.FileFormat] = dataclasses.field(
-        default_factory = lambda: formats)
     parameters: MutableMapping[str, str] = dataclasses.field(
         default_factory = lambda: default_parameters) 
     
@@ -214,11 +156,8 @@ class Clerk(object):
             file_name = file_name,
             file_format = file_format)
         parameters = self._get_parameters(file_format = file_format, **kwargs)
-        if file_format.module:
-            tool = file_format.load('import_method')
-        else:
-            tool = getattr(self, file_format.import_method)
-        return tool(file_path, **parameters)
+        loader = file_format.instances[file_format]
+        return loader(file_path, **parameters)
 
     def save(
         self,
@@ -277,7 +216,7 @@ class Clerk(object):
             pathlib.Path: derived from 'path'.
 
         """
-        path = amos.pathlibify(item = path)
+        path = convert.pathlibify(item = path)
         if isinstance(path, str):
             if (hasattr(self, path) 
                     and isinstance(getattr(self, path), pathlib.Path)):

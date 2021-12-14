@@ -26,6 +26,7 @@ ToDo:
 from __future__ import annotations
 import abc
 from collections.abc import Mapping, MutableMapping, Sequence
+import copy
 import dataclasses
 from typing import Any, ClassVar, Optional, Type, Union
 
@@ -55,6 +56,54 @@ class BaseFactory(abc.ABC):
         pass
 
    
+@dataclasses.dataclass
+class InstanceFactory(BaseFactory):
+    """Mixin which automatically registers instances.
+    
+    Args:
+        instances (ClassVar[mappings.Catalog]): project catalog of instances.
+            
+    """
+    instances: ClassVar[mappings.Catalog] = mappings.Catalog()
+    
+    """ Initialization Methods """
+            
+    def __post_init__(self) -> None:
+        try:
+            super().__post_init__(*args, **kwargs) # type: ignore
+        except AttributeError:
+            pass
+        key = traits.get_name(item = self)
+        self.__class__.instances[key] = self
+        
+    """ Public Methods """
+
+    @classmethod
+    def create(
+        cls, 
+        item: Union[str, Sequence[str]], 
+        **kwargs: Any) -> InstanceFactory:
+        """Creates an instance of a InstanceFactory subclass from 'item'.
+        
+        If kwargs are passed, they are added as attributes to the returned 
+        instance.
+        
+        Args:
+            item (Union[str, Sequence[str]]): key(s) for items stored in 
+                'instances'.
+                                
+        Returns:
+            InstanceFactory: an InstanceFactory instance created based on 'item' 
+                and any passed arguments.
+                
+        """
+        instance = copy.deepcopy(cls.instances[item])
+        if kwargs:
+            for key, value in kwargs.items():
+                setattr(instance, key, value)
+        return instance       
+           
+           
 @dataclasses.dataclass
 class LibraryFactory(BaseFactory):
     """Mixin which automatically registers subclasses and instances.
