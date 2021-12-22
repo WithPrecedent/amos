@@ -52,6 +52,12 @@ default_parameters: MutableMapping[str, Any] = {
 
 formats: mappings.Dictionary[str, template.FileFormat] = mappings.Dictionary(
     contents = {
+        'csv': template.FileFormat(
+            name = 'csv',
+            module =  'csv',
+            extension = '.csv',
+            loader = template.pickle_object,
+            saver = template.unpickle_object),
         'json': template.FileFormat(
             name = 'json',
             module =  'pandas',
@@ -64,14 +70,14 @@ formats: mappings.Dictionary[str, template.FileFormat] = mappings.Dictionary(
                 'chunksize': 'test_size'}),
         'pickle': template.FileFormat(
             name = 'pickle',
-            module =  None,
-            extension = '.pickle',
-            loader = template.pickle_object,
-            saver = template.unpickle_object),
+            module =  'pickle',
+            extension = ['.pickle', '.pkl'],
+            loader = template.load_pickle,
+            saver = template.save_pickle),
         'text': template.FileFormat(
             name = 'text',
             module =  None,
-            extension = '.txt',
+            extension = ['.txt', 'text'],
             loader = template.load_text,
             saver = template.save_text)})
 
@@ -244,9 +250,9 @@ class Clerk(object):
             
         """
         try:
-            return self.validate_path(path = path)
+            return convert.pathlibify(item = path)
         except FileNotFoundError:
-            return self.validate_path(path = self.root_folder / path)
+            return convert.pathlibify(item = self.root_folder / path)
 
     def _write_folder(self, folder: Union[str, pathlib.Path]) -> None:
         """Writes folder to disk.

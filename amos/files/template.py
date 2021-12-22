@@ -22,9 +22,10 @@ Contents:
      
 """
 from __future__ import annotations
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping, MutableSequence
 import dataclasses
 import pathlib
+import sys
 import types
 from typing import Any, ClassVar, Optional, Type, Union
 
@@ -44,7 +45,10 @@ class FileFormat(factories.InstanceFactory):
         module (Optional[str]): name of module where object to incorporate is, 
             which can either be a amos or non-amos module. Defaults to 
             None.
-        extension (Optional[str]): str file extension to use. Defaults to None.
+        extension (Optional[Union[str, MutableSequence[str]]]): str file 
+            extension(s) to use. If more than one is listed, the first one is 
+            used for saving new files and all will be used for loading. Defaults 
+            to None.
         loader (Optional[Union[str, types.FunctionType]]): if a str, it is
             the name of import method in 'module' to use. Otherwise, it should
             be a function for loading. Defaults to None.
@@ -60,7 +64,7 @@ class FileFormat(factories.InstanceFactory):
     """
     name: Optional[str] = None
     module: Optional[str] = None
-    extension: Optional[str] = None
+    extension: Optional[Union[str, MutableSequence[str]]] = None
     loader: Optional[Union[str, types.FunctionType]] = None
     saver: Optional[Union[str, types.FunctionType]] = None
     parameters: Mapping[str, str] = dataclasses.field(default_factory = dict)
@@ -189,7 +193,7 @@ def save_text(item: Any, path: Union[str, pathlib.Path], **kwargs) -> None:
     _file.close()
     return
 
-def pickle_object(path: Union[str, pathlib.Path], **kwargs) -> str:
+def load_pickle(path: Union[str, pathlib.Path], **kwargs) -> str:
     """[summary]
 
     Args:
@@ -199,13 +203,12 @@ def pickle_object(path: Union[str, pathlib.Path], **kwargs) -> str:
         str: [description]
         
     """   
-    import pickle 
     _file = open(path, 'r', **kwargs)
-    loaded = pickle.load(_file)
+    loaded = sys.modules['pickle'].load(_file)
     _file.close()
     return loaded
 
-def unpickle_object(
+def save_pickle(
     item: Any, 
     path: Union[str, pathlib.Path], 
     **kwargs) -> None:
@@ -216,8 +219,7 @@ def unpickle_object(
         path (Union[str, pathlib.Path]): [description]
         
     """   
-    import pickle 
     _file = open(path, 'w', **kwargs)
-    pickle.dump(item, _file)
+    sys.modules['pickle'].dump(item, _file)
     _file.close()
     return
