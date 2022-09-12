@@ -1,7 +1,7 @@
 """
 modify: functions that modify stored data without changing the data type
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@ License: Apache-2.0
 Contents:
     Adders:
         add_prefix (Callable, dispatcher): adds a str prefix to item.
-        add_slots (Callable): adds '__slots__' to a dataclass.
+        add_slots: adds '__slots__' to a dataclass.
         add_suffix (Callable, dispatcher): adds a str suffix to item.
     Dividers:
         cleave (Callable, dispatcher): divides an item into 2 parts based on
@@ -28,13 +28,21 @@ Contents:
             'divider'.
     Subtractors:
         deduplicate (Callable, dispatcher): removes duplicate data from an item.
+        drop_dunders: drops strings from a list if they start and end with 
+            double underscores.
         drop_prefix (Callable, dispatcher): removes a str prefix from an item.
+        drop_prefix_from_dict
+        drop_prefix_from_list
+        drop_prefix_from_set
+        drop_prefix_from_str
+        drop_prefix_from_tuple
+        drop_privates
         drop_substring (Callable, dispatcher): removes a substring from an item.
         drop_suffix (Callable, dispatcher): removes a str suffix from an item.
     Other: 
-        capitalify (Callable): converts a snake case str to capital case.
-        snakify (Callable): converts a capital case str to snake case.
-        uniquify (Callable): returns a unique key for a dict.
+        capitalify: converts a snake case str to capital case.
+        snakify: converts a capital case str to snake case.
+        uniquify: returns a unique key for a dict.
 
 ToDo:
     Reintegrate dispatcher from ashworth package once it has been tested.
@@ -511,6 +519,26 @@ def deduplicate_tuple(item: tuple[Any, ...]) -> tuple[Any, ...]:
         
     """
     return tuple(list(dict.fromkeys(item)))
+
+def drop_dunders(item: list[Any]) -> list[Any]:
+    """Drops items in 'item' with names beginning with an underscore.
+
+    Args:
+        item (list[Any]): attributes, methods, and properties of a class.
+
+    Returns:
+        list[Any]: attributes, methods, and properties that do not start with an
+            underscore.
+        
+    """
+    if len(item) > 0 and hasattr(item[0], '__name__'):
+        return [
+            i for i in item 
+            if not i.__name__.startswith('__') 
+            and not i.__name__.endswith('__')]
+    else:
+        return [
+            i for i in item if not i.startswith('__') and not i.endswith('__')]
     
 # @amos.dynamic.dispatcher # type: ignore
 def drop_prefix(item: Any, prefix: str, divider: str = '') -> Any:
@@ -663,7 +691,7 @@ def drop_privates(item: list[Any]) -> list[Any]:
         return [i for i in item if not i.__name__.startswith('_')]
     else:
         return [i for i in item if not i.startswith('_')]
-       
+              
 # @amos.dynamic.dispatcher # type: ignore
 def drop_substring(item: Any, substring: str) -> Any:
     """Drops 'substring' from 'item' with a possible 'divider' in between.

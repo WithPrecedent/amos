@@ -1,7 +1,7 @@
 """
 bunches: base classes for extensible, flexible, lightweight containers
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,11 +17,11 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-    Proxy (Container): basic wrapper for a stored python object. Dunder methods 
-        attempt to intelligently apply access methods to either the wrapper or 
-        the wrapped item.   
-    Bunch (Collection, ABC): base class for all containers in the bunches
-        package. It requires subclasses to have 'add' and 'subset' methods.
+    # Proxy (Container): basic wrapper for a stored python object. Dunder methods 
+    #     attempt to intelligently apply access methods to either the wrapper or 
+    #     the wrapped item.   
+    Bunch (Collection, ABC): base class for general containers in amos. It 
+        requires subclasses to have 'add' and 'subset' methods.
           
 To Do:
     Integrate ashford Kinds system when it is finished.
@@ -158,7 +158,7 @@ from typing import Any, Optional, Type, Union
    
 @dataclasses.dataclass # type: ignore
 class Bunch(Collection, abc.ABC): # type: ignore
-    """Abstract base class for bunches collections.
+    """Abstract base class for general amos collections.
   
     A Bunch differs from a general python Collection in 3 ways:
         1) It must include an 'add' method which provides the default mechanism
@@ -168,7 +168,7 @@ class Bunch(Collection, abc.ABC): # type: ignore
         2) A subclass must include a 'subset' method with optional 'include' and
             'exclude' parameters for returning a subset of the Bunch subclass.
         3) It supports the '+' operator being used to join a Bunch subclass 
-            instance of the same general type (Mapping, Sequence, tuple, etc.). 
+            instance of the same python type (Mapping, Sequence, tuple, etc.). 
             The '+' operator calls the Bunch subclass 'add' method to implement 
             how the added item(s) is/are added to the Bunch subclass instance.
 
@@ -193,17 +193,17 @@ class Bunch(Collection, abc.ABC): # type: ignore
     @abc.abstractmethod
     def subset(
         self, 
-        include: Optional[Union[Sequence[Any], Any]] = None, 
-        exclude: Optional[Union[Sequence[Any], Any]] = None,
+        include: Optional[Union[Collection[Any], Any]] = None, 
+        exclude: Optional[Union[Collection[Any], Any]] = None,
         *args: Any, 
         **kwargs: Any) -> Bunch:
         """Returns a subclass with some items removed from 'contents'.
         
         Args:
-            include (Optional[Union[Sequence[Any], Any]]): item(s) to include in 
-                the new Bunch. Defaults to None.
-            exclude (Optional[Union[Sequence[Any], Any]]): item(s) to exclude in 
-                the new Bunch. Defaults to None.
+            include (Optional[Union[Collection[Any], Any]]): item(s) to include 
+                in the new Bunch. Defaults to None.
+            exclude (Optional[Union[Collection[Any], Any]]): item(s) to exclude 
+                in the new Bunch. Defaults to None.
         
         """
         pass

@@ -1,7 +1,7 @@
 """
 template: file format class and helper functions
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,14 @@ License: Apache-2.0
 Contents:
     FileFormat (factories.InstanceFactory): contains data needed for a Clerk-
         compatible file format.
-     
+    load_text:
+    save_text:
+    load_pickle:
+    save_pickle:
+    
+ToDo:
+
+    
 """
 from __future__ import annotations
 from collections.abc import Mapping, MutableSequence
@@ -29,9 +36,9 @@ import sys
 import types
 from typing import Any, ClassVar, Optional, Type, Union
 
-from ..base import mappings
-from ..construct import factories
-from ..observe import traits
+from ..containers import mappings
+from ..builders import factories
+from ..observe import report
 from . import lazy
  
       
@@ -153,12 +160,12 @@ class FileFormat(factories.InstanceFactory):
         return (
             subclass in cls.__subclasses__() 
             or (
-                traits.has_attributes(
+                report.has_attributes(
                     item = subclass,
                     attributes = [
                         'name', 'module', 'extension', 'loader',
                         'saver', 'parameters'])
-                and traits.has_methods(
+                and report.has_methods(
                     item = subclass,
                     methods = ['load', 'save'])))
 

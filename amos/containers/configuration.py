@@ -1,7 +1,7 @@
 """
-configuration: easy, flexible system for project configuration
+configuration: easy, flexible system for configuring projects
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,9 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-    Settings (Factory, MutableMapping): stores configuration settings after 
-        either loading them from disk or by the passed arguments.
+    Settings (mappings.Dictionary, factories.SourceFactory): stores 
+        configuration settings after either loading them from disk or by the 
+        passed arguments.
 
 ToDo:
        
@@ -33,13 +34,13 @@ import importlib.util
 import pathlib
 from typing import Any, ClassVar, Optional, Type, Union
 
-from ..base import mappings
-from ..construct import factories
-from ..repair import convert
+from . import mappings
+from ..builders import factories
+from ..change import convert
 
 
 @dataclasses.dataclass
-class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
+class Settings(mappings.Dictionary, factories.SourceFactory): # type: ignore
     """Loads and stores configuration settings.
 
     To create settings instance, a user can pass as the 'contents' parameter a:
@@ -85,7 +86,7 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
     default: Mapping[Hashable, Any] = dataclasses.field(
         default_factory = dict)
     infer_types: bool = True
-    sources: ClassVar[Mapping[Type[Any], str]] = {
+    sources: ClassVar[Mapping[Type, str]] = {
         MutableMapping: 'dictionary', 
         pathlib.Path: 'path',  
         str: 'path'}
@@ -100,9 +101,9 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
         except AttributeError:
             pass
         # Converts 'contents' if it is not a dict.
-        if not (self.contents, MutableMapping):
+        if not (self.contents, Mapping):
             self = self.create(
-                source = self.contents,
+                item = self.contents,
                 default_factory = self.default_factory,
                 default = self.default,
                 infer_types = self.infer_types)
@@ -315,17 +316,21 @@ class Settings(mappings.Dictionary, factories.SourcesFactory): # type: ignore
         additional: Optional[Union[Sequence[str], str]] = None,
         overwrite: bool = False) -> object:
         """Injects appropriate items into 'instance' from 'contents'.
+        
+        By default, if 'instance' has a 'name' attribute, this method will add
+        any settings in a section matching that 'name' to 'instance' as
+        attributes.
 
         Args:
             instance (object): amos class instance to be modified.
             additional (Union[Sequence[str], str]]): other section(s) in 
                 'contents' to inject into 'instance'. Defaults to None.
             overwrite (bool]): whether to overwrite a local attribute in 
-                'instance' if there are values stored in that attribute. 
-                Defaults to False.
+                'instance' if there are existing values stored in that 
+                attribute. Defaults to False.
 
         Returns:
-            instance (object): amos class instance with modifications made.
+            instance (object): instance with modifications made.
 
         """
         sections = []

@@ -1,7 +1,7 @@
 """
 clock: date and time related tools
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,13 +16,12 @@ License: Apache-2.0
     See the License for the specific language governing permissions and
     limitations under the License.
 
-Contents:   
-    how_soon_is_now (Callable): converts a current date and time to a str.
-    timer (Callable): computes the time it takes for the wrapped 'process' to
-        complete.  
+Contents:  
+    how_soon_is_now: returns current date and time as a str.
+    timer: computes the time it takes for the wrapped 'process' to complete.  
         
 ToDo:
-    Provide mechanisms for 'timer' to record results in logger and/or the python
+    Add mechanisms for 'timer' to record results in logger and/or the python
         terminal.
 
 """
@@ -32,13 +31,10 @@ import datetime
 import time
 from typing import Any, Optional, Type, Union
 
+from ..change import convert
+
 
 """ General Tools """
-
-def datetime_string(
-    prefix: str = '', 
-    time_format: str = '%Y-%m-%d_%H-%M') -> str:
-    return ''.join([prefix, datetime.datetime.now().strftime(time_format)])
 
 def how_soon_is_now(
     prefix: Optional[str] = None,
@@ -52,7 +48,9 @@ def how_soon_is_now(
         str: with current date and time in 'format' format.
 
     """
-    time_string = datetime.datetime.now().strftime(time_format)
+    time_string = convert.datetime_to_string(
+        item = datetime.datetime.now(),
+        time_format = time_format)
     if prefix is None:
         return f'{prefix}{time_string}'
     else:

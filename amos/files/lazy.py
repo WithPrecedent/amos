@@ -1,7 +1,7 @@
 """
 lazy: lazy importing and loading classes and functions
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,16 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-
+    from_path:
+    from_file_path:
+    from_import_path:
+    absolute_import:
+    absolute_supackage_import:
+    relative_import:
+    relative_subpackage_import:
+    from_importables:
+    Importer (object):
+    Delayed (object):
     
 ToDo:
 

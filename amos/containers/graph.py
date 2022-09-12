@@ -1,7 +1,7 @@
 """
 graph: lightweight graph data structures
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,14 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-    System (Graph): a lightweight directed acyclic graph (DAG). Internally, the 
-        graph is stored as an adjacency list. As a result, it should primarily 
-        be used for workflows or other uses that do require large graphs.
+    Edge (composites.Composite, ABC): an edge in a graph.
+    Graph (composites.Composite, ABC): base class for graphs. All subclasses 
+        must have 'connect' and 'disconnect' methods for changing edges between
+        nodes.
+    Adjacency (mappings.Dictionary, Graph): a graph stored as an adjacency list.
+    Edges (Graph): a graph stored as an edge list.
+    Matrix (Graph): a graph stored as an adjacency matrix.
+    System (Adjacency): a directed graph with unweighted edges.
         
 To Do:
     Complete Network which will use an adjacency matrix for internal storage.
@@ -35,29 +40,21 @@ import dataclasses
 import itertools
 from typing import Any, Optional, Type, TYPE_CHECKING, Union
 
-from ..base import mappings
-from ..observe import traits
-from ..repair import convert
+from . import mappings
+from ..observe import report
+from ..change import convert
 from . import composites
-from . import check
-from . import transform
+from ..observe import check
+from ..change import convert
 from . import hybrid
 
 if TYPE_CHECKING:
     from . import tree
     
  
-@dataclasses.dataclass
-class Edge(composites.Composite, abc.ABC):
-    
-    @classmethod
-    def __instancecheck__(cls, instance: object) -> bool:
-        return check.is_edge(item = instance)
-
-     
 @dataclasses.dataclass # type: ignore
 class Graph(composites.Composite, abc.ABC):
-    """composites class for graph data structures.
+    """Base class for graph data structures.
     
     Args:
         contents (Collection[Any]): stored collection of nodes and/or edges.
@@ -99,74 +96,82 @@ class Graph(composites.Composite, abc.ABC):
     
     @classmethod
     def __instancecheck__(cls, instance: object) -> bool:
+        """Checks if 'instance' is a virtual or actual subclass instance."""
         return check.is_graph(item = instance)
 
 
 @dataclasses.dataclass
 class Adjacency(mappings.Dictionary, Graph):
-    """composites class for adjacency-list-compositesd graphs.
+    """Base class for adjacency-list graphs.
     
     Args:
-        contents (MutableMapping[composites.Node, Set[composites.Node]]): keys are nodes and 
-            values are sets of nodes (or hashable representations of nodes). 
-            Defaults to a defaultdict that has a set for its value format.
+        contents (MutableMapping[composites.Node, Set[composites.Node]]): keys 
+            are nodes and values are sets of nodes (or hashable representations 
+            of nodes). Defaults to a defaultdict that has a set for its value 
+            type.
                                       
     """  
-    contents: MutableMapping[composites.Node, Set[composites.Node]] = dataclasses.field(
-        default_factory = lambda: collections.defaultdict(set))
+    contents: MutableMapping[
+        composites.Node, Set[composites.Node]] = dataclasses.field(
+            default_factory = lambda: collections.defaultdict(set))
     
     """ Dunder Methods """
     
     @classmethod
     def __instancecheck__(cls, instance: object) -> bool:
+        """Checks if 'instance' is a virtual or actual subclass instance."""
         return check.is_adjacency(item = instance)
 
 
 @dataclasses.dataclass
 class Edges(Graph):
-    """composites class for edges-list-compositesd graphs.
+    """Base class for edge-list graphs.
     
     Args:
-        contents (tuple[tuple[composites.Node, Node], ...]): tuple of tuple of edges. 
-            Defaults to an empty tuple.
+        contents (tuple[tuple[composites.Node, Node], ...]): tuple of tuple of 
+            edges. Defaults to an empty tuple.
                                       
     """   
-    contents: tuple[tuple[composites.Node, composites.Node], ...] = dataclasses.field(
-        default_factory = tuple)
+    contents: tuple[
+        tuple[composites.Node, composites.Node], ...] = dataclasses.field(
+            default_factory = tuple)
     
     """ Dunder Methods """
            
     @classmethod
     def __instancecheck__(cls, instance: object) -> bool:
+        """Checks if 'instance' is a virtual or actual subclass instance."""
         return check.is_edges(item = instance)
     
     
 @dataclasses.dataclass
 class Matrix(Graph):
-    """composites class for adjacency-matrix-compositesd graphs.
+    """Base class for adjacency-matrix graphs.
     
     Args:
         contents (Sequence[Sequence[int]]): a list of list of integers 
             indicating edges between nodes in the matrix. Defaults to an empty
             list.
-        labels (Sequence[composites.Node]): names of nodes in the matrix. Defaults to 
-            an empty list.
+        labels (Sequence[composites.Node]): names of nodes in the matrix. 
+            Defaults to an empty list.
                                       
     """  
     contents: Sequence[Sequence[int]] = dataclasses.field(
         default_factory = list)
-    labels: Sequence[composites.Node] = dataclasses.field(default_factory = list)
+    labels: Sequence[composites.Node] = dataclasses.field(
+        default_factory = list)
     
     """ Dunder Methods """
         
     @classmethod
     def __instancecheck__(cls, instance: object) -> bool:
+        """Checks if 'instance' is a virtual or actual subclass instance."""
         return check.is_matrix(item = instance)
 
     
 @dataclasses.dataclass
 class System(Adjacency):
-    """Directed graph with unweighted edges.
+    """Directed graph with unweighted edges stored as an adjacency list.
     
     Args:
         contents (MutableMapping[composites.Node, Set[composites.Node]]): keys 
@@ -200,16 +205,16 @@ class System(Adjacency):
     @property
     def edges(self) -> Edges:
         """Returns the stored graph as an edge list."""
-        return transform.adjacency_to_edges(item = self.contents)
+        return convert.adjacency_to_edges(item = self.contents)
     
     @property
     def matrix(self) -> Matrix:
         """Returns the stored graph as an adjacency matrix."""
-        return transform.adjacency_to_matrix(item = self.contents)
+        return convert.adjacency_to_matrix(item = self.contents)
                       
     @property
     def nodes(self) -> set[composites.Node]:
-        """Returns all stored nodes in a list."""
+        """Returns all stored nodes in a set."""
         return set(self.contents.keys())
 
     @property
@@ -250,29 +255,29 @@ class System(Adjacency):
     @classmethod
     def from_edges(cls, item: Edges) -> System:
         """Creates a System instance from an edge list."""
-        return cls(contents = transform.edges_to_adjacency(item = item))
+        return cls(contents = convert.edges_to_adjacency(item = item))
     
     @classmethod
     def from_matrix(cls, item: Matrix) -> System:
         """Creates a System instance from an adjacency matrix."""
-        return cls(contents = transform.matrix_to_adjacency(item = item))
+        return cls(contents = convert.matrix_to_adjacency(item = item))
     
     @classmethod
     def from_nodes(cls, item: composites.Nodes) -> System:
         """Creates a System instance from a Nodes."""
-        new_contents = transform.pipeline_to_adjacency(item = item)
+        new_contents = convert.pipeline_to_adjacency(item = item)
         return cls(contents = new_contents)
 
     @classmethod
     def from_pipeline(cls, item: hybrid.Pipeline) -> System:
         """Creates a System instance from a Pipeline."""
-        new_contents = transform.pipeline_to_adjacency(item = item)
+        new_contents = convert.pipeline_to_adjacency(item = item)
         return cls(contents = new_contents)
     
     @classmethod
     def from_pipelines(cls, item: hybrid.Pipelines) -> System:
         """Creates a System instance from a Pipeline."""
-        new_contents = transform.pipelines_to_adjacency(item = item)
+        new_contents = convert.pipelines_to_adjacency(item = item)
         return cls(contents = new_contents)
 
     @classmethod
@@ -307,7 +312,7 @@ class System(Adjacency):
         #     self.contents = set(getattr(self, descendants))
         else:
             descendants = list(convert.iterify(item = descendants))
-            descendants = [traits.get_name(item = n) for n in descendants]
+            descendants = [convert.namify(item = n) for n in descendants]
             missing = [n for n in descendants if n not in self.contents]
             if missing:
                 raise KeyError(
@@ -377,7 +382,7 @@ class System(Adjacency):
         elif stop not in self:
             self.add(node = stop)
         if stop not in self.contents[start]:
-            self.contents[start].add(traits.get_name(item = stop))
+            self.contents[start].add(convert.namify(item = stop))
         return
 
     def delete(self, node: composites.Node) -> None:
@@ -418,7 +423,7 @@ class System(Adjacency):
         """Adds 'item' to this Graph.
 
         This method is roughly equivalent to a dict.update, just adding the
-        new keys and values to the existing graph. It transforms 'item' to an 
+        new keys and values to the existing graph. It converts 'item' to an 
         adjacency list that is then added to the existing 'contents'.
         
         Args:
@@ -435,11 +440,11 @@ class System(Adjacency):
         elif isinstance(item, Adjacency):
             adjacency = item
         elif isinstance(item, Edges):
-            adjacency = transform.edges_to_adjacency(item = item)
+            adjacency = convert.edges_to_adjacency(item = item)
         elif isinstance(item, Matrix):
-            adjacency = transform.matrix_to_adjacency(item = item)
+            adjacency = convert.matrix_to_adjacency(item = item)
         elif isinstance(item, (list, tuple, set)):
-            adjacency = transform.pipeline_to_adjacency(item = item)
+            adjacency = convert.pipeline_to_adjacency(item = item)
         elif isinstance(item, composites.Node):
             adjacency = {item: set()}
         else:
@@ -669,7 +674,7 @@ class System(Adjacency):
 #                 values are the nodes themselves.
             
 #         """
-#         return {self.traits.get_name(item = n): n for n in self.contents.keys()}
+#         return {self.traits.namify(item = n): n for n in self.contents.keys()}
   
 #     @property
 #     def roots(self) -> list[composites.Node]:
@@ -877,7 +882,7 @@ class System(Adjacency):
 #             if start not in self.contents:
 #                 self.add(node = start)
 #             if stop not in self.contents[start]:
-#                 self.contents[start].append(self.traits.get_name(item = stop))
+#                 self.contents[start].append(self.traits.namify(item = stop))
 #         return
 
 #     def delete(self, node: composites.Node) -> None:
@@ -922,7 +927,7 @@ class System(Adjacency):
 #         """Adds 'item' to this Graph.
 
 #         This method is roughly equivalent to a dict.update, just adding the
-#         new keys and values to the existing graph. It transforms the supported
+#         new keys and values to the existing graph. It converts the supported
 #         formats to an adjacency list that is then added to the existing 
 #         'contents'.
         

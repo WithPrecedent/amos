@@ -1,7 +1,7 @@
 """
 convert: functions that convert types
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,8 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-
+    bonafide
+    
 
 ToDo:
 

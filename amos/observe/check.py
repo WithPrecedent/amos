@@ -1,7 +1,7 @@
 """
-traits: tools for examining classes, instances, and other python objects
+check: functions that check passed item and give a boolean result
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,71 +17,86 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-    contains
-    contains_dict
-    contains_list
-    contains_set
-    contains_tuple
-    parallel_contains
-    serial_contains
-    get_annotations
-    get_attributes
-    get_contents
-    get_contents_types
-    get_methods
-    get_name
-    get_properties
-    get_signatures
-    get_types
-    get_variables
-    has_attributes
-    has_methods
-    has_properties
-    has_signatures
-    has_traits
-    has_types
-    has_types_dict
-    has_types_list
-    has_types_sequence
-    is_class_attribute
-    is_container
-    is_function
-    is_iterable
-    is_method
-    is_nested
-    is_sequence
-    name_attributes
-    name_methods
-    name_parameters
-    name_properties
-    name_variables
-        
-ToDo:
-    Adding parsing functionlity to signature-related functions to find
+    Contents Checkers:
+        contains
+        dict_contains
+        list_contains
+        set_contains
+        tuple_contains
+        parallel_contains
+        serial_contains
+    Simple Type Checkers:
+        is_container: returns if an item is a container but not a str.
+        is_function: returns if an item is a function type.
+        is_iterable: returns if an item is iterable but not a str.
+        is_nested: dispatcher which returns if an item is a nested container.
+        is_nested_dict: returns if an item is a nested dict.
+        is_nested_sequence: returns if an item is a nested sequence.
+        is_nested_set: returns if an item is a nested set.
+        is_sequence: returns if an item is a sequence but not a str.
+    Composite Type Checkers:
+        is_node: returns whether an item is a node.
+        is_nodes: returns whether an item is a collection of nodes.
+        is_edge: returns whether an item is an edge.
+        is_composite: returns whether an item is a composite data structure.
+        is_adjacency: returns whether an item is an adjacency list.
+        is_matrix: returns whether an item is an adjacency matrix.
+        is_edges: returns whether an item is a colleciton of edges.
+        is_graph: returns whether an item is a graph.
+        is_pipeline: returns whether an item is a pipeline of nodes.
+        is_pipelines: returns whether an item is a collection of pipelines.
+        is_tree: returns whether an item is a tree.
+        is_forest: returns whether an item is a collection of trees.
+    Attribute Checkers:
+        has_attributes
+        has_methods
+        has_properties
+        has_signatures
+        has_traits
+        is_class_attribute: returns whether an attribute is a class 
+            attribute.
+        is_method: returns whether an attribute of a class is a method. 
+        is_property 
+        is_variable: returns whether an attribute of a class is an
+            ordinary data variable. 
+    File and Folder Checkers:
+        is_file
+        is_folder
+        is_module
+        is_path   
+    
+To Do:
+    Adding parsing functionality to commented signature functions to find
         equivalence when one signature has subtypes of the other signature
         (e.g., one type annotation is 'dict' and the other is 'MutableMapping').
         It might be necessary to create a separate Signature-like class to 
         implement this functionality. This includes fixing or abandoning 
         'has_annotations' due to issues matching type annotations.
-    Add support for nagata Kinds once that system is complete.
+    Add support for Kinds once that system is complete.
     Add support for types (using type annotations) in the 'contains' function so
         that 'contains' can be applied to classes and not just instances.
     Add 'dispatcher' framework to 'contains' once the dispatcher framework is
         completed in the 'bobbie' package and the Kind system is completed in
         the nagata package. This should replace existing usages of python's
         singledispatch, which doesn't propertly deal with subtypes.
-
+    
 """
 from __future__ import annotations
 from collections.abc import (
-    Container, Hashable, Iterable, Mapping, MutableSequence, Sequence, Set)
+    Collection, Container, Hashable, Iterable, Mapping, MutableMapping, 
+    MutableSequence, Sequence, Set)
 import functools
 import inspect
+import itertools
+import pathlib
 import types
 from typing import Any, Optional, Type, Union
+   
+from ..change import convert 
 
-from ..repair import modify
 
+""" Contents Checkers """
+  
 @functools.singledispatch
 def contains(
     item: object,
@@ -92,7 +107,10 @@ def contains(
         item (object): item to examine.
         contents (Union[Type[Any], tuple[Type[Any], ...]]): types to check for
             in 'item' contents.
-
+        
+    Raises:
+        TypeError: if 'item' does not match any of the registered types.
+        
     Returns:
         bool: whether 'item' holds the types in 'contents'.
         
@@ -207,153 +225,362 @@ def serial_contains(
         
     """
     return all(isinstance(i, contents) for i in item)
-         
-def get_annotations(
-    item: object, 
-    include_private: bool = False) -> dict[str, Type[Any]]:
-    """Returns dict of attributes of 'item' with type annotations.
-    
-    Args:
-        item (object): instance to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-                        
-    Returns:
-        dict[str, Any]: dict of attributes in 'item' (keys are attribute names 
-            and values are type annotations) that are type annotated.
-            
-    """
-    annotations = item.__annotations__
-    if include_private:
-        return annotations
-    else:
-        return {k: v for k, v in annotations.items() if not k.startswith('_')}
 
-def get_attributes(
-    item: object, 
-    include_private: bool = False) -> dict[str, Any]:
-    """Returns dict of attributes of 'item'.
+""" Simple Type Checkers """
     
-    Args:
-        item (Any): item to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-                        
-    Returns:
-        dict[str, Any]: dict of attributes in 'item' (keys are attribute names 
-            and values are attribute values).
-            
-    """
-    attributes = name_attributes(item = item, include_private = include_private)
-    values = [getattr(item, m) for m in attributes]
-    return dict(zip(attributes, values))
-
-def get_methods(
-    item: Union[object, Type[Any]], 
-    include_private: bool = False) -> dict[str, types.MethodType]:
-    """Returns dict of methods of 'item'.
+def is_container(item: Union[object, Type[Any]]) -> bool:
+    """Returns if 'item' is a container and not a str.
     
     Args:
         item (Union[object, Type[Any]]): class or instance to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-
-    Returns:
-        dict[str, types.MethodType]: dict of methods in 'item' (keys are method 
-            names and values are methods).
         
-    """ 
-    methods = name_methods(item = item, include_private = include_private)
-    return [getattr(item, m) for m in methods]
+    Returns:
+        bool: if 'item' is a container but not a str.
+        
+    """  
+    if not inspect.isclass(item):
+        item = item.__class__ 
+    return issubclass(item, Container) and not issubclass(item, str)
 
-def get_name(item: Any, default: Optional[str] = None) -> Optional[str]:
-    """Returns str name representation of 'item'.
+def is_dict(item: Union[object, Type[Any]]) -> bool:
+    """Returns if 'item' is a mutable mapping (generic dict type).
     
-    Args:
-        item (Any): item to determine a str name.
-        default(Optional[str]): default name to return if other methods at name
-            creation fail.
-
-    Returns:
-        str: a name representation of 'item.'
-        
-    """        
-    if isinstance(item, str):
-        return item
-    elif (
-        hasattr(item, 'name') 
-        and not inspect.isclass(item)
-        and isinstance(item.name, str)):
-        return item.name
-    else:
-        try:
-            return modify.snakify(item.__name__)
-        except AttributeError:
-            if item.__class__.__name__ is not None:
-                return modify.snakify(item.__class__.__name__) 
-            else:
-                return default
-
-def get_properties(
-    item: object, 
-    include_private: bool = False) -> dict[str, Any]:
-    """Returns properties of 'item'.
-
-    Args:
-        item (object): instance to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-
-    Returns:
-        dict[str, Any]: dict of properties in 'item' (keys are property names 
-            and values are property values).
-        
-    """    
-    properties = name_properties(item = item, include_private = include_private)
-    values = [getattr(item, p) for p in properties]
-    return dict(zip(properties, values))
-
-def get_signatures(
-    item: Union[object, Type[Any]], 
-    include_private: bool = False) -> dict[str, inspect.Signature]:
-    """Returns dict of method signatures of 'item'.
-
     Args:
         item (Union[object, Type[Any]]): class or instance to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-
+        
     Returns:
-        dict[str, inspect.Signature]: dict of method signatures in 'item' (keys 
-            are method names and values are method signatures).
-                   
-    """ 
-    methods = name_methods(item = item, include_private = include_private)
-    signatures = [inspect.signature(getattr(item, m)) for m in methods]
-    return dict(zip(methods, signatures))
+        bool: if 'item' is a mutable mapping type.
+        
+    """  
+    if not inspect.isclass(item):
+        item = item.__class__ 
+    return isinstance(item, MutableMapping) 
 
-def get_variables(
-    item: object, 
-    include_private: bool = False) -> dict[str, Any]:
-    """Returns dict of attributes of 'item' that are not methods or properties.
+def is_function(item: Union[object, Type[Any]]) -> bool:
+    """Returns if 'item' is a function type.
+    
+    Args:
+        item (Union[object, Type[Any]]): class or instance to examine.
+        
+    Returns:
+        bool: if 'item' is a function type.
+        
+    """  
+    return isinstance(item, types.FunctionType)
+  
+def is_iterable(item: Union[object, Type[Any]]) -> bool:
+    """Returns if 'item' is iterable and is NOT a str type.
+    
+    Args:
+        item (Union[object, Type[Any]]): class or instance to examine.
+        
+    Returns:
+        bool: if 'item' is iterable but not a str.
+        
+    """ 
+    if not inspect.isclass(item):
+        item = item.__class__ 
+    return issubclass(item, Iterable) and not issubclass(item, str)
+
+def is_list(item: Union[object, Type[Any]]) -> bool:
+    """Returns if 'item' is a mutable sequence (generic list type).
+    
+    Args:
+        item (Union[object, Type[Any]]): class or instance to examine.
+        
+    Returns:
+        bool: if 'item' is a mutable list type.
+        
+    """
+    if not inspect.isclass(item):
+        item = item.__class__ 
+    return isinstance(item, MutableSequence)
+
+@functools.singledispatch
+def is_nested(item: object) -> bool:
+    """Returns if 'item' is nested at least one-level.
     
     Args:
         item (object): instance to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-                        
+        
+    Raises:
+        TypeError: if 'item' does not match any of the registered types.
+        
     Returns:
-        dict[str, Any]: dict of attributes in 'item' (keys are attribute names 
-            and values are attribute values) that are not methods or properties.
-            
+        bool: if 'item' is a nested mapping.
+        
+    """ 
+    raise TypeError(f'item {item} is not supported by {__name__}')
+
+@is_nested.register(Mapping)   
+def is_nested_dict(item: Mapping[Any, Any]) -> bool:
+    """Returns if 'item' is nested at least one-level.
+    
+    Args:
+        item (Union[object, Type[Any]]): class or instance to examine.
+        
+    Returns:
+        bool: if 'item' is a nested mapping.
+        
+    """ 
+    return (
+        isinstance(item, Mapping) 
+        and any(isinstance(v, Mapping) for v in item.values()))
+
+@is_nested.register(Sequence)     
+def is_nested_sequence(item: Sequence[Any]) -> bool:
+    """Returns if 'item' is nested at least one-level.
+    
+    Args:
+        item (Union[object, Type[Any]]): class or instance to examine.
+        
+    Returns:
+        bool: if 'item' is a nested sequence.
+        
+    """ 
+    return (
+        is_sequence(item = item)
+        and any(is_sequence(item = v) for v in item.values()))
+
+@is_nested.register(Set)         
+def is_nested_set(item: Set[Any]) -> bool:
+    """Returns if 'item' is nested at least one-level.
+    
+    Args:
+        item (Union[object, Type[Any]]): class or instance to examine.
+        
+    Returns:
+        bool: if 'item' is a nested set.
+        
+    """ 
+    return (
+        is_set(item = item)
+        and any(is_set(item = v) for v in item.values()))
+        
+def is_sequence(item: Union[object, Type[Any]]) -> bool:
+    """Returns if 'item' is a sequence and is NOT a str type.
+    
+    Args:
+        item (Union[object, Type[Any]]): class or instance to examine.
+        
+    Returns:
+        bool: if 'item' is a sequence but not a str.
+        
+    """ 
+    if not inspect.isclass(item):
+        item = item.__class__ 
+    return issubclass(item, Sequence) and not issubclass(item, str) 
+        
+def is_set(item: Union[object, Type[Any]]) -> bool:
+    """Returns if 'item' is a Set (including generic type sets).
+    
+    Args:
+        item (Union[object, Type[Any]]): class or instance to examine.
+        
+    Returns:
+        bool: if 'item' is a set.
+        
+    """ 
+    if not inspect.isclass(item):
+        item = item.__class__ 
+    return issubclass(item, Set)
+
+""" Composite Type Checkers """
+
+def is_node(item: object) -> bool:
+    """Returns whether 'item' is a node.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is a node.
+    
     """
-    attributes = name_attributes(item = item, include_private = include_private)
-    methods = name_methods(item = item, include_private = include_private)
-    properties = name_properties(item = item, include_private = include_private)
-    variables = [
-        a for a in attributes if a not in methods and a not in properties]
-    values = [getattr(item, m) for m in variables]
-    return dict(zip(variables, values))
+    if inspect.isclass(item):
+        return hasattr(item, '__hash__') and hasattr(item, 'name')
+    return isinstance(item, Hashable) and hasattr(item, 'name')
+
+def is_nodes(item: object) -> bool:
+    """Returns whether 'item' is a collection of nodes.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is a collection of nodes.
+    
+    """
+    return isinstance(item, Collection) and all(is_node(item = i) for i in item)
+
+def is_edge(item: object) -> bool:
+    """Returns whether 'item' is an edge.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is an edge.
+        
+    """
+    return (
+        isinstance(item, tuple) 
+        and len(item) == 2
+        and is_node(item = item[0])
+        and is_node(item = item[1]))
+
+def is_composite(item: object) -> bool:
+    """Returns whether 'item' is a collection of node connections.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is a collection of node connections.
+        
+    """
+    return (
+        is_adjacency(item = item)
+        or is_edges(item = item)
+        or is_graph(item = item)
+        or is_matrix(item = item)
+        or is_tree(item = item))
+
+def is_adjacency(item: object) -> bool:
+    """Returns whether 'item' is an adjacency list.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is an adjacency list.
+        
+    """
+    if isinstance(item, MutableMapping):
+        connections = list(item.values())
+        nodes = list(itertools.chain(item.values()))
+        return (
+            all(isinstance(e, (Set)) for e in connections)
+            and all(isinstance(n, (Set, Hashable)) for n in nodes))
+    else:
+        return False
+
+def is_matrix(item: object) -> bool:
+    """Returns whether 'item' is an adjacency matrix.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is an adjacency matrix.
+        
+    """
+    if isinstance(item, tuple) and len(item) == 2:
+        matrix = item[0]
+        labels = item[1]
+        connections = list(itertools.chain(matrix))
+        return (
+            isinstance(matrix, MutableSequence)
+            and isinstance(labels, Sequence) 
+            and not isinstance(labels, str)
+            and all(isinstance(i, MutableSequence) for i in matrix)
+            and all(isinstance(n, Hashable) for n in labels)
+            and all(isinstance(e, int) for e in connections))
+    else:
+        return False
+
+def is_edges(item: object) -> bool:
+    """Returns whether 'item' is an edge list.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is an edge list.
+    
+    """
+        
+    return (
+        isinstance(item, Sequence) 
+        and not isinstance(item, str)
+        and all(is_edge(item = i) for i in item))
+
+def is_graph(item: object) -> bool:
+    """Returns whether 'item' is a graph.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is a graph.
+    
+    """
+        
+    return (
+        is_adjacency(item = item) 
+        or is_matrix(item = item)
+        or is_edges(item = item))
+
+def is_pipeline(item: object) -> bool:
+    """Returns whether 'item' is a pipeline.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is a pipeline.
+    
+    """
+    return (
+        isinstance(item, Sequence)
+        and not isinstance(item, str)
+        and all(is_node(item = i) for i in item))
+
+def is_pipelines(item: object) -> bool:
+    """Returns whether 'item' is a sequence of pipelines.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is a sequence of pipelines.
+    
+    """
+    return (
+        isinstance(item, Sequence)
+        and not isinstance(item, str)
+        and all(is_pipeline(item = i) for i in item)) 
+
+def is_tree(item: object) -> bool:
+    """Returns whether 'item' is a tree.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is a tree.
+    
+    """
+    return (
+        isinstance(item, MutableSequence)
+        and all(isinstance(i, (MutableSequence, Hashable)) for i in item)) 
+    
+def is_forest(item: object) -> bool:
+    """Returns whether 'item' is a dict of trees.
+
+    Args:
+        item (object): instance to test.
+
+    Returns:
+        bool: whether 'item' is a dict of trees.
+    
+    """
+    return (
+        isinstance(item, MutableMapping)
+        and all(isinstance(i, Hashable) for i in item.keys())
+        and all(is_tree(item = i) for i in item.values())) 
+
+""" Attribute Checkers """
 
 def has_attributes(
     item: Union[object, Type[Any]], 
@@ -404,7 +631,7 @@ def has_properties(
     """
     properties = list(convert.iterify(properties))
     return all(is_property(item = item, attribute = p) for p in properties)
-
+    
 def has_signatures(
     item: Union[object, Type[Any]], 
     signatures: Mapping[str, inspect.Signature]) -> bool:
@@ -419,19 +646,20 @@ def has_signatures(
         bool: whether all 'signatures' exist in 'items'.
         
     """
-    item_signatures = get_signatures(item = item, include_private = True)
+    keys = [a for a in dir(item) if is_method(item = item, attribute = a)]
+    values = [inspect.signature(getattr(item, m)) for m in keys]
+    item_signatures = dict(zip(keys, values))
     pass_test = True
     for name, parameters in signatures.items():
         if (name not in item_signatures or item_signatures[name] != parameters):
             pass_test = False
     return pass_test
-    
+   
 def has_traits(
     item: Union[object, Type[Any]],
     attributes: Optional[MutableSequence[str]] = None,
     methods: Optional[MutableSequence[str]] = None,
-    properties: Optional[MutableSequence[str]] = None,
-    signatures: Optional[Mapping[str, inspect.Signature]] = None) -> bool:
+    properties: Optional[MutableSequence[str]] = None) -> bool:
     """Returns if 'item' has 'attributes', 'methods' and 'properties'.
 
     Args:
@@ -442,8 +670,6 @@ def has_traits(
             they exist in 'item' and are types.MethodType.          
         properties (MutableSequence[str]): names of properties to check to see 
             if they exist in 'item' and are property type.
-        signatures (Mapping[str, inspect.Signature]): keys are the names of 
-            methods and values are the corresponding method signatures.
                           
     Returns:
         bool: whether all passed arguments exist in 'items'.    
@@ -460,85 +686,6 @@ def has_traits(
         and has_methods(item = item, methods = methods)
         and has_properties(item = item, properties = properties)
         and has_signatures(item = item, signatures = signatures))
-    
-@functools.singledispatch
-def has_types(item: object) -> Optional[Union[
-    tuple[Type[Any], ...], 
-    tuple[tuple[Type[Any], ...], tuple[Type[Any], ...]]]]:
-    """Returns types contained in 'item'.
-
-    Args:
-        item (object): item to examine.
-    
-    Returns:
-        Optional[Union[tuple[Type[Any], ...], tuple[tuple[Type[Any], ...], 
-            tuple[Type[Any], ...]]]]:: returns the types of things contained 
-            in 'item'. Returns None if 'item' is not a container.
-        
-    """
-    raise TypeError(f'item {item} is not supported by {__name__}')
-
-@has_types.register(Mapping)  
-def has_types_dict(
-    item: Mapping[Hashable, Any]) -> Optional[
-        tuple[tuple[Type[Any], ...], tuple[Type[Any], ...]]]:
-    """Returns types contained in 'item'.
-
-    Args:
-        item (object): item to examine.
-    
-    Returns:
-        Optional[tuple[Type[Any], ...]]: returns the types of things contained 
-            in 'item'. Returns None if 'item' is not a container.
-        
-    """
-    if isinstance(item, Mapping):
-        key_types = has_types_sequence(item = item.keys())
-        value_types = has_types_sequence(item = item.values())
-        return tuple([key_types, value_types])
-    else:
-        return None
-
-@has_types.register(MutableSequence)  
-def has_types_list(item: list[Any]) -> Optional[tuple[Type[Any], ...]]:
-    """Returns types contained in 'item'.
-
-    Args:
-        item (list[Any]): item to examine.
-    
-    Returns:
-        Optional[tuple[Type[Any], ...]]: returns the types of things contained 
-            in 'item'. Returns None if 'item' is not a container.
-        
-    """
-    if isinstance(item, list):
-        key_types = has_types_sequence(item = item.keys())
-        value_types = has_types_sequence(item = item.values())
-        return tuple([key_types, value_types])
-    else:
-        return None
-
-@has_types.register(Sequence)    
-def has_types_sequence(item: Sequence[Any]) -> Optional[tuple[Type[Any], ...]]:
-    """Returns types contained in 'item'.
-
-    Args:
-        item (Sequence[Any]): item to examine.
-    
-    Returns:
-        Optional[tuple[Type[Any], ...]]: returns the types of things contained 
-            in 'item'. Returns None if 'item' is not a container.
-        
-    """
-    if isinstance(item, Sequence):
-        all_types = []
-        for thing in item:
-            kind = type(thing)
-            if not kind in all_types:
-                all_types.append(kind)
-        return tuple(all_types)
-    else:
-        return None
  
 def is_class_attribute(item: Union[object, Type[Any]], attribute: str) -> bool:
     """Returns if 'attribute' is a class attribute of 'item'."""
@@ -562,29 +709,6 @@ def is_container(item: Union[object, Type[Any]]) -> bool:
     if not inspect.isclass(item):
         item = item.__class__ 
     return issubclass(item, Container) and not issubclass(item, str)
-
-def is_function(item: Union[object, Type[Any]], attribute: Any) -> bool:
-    """Returns if 'attribute' is a function of 'item'."""
-    if isinstance(attribute, str):
-        try:
-            attribute = getattr(item, attribute)
-        except AttributeError:
-            return False
-    return isinstance(attribute, types.FunctionType)
-   
-def is_iterable(item: Union[object, Type[Any]]) -> bool:
-    """Returns if 'item' is iterable and is NOT a str type.
-    
-    Args:
-        item (Union[object, Type[Any]]): class or instance to examine.
-        
-    Returns:
-        bool: if 'item' is iterable but not a str.
-        
-    """ 
-    if not inspect.isclass(item):
-        item = item.__class__ 
-    return issubclass(item, Iterable) and not issubclass(item, str)
         
 def is_method(item: Union[object, Type[Any]], attribute: Any) -> bool:
     """Returns if 'attribute' is a method of 'item'."""
@@ -594,20 +718,6 @@ def is_method(item: Union[object, Type[Any]], attribute: Any) -> bool:
         except AttributeError:
             return False
     return inspect.ismethod(attribute)
-
-def is_nested(item: Mapping[Any, Any]) -> bool:
-    """Returns if 'item' is nested at least one-level.
-    
-    Args:
-        item (Union[object, Type[Any]]): class or instance to examine.
-        
-    Returns:
-        bool: if 'item' is a nested mapping.
-        
-    """ 
-    return (
-        isinstance(item, Mapping) 
-        and any(isinstance(v, Mapping) for v in item.values()))
  
 def is_property(item: Union[object, Type[Any]], attribute: Any) -> bool:
     """Returns if 'attribute' is a property of 'item'."""
@@ -619,20 +729,6 @@ def is_property(item: Union[object, Type[Any]], attribute: Any) -> bool:
         except AttributeError:
             return False
     return isinstance(attribute, property)
-
-def is_sequence(item: Union[object, Type[Any]]) -> bool:
-    """Returns if 'item' is a sequence and is NOT a str type.
-    
-    Args:
-        item (Union[object, Type[Any]]): class or instance to examine.
-        
-    Returns:
-        bool: if 'item' is a sequence but not a str.
-        
-    """ 
-    if not inspect.isclass(item):
-        item = item.__class__ 
-    return issubclass(item, Sequence) and not issubclass(item, str) 
 
 def is_variable(item: Union[object, Type[Any]], attribute: str) -> bool:
     """Returns if 'attribute' is a simple data attribute of 'item'.
@@ -650,101 +746,62 @@ def is_variable(item: Union[object, Type[Any]], attribute: str) -> bool:
         and not is_function(item = item, attribute = attribute)
         and not is_property(item = item, attribute = attribute))
 
-def name_attributes(
-    item: Union[object, Type[Any]], 
-    include_private: bool = False) -> list[str]:
-    """Returns attribute names of 'item'.
+""" File and Folder Checkers """
+
+def is_file(item: Union[str, pathlib.Path]) -> bool:
+    """Returns whether 'item' is a non-python-module file.
     
     Args:
-        item (Union[object, Type[Any]]): item to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-                        
-    Returns:
-        list[str]: names of attributes in 'item'.
-            
-    """
-    names = dir(item)
-    if not include_private:
-        names = modify.drop_privates(item = names)
-    return names
-
-def name_methods(
-    item: Union[object, Type[Any]], 
-    include_private: bool = False) -> list[str]:
-    """Returns method names of 'item'.
-    
-    Args:
-        item (Union[object, Type[Any]]): item to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-                        
-    Returns:
-        list[str]: names of methods in 'item'.
-            
-    """
-    methods = [
-        a for a in dir(item)
-        if is_method(item = item, attribute = a)]
-    if not include_private:
-        methods = modify.drop_privates(item = methods)
-    return methods
-
-def name_parameters(item: Type[Any]) -> list[str]:
-    """Returns list of parameters based on annotations of 'item'.
-
-    Args:
-        item (Type[Any]): class to get parameters to.
-
-    Returns:
-        list[str]: names of parameters in 'item'.
+        item (Union[str, pathlib.Path]): path to check.
         
-    """          
-    return list(item.__annotations__.keys())
+    Returns:
+        bool: whether 'item' is a non-python-module file.
+        
+    """
+    item = convert.pathlibify(item = item)
+    return (
+        item.exists() 
+        and item.is_file() 
+        and not item.suffix in ['.py', '.pyc'])
 
-def name_properties(
-    item: Union[object, Type[Any]], 
-    include_private: bool = False) -> list[str]:
-    """Returns method names of 'item'.
+def is_folder(item: Union[str, pathlib.Path]) -> bool:
+    """Returns whether 'item' is a path to a folder.
     
     Args:
-        item (Union[object, Type[Any]]): item to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-                        
+        item (Union[str, pathlib.Path]): path to check.
+        
     Returns:
-        list[str]: names of properties in 'item'.
-            
+        bool: whether 'item' is a path to a folder.
+        
     """
-    if not inspect.isclass(item):
-        item = item.__class__
-    properties = [
-        a for a in dir(item)
-        if is_property(item = item, attribute = a)]
-    if not include_private:
-        properties = modify.drop_privates(item = properties)
-    return properties
+    item = convert.pathlibify(item = item)
+    return item.exists() and item.is_dir() # type: ignore
 
-def name_variables(
-    item: Union[object, Type[Any]], 
-    include_private: bool = False) -> list[str]:
-    """Returns variable names of 'item'.
+def is_module(item: Union[str, pathlib.Path]) -> bool:
+    """Returns whether 'item' is a python-module file.
     
     Args:
-        item (Union[object, Type[Any]]): item to examine.
-        include_private (bool): whether to include items that begin with '_'
-            (True) or to exclude them (False). Defauls to False.
-                        
+        item (Union[str, pathlib.Path]): path to check.
+        
     Returns:
-        list[str]: names of attributes in 'item' that are neither methods nor
-            properties.
-            
+        bool: whether 'item' is a python-module file.
+        
     """
-    names = [a for a in dir(item) if is_variable(item = item, attribute = a)]
-    if not include_private:
-        names = modify.drop_privates(item = names)
-    return names
+    item = convert.pathlibify(item = item)
+    return item.exists() and item.is_file() and item.suffix in ['.py'] # type: ignore
 
+def is_path(item: Union[str, pathlib.Path]) -> bool:
+    """Returns whether 'item' is a currently existing path.
+    
+    Args:
+        item (Union[str, pathlib.Path]): path to check.
+        
+    Returns:
+        bool: whether 'item' is a currently existing path.
+        
+    """
+    item = convert.pathlibify(item = item)
+    return item.exists() # type: ignore
 
 
 # def has_annotations(
@@ -789,3 +846,4 @@ def name_variables(
 #                 except TypeError:
 #                     pass
 #     return matched  
+  

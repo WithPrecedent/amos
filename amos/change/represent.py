@@ -1,7 +1,7 @@
 """
-recap: functions for better representing python objects as strings
+represent: functions for better representing python objects as strings
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,26 +18,28 @@ License: Apache-2.0
 
 Contents:
     Representation (object): data for a data type's representation.
-    facades (Dict): dictionary of different supported types with Representation
+    facades (dict): dictionary of different supported types with Representation
         instances as values.
-    beautify (Callable): provides a pretty str summary for an object. The
+    beautify: provides a pretty str summary for an object. The
         function uses the 'LINE_BREAK' and 'INDENT' module-level items for
         the values for new lines and length of an indentation.
-    beautify_dict (Callable): returns a beautiful string repreentation of a
+    beautify_dict: returns a beautiful string repreentation of a
         dict or dict-like object.
-    beautify_object (Callable): returns a beautiful string repreentation of a
+    beautify_object: returns a beautiful string repreentation of a
         class instance and its attributes.
-    beautify_list (Callable): returns a beautiful string repreentation of a
+    beautify_list: returns a beautiful string repreentation of a
         list, set, tuple, list-like, set-like, or tuple-like object.
-    beautify_string (Callable): returns a beautiful string repreentation of a
+    beautify_string: returns a beautiful string repreentation of a
         str.
-    _get_indent (Callable): determines the appropriate indentation for a 
+    _get_indent: determines the appropriate indentation for a 
         beautiful str.
-    _classify_facade (Callable): called by 'beautify' to determine the 
+    _classify_facade: called by 'beautify' to determine the 
         appropriate function to beautify the passed 'item'.
          
 ToDo:
-    Clean up and add DocStrings
+    Completely rewrite. Consider removing class entirely (or moving it to a 
+        separate module like Inspector in 'observe' subpackage).
+    Clean up and add DocStrings.
     Add a textwrap option when VERTICAL is False.
     
 """
@@ -49,8 +51,8 @@ import inspect
 from types import FunctionType
 from typing import Any, Optional, Type, Union
 
-from ..observe import traits
-from ..repair import modify
+from . import convert
+from ..change import modify
 
 
 LINE_BREAK: str = '\n'
@@ -190,7 +192,7 @@ def beautify_object(
         if hasattr(module, '__package__'):
             package = module.__package__
     if facade.name == 'object':
-        name = traits.get_name(item = item)
+        name = convert.namify(item = item)
     else:
         name = ''
     base = modify.snakify(item.__class__.__name__)

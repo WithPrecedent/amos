@@ -1,7 +1,7 @@
 """
 mappings: extensible, flexible, lightweight dict-like classes
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,12 +17,12 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-    Dictionary (Bunch, MutableMapping): bunches's drop-in replacement for a 
-        python dict with some added functionality.
+    Dictionary (bunches,Bunch, MutableMapping): bunches's drop-in replacement 
+        for a python dict with some added functionality.
     Catalog (Dictionary): wildcard-accepting dict which is primarily intended 
         for storing different options and strategies. It also returns lists of 
         matches if a list of keys is provided.
-    Library (MutableMapping): a chained mapping used to registering subclasses
+    Library (MutableMapping): a chained mapping used for registering subclasses
         and instances.
         
 ToDo:
@@ -37,9 +37,9 @@ import dataclasses
 import inspect
 from typing import Any, Optional, Type, Union
 
-from ..observe import traits
-from ..repair import convert
-from . import bunches
+from ..observe import report
+from ..change import convert
+from . import bases
                   
 
 _ALL_KEYS: list[Any] = ['all', 'All', ['all'], ['All']]
@@ -50,8 +50,8 @@ _NONE_KEYS: list[Any] = ['none', 'None', ['none'], ['None']]
 
 
 @dataclasses.dataclass  # type: ignore
-class Dictionary(bunches.Bunch, MutableMapping):  # type: ignore
-    """Basic bunches dict replacement.
+class Dictionary(bases.Bunch, MutableMapping):  # type: ignore
+    """Basic amos dict replacement.
     
     A Dictionary differs from an ordinary python dict in ways inherited from 
     Bunch by requiring 'add' and 'subset' methods, storing data in 'contents', 
@@ -172,8 +172,8 @@ class Dictionary(bunches.Bunch, MutableMapping):  # type: ignore
         """Returns a new instance with a subset of 'contents'.
 
         This method applies 'include' before 'exclude' if both are passed. If
-        'include' is None, all existing keys will be added before 'exclude' is
-        applied.
+        'include' is None, all existing keys will be added before items in 
+        'exclude' are dropped.
         
         Args:
             include (Optional[Union[Hashable, Sequence[Hashable]]]): key(s) to 
@@ -414,11 +414,11 @@ class Library(MutableMapping):
             item (Union[Type[Any], object]): class or instance to add to the 
                 Library instance.
             name (Optional[Hashable]): key to use to store 'item'. If not
-                passed, a key will be created using the 'get_name' method.
+                passed, a key will be created using the 'namify' method.
                 Defaults to None
                 
         """
-        key = name or traits.get_name(item = item)
+        key = name or convert.namify(item = item)
         if inspect.isclass(item):
             self.classes[key] = item
         elif isinstance(item, object):

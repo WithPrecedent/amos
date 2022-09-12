@@ -1,7 +1,7 @@
 """
 convert: functions that convert types
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,32 +24,76 @@ be:
     f'to_{output type}'
      
 Contents:
-    instancify (Callable): converts a class to an instance or adds kwargs to a
-        passed instance as attributes.
-    listify (Callable): converts passed item to a list.
-    namify (Callable): returns hashable name for passed item.
-    numify (Callable): attempts to convert passed item to a numerical type.
-    pathlibify (Callable): converts a str to a pathlib object or leaves it as
+    instancify: converts a class to an instance or adds kwargs to a passed 
+        instance as attributes.
+    listify: converts passed item to a list.
+    namify: returns hashable name for passed item.
+    numify: attempts to convert passed item to a numerical type.
+    pathlibify: converts a str to a pathlib object or leaves it as
         a pathlib object.
-    tuplify (Callable): converts a passed item to a tuple.
-    typify (Callable): converts a str type to other common types, if possible.
-
-
+    tuplify: converts a passed item to a tuple.
+    typify: converts a str type to other common types, if possible.
+    to_dict:
+    to_index
+    str_to_index
+    to_int
+    str_to_int
+    float_to_int
+    to_list
+    str_to_list
+    to_float
+    int_to_float
+    str_to_float
+    to_path
+    str_to_path
+    to_str
+    int_to_str
+    float_to_str
+    list_to_str
+    none_to_str
+    path_to_str
+    datetime_to_str
+    to_adjacency
+    edges_to_adjacency
+    matrix_to_adjacency
+    pipeline_to_adjacency
+    pipelines_to_adjacency
+    tree_to_adjacency
+    nodes_to_adjacency
+    to_edges
+    adjacency_to_edges
+    to_matrix
+    adjacency_to_matrix
+    to_tree
+    matrix_to_tree  
+    
 ToDo:
     Add more flexible tools.
     
 """
 from __future__ import annotations
 import ast
+import collections
 from collections.abc import (
     Collection, Hashable, Iterable, Mapping, MutableMapping, MutableSequence, 
     Sequence, Set)
+import datetime
 import inspect
 import pathlib
-from typing import Any, Callable, Optional, Type, Union
+from typing import Any, Callable, Optional, Type, TYPE_CHECKING, Union
+
+import more_itertools
 
 from . import modify
+from ..observe import check
 
+if TYPE_CHECKING:
+    from ..containers import composites
+    from ..containers import graph
+    from ..containers import hybrid
+    from ..containers import sequences
+    from ..containers import tree
+    
 
 """ General Converters """
 
@@ -149,7 +193,35 @@ def listify(item: Any, default: Optional[Any] = None) -> Any:
         return item
     else:
         return [item]
-                 
+
+def namify(item: Any, default: Optional[str] = None) -> Optional[str]:
+    """Returns str name representation of 'item'.
+    
+    Args:
+        item (Any): item to determine a str name.
+        default(Optional[str]): default name to return if other methods at name
+            creation fail.
+
+    Returns:
+        str: a name representation of 'item.'
+        
+    """        
+    if isinstance(item, str):
+        return item
+    elif (
+        hasattr(item, 'name') 
+        and not inspect.isclass(item)
+        and isinstance(item.name, str)):
+        return item.name
+    else:
+        try:
+            return modify.snakify(item.__name__)
+        except AttributeError:
+            if item.__class__.__name__ is not None:
+                return modify.snakify(item.__class__.__name__) 
+            else:
+                return default
+                            
 def numify(item: Any, raise_error: bool = False) -> Union[int, float, Any]:
     """Converts 'item' to a numeric type.
     
@@ -612,3 +684,296 @@ def path_to_str(item: pathlib.Path) -> str:
     """    
     """Converts a pathlib.Path to a str."""
     return str(item)
+
+# @to_str.register # type: ignore
+def datetime_to_string(
+    item: datetime.datetime,
+    time_format: str = '%Y-%m-%d_%H-%M') -> str:
+    return item.strftime(time_format)
+
+""" Composite Converters """
+
+# @amos.dispatcher 
+def to_adjacency(item: Any) -> graph.Adjacency:
+    """Converts 'item' to an Adjacency.
+    
+    Args:
+        item (Any): item to convert to an Adjacency.
+
+    Raises:
+        TypeError: if 'item' is a type that is not registered with the 
+        dispatcher.
+
+    Returns:
+        graph.Adjacency: derived from 'item'.
+
+    """
+    if check.is_adjacency(item = item):
+        return item
+    else:
+        raise TypeError(
+            f'item cannot be converted because it is an unsupported type: '
+            f'{type(item).__name__}')
+
+# @to_adjacency.register # type: ignore
+def edges_to_adjacency(item: graph.Edges) -> graph.Adjacency:
+    """Converts 'item' to an Adjacency.
+
+    Args:
+        item (graph.Edges): item to convert to an Adjacency.
+
+    Returns:
+        graph.Adjacency: derived from 'item'.
+
+    """
+    adjacency = collections.defaultdict(set)
+    for edge_pair in item:
+        if edge_pair[0] not in adjacency:
+            adjacency[edge_pair[0]] = {edge_pair[1]}
+        else:
+            adjacency[edge_pair[0]].add(edge_pair[1])
+        if edge_pair[1] not in adjacency:
+            adjacency[edge_pair[1]] = set()
+    return adjacency
+
+# @to_adjacency.register # type: ignore 
+def matrix_to_adjacency(item: graph.Matrix) -> graph.Adjacency:
+    """Converts 'item' to an Adjacency.
+
+    Args:
+        item (graph.Matrix): item to convert to an Adjacency.
+
+    Returns:
+        graph.Adjacency: derived from 'item'.
+
+    """  
+    matrix = item[0]
+    names = item[1]
+    name_mapping = dict(zip(range(len(matrix)), names))
+    raw_adjacency = {
+        i: [j for j, adjacent in enumerate(row) if adjacent] 
+        for i, row in enumerate(matrix)}
+    adjacency = collections.defaultdict(set)
+    for key, value in raw_adjacency.items():
+        new_key = name_mapping[key]
+        new_values = set()
+        for edge in value:
+            new_values.add(name_mapping[edge])
+        adjacency[new_key] = new_values
+    return adjacency
+
+# @to_adjacency.register # type: ignore 
+def pipeline_to_adjacency(item: hybrid.Pipeline) -> graph.Adjacency:
+    """Converts 'item' to an Adjacency.
+
+    Args:
+        item (hybrid.Pipeline): item to convert to an Adjacency.
+
+    Returns:
+        graph.Adjacency: derived from 'item'.
+
+    """
+    if not isinstance(item, (Collection)) or isinstance(item, str):
+        item = [item]
+    adjacency = collections.defaultdict(set)
+    if len(item) == 1:
+        adjacency.update({item: set()})
+    else:
+        edges = more_itertools.windowed(item, 2)
+        for edge_pair in edges:
+            if edge_pair[0] in adjacency:
+                adjacency[edge_pair[0]].add(edge_pair[1])
+            else:
+                adjacency[edge_pair[0]] = {edge_pair[1]}
+    return adjacency
+
+# @to_adjacency.register # type: ignore 
+def pipelines_to_adjacency(item: hybrid.Pipelines) -> graph.Adjacency:
+    """Converts 'item' to an Adjacency.
+
+    Args:
+        item (hybrid.Pipelines): item to convert to an Adjacency.
+
+    Returns:
+        graph.Adjacency: derived from 'item'.
+
+    """
+    adjacency = collections.defaultdict(set)
+    for _, pipeline in item.items():
+        pipe_adjacency = pipeline_to_adjacency(item = pipeline)
+        for key, value in pipe_adjacency.items():
+            if key in adjacency:
+                for inner_value in value:
+                    if inner_value not in adjacency:
+                        adjacency[key].add(inner_value)
+            else:
+                adjacency[key] = value
+    return adjacency
+
+# @to_adjacency.register # type: ignore 
+def tree_to_adjacency(item: tree.Tree) -> graph.Adjacency:
+    """Converts 'item' to an Adjacency.
+
+    Args:
+        item (tree.Tree): item to convert to an Adjacency.
+
+    Returns:
+        graph.Adjacency: derived from 'item'.
+
+    """
+    raise NotImplementedError
+             
+# @to_adjacency.register # type: ignore 
+def nodes_to_adjacency(item: composites.Nodes) -> graph.Adjacency:
+    """Converts 'item' to an Adjacency.
+
+    Args:
+        item (composites.Nodes): item to convert to an Adjacency.
+
+    Returns:
+        graph.Adjacency: derived from 'item'.
+
+    """
+    adjacency = collections.defaultdict(set)
+    return adjacency.update((k, set()) for k in item)
+
+# @amos.dispatcher   
+def to_edges(item: Any) -> graph.Edges:
+    """Converts 'item' to an Edges.
+    
+    Args:
+        item (Any): item to convert to an Edges.
+
+    Raises:
+        TypeError: if 'item' is a type that is not registered.
+
+    Returns:
+        graph.Edges: derived from 'item'.
+
+    """
+    if check.is_edges(item = item):
+        return item
+    else:
+        raise TypeError(
+            f'item cannot be converted because it is an unsupported type: '
+            f'{type(item).__name__}')
+    
+# @to_edges.register # type: ignore
+def adjacency_to_edges(item: graph.Adjacency) -> graph.Edges:
+    """Converts 'item' to an Edges.
+    
+    Args:
+        item (graph.Adjacency): item to convert to an Edges.
+
+    Returns:
+        graph.Edges: derived from 'item'.
+
+    """ 
+    edges = []
+    for node, connections in item.items():
+        for connection in connections:
+            edges.append(tuple([node, connection]))
+    return tuple(edges)
+
+# @amos.dispatcher   
+def to_matrix(item: Any) -> graph.Matrix:
+    """Converts 'item' to a Matrix.
+    
+    Args:
+        item (Any): item to convert to a Matrix.
+
+    Raises:
+        TypeError: if 'item' is a type that is not registered.
+
+    Returns:
+        graph.Matrix: derived from 'item'.
+
+    """
+    if check.is_matrix(item = item):
+        return item
+    else:
+        raise TypeError(
+            f'item cannot be converted because it is an unsupported type: '
+            f'{type(item).__name__}')
+
+# @to_matrix.register # type: ignore 
+def adjacency_to_matrix(item: graph.Adjacency) -> graph.Matrix:
+    """Converts 'item' to a Matrix.
+    
+    Args:
+        item (graph.Adjacency): item to convert to a Matrix.
+
+    Returns:
+        graph.Matrix: derived from 'item'.
+
+    """ 
+    names = list(item.keys())
+    matrix = []
+    for i in range(len(item)): 
+        matrix.append([0] * len(item))
+        for j in item[i]:
+            matrix[i][j] = 1
+    return tuple([matrix, names])    
+
+# @amos.dispatcher   
+def to_tree(item: Any) -> tree.Tree:
+    """Converts 'item' to a Tree.
+    
+    Args:
+        item (Any): item to convert to a Tree.
+
+    Raises:
+        TypeError: if 'item' is a type that is not registered.
+
+    Returns:
+        tree.Tree: derived from 'item'.
+
+    """
+    if check.is_tree(item = item):
+        return item
+    else:
+        raise TypeError(
+            f'item cannot be converted because it is an unsupported type: '
+            f'{type(item).__name__}')
+
+# @to_tree.register # type: ignore 
+def matrix_to_tree(item: graph.Matrix) -> tree.Tree:
+    """Converts 'item' to a Tree.
+    
+    Args:
+        item (graph.Matrixy): item to convert to a Tree.
+
+    Raises:
+        TypeError: if 'item' is a type that is not registered.
+
+    Returns:
+        tree.Tree: derived from 'item'.
+
+    """
+    tree = {}
+    for node in item:
+        children = item[:]
+        children.remove(node)
+        tree[node] = matrix_to_tree(children)
+    return tree
+
+# @amos.dispatcher   
+def to_pipeline(item: Any) -> sequences.pipeline:
+    """Converts 'item' to a Tree.
+    
+    Args:
+        item (Any): item to convert to a Tree.
+
+    Raises:
+        TypeError: if 'item' is a type that is not registered.
+
+    Returns:
+        tree.Tree: derived from 'item'.
+
+    """
+    if check.is_tree(item = item):
+        return item
+    else:
+        raise TypeError(
+            f'item cannot be converted because it is an unsupported type: '
+            f'{type(item).__name__}')

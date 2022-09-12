@@ -1,7 +1,7 @@
 """
 sequences: extensible, flexible, lightweight list-like classes
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,8 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-    Listing (Bunch, MutableSequence): drop-in replacement for a python list with 
-        additional functionality.
+    Listing (bunches.Bunch, MutableSequence): drop-in replacement for a python 
+        list with additional functionality.
     Hybrid (Listing): iterable with both dict and list interfaces. Stored items
         must be hashable or have a 'name' attribute.
     
@@ -32,14 +32,14 @@ import copy
 import dataclasses
 from typing import Any, Optional, Union
 
-from ..observe import traits
-from ..repair import convert
-from . import bunches
+from ..observe import report
+from ..change import convert
+from . import bases
 
                           
 @dataclasses.dataclass # type: ignore
-class Listing(bunches.Bunch, MutableSequence): # type: ignore
-    """Basic bunches list replacement.
+class Listing(bases.Bunch, MutableSequence): # type: ignore
+    """Basic amos list replacement.
     
     A Listing differs from an ordinary python list in ways required by 
     inheriting from Bunch: 'add' and 'subset' methods, storing data in 
@@ -195,7 +195,7 @@ class Hybrid(Listing):
     
     A Hybrid differs from a Listing in 3 significant ways:
         1) It only stores hashable items or objects for which a str name can be
-            derived (using the get_name function).
+            derived (using the namify function).
         2) Hybrid has an interface of both a dict and a list, but stores a list. 
             Hybrid does this by taking advantage of the 'name' attribute or
             hashability of stored items. A 'name' or hash acts as a key to 
@@ -279,7 +279,7 @@ class Hybrid(Listing):
                 any duplicate keys, which are permitted by Hybrid.
             
         """
-        return tuple([traits.get_name(item = c) for c in self.contents])
+        return tuple([convert.namify(item = c) for c in self.contents])
 
     def setdefault(self, value: Any) -> None: # type: ignore
         """sets default value to return when 'get' method is used.
@@ -347,16 +347,16 @@ class Hybrid(Listing):
         else:
             
             matches = [
-                c for c in self.contents if traits.get_name(item = c) == key]
+                c for c in self.contents if convert.namify(item = c) == key]
             # matches = []
             # for value in self.contents:
             #     if (
             #         hash(value) == key 
-            #         or traits.get_name(item = value) == key):
+            #         or traits.namify(item = value) == key):
             #         matches.append(value)
             # matches = [
             #     i for i, c in enumerate(self.contents)
-            #     if traits.get_name(c) == key]
+            #     if traits.namify(c) == key]
             if len(matches) == 0:
                 raise KeyError(f'{key} is not in {self.__class__.__name__}')
             elif len(matches) == 1:
@@ -397,6 +397,6 @@ class Hybrid(Listing):
             del self.contents[key]
         else:
             self.contents = [
-                c for c in self.contents if traits.get_name(c) != key]
+                c for c in self.contents if convert.namify(c) != key]
         return
 

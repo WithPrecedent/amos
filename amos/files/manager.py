@@ -1,7 +1,7 @@
 """
 manager: base file manager
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
-Copyright 2021, Corey Rayburn Yung
+Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,14 @@ Contents:
     formats (amos.Dictionary): a dictionary of the out-of-the-box supported file 
         formats.
     Clerk (object): interface for amos file management classes and methods.
-     
+    combine_path:
+    get_transfer_parameters:
+    prepare_transfer:
+    _validate_file_format:
+    
+ToDo:
+
+    
 """
 from __future__ import annotations
 from collections.abc import Hashable, MutableMapping
@@ -31,9 +38,9 @@ import inspect
 import pathlib
 from typing import Any, Optional, Union
 
-from ..base import mappings
-from ..repair import convert
-from . import template
+from ..containers import mappings
+from ..change import convert
+from . import formats
 
 
 """ Default Parameters for Clerk """
@@ -50,15 +57,15 @@ default_parameters: MutableMapping[str, Any] = {
 
 """ Included File Formats """
 
-formats: mappings.Dictionary[str, template.FileFormat] = mappings.Dictionary(
+formats: mappings.Dictionary[str, formats.FileFormat] = mappings.Dictionary(
     contents = {
-        'csv': template.FileFormat(
+        'csv': formats.FileFormat(
             name = 'csv',
             module =  'csv',
             extension = '.csv',
-            loader = template.pickle_object,
-            saver = template.unpickle_object),
-        'json': template.FileFormat(
+            loader = formats.pickle_object,
+            saver = formats.unpickle_object),
+        'json': formats.FileFormat(
             name = 'json',
             module =  'pandas',
             extension = '.json',
@@ -68,18 +75,18 @@ formats: mappings.Dictionary[str, template.FileFormat] = mappings.Dictionary(
                 'encoding': 'file_encoding',
                 'columns': 'included_columns',
                 'chunksize': 'test_size'}),
-        'pickle': template.FileFormat(
+        'pickle': formats.FileFormat(
             name = 'pickle',
             module =  'pickle',
             extension = ['.pickle', '.pkl'],
-            loader = template.load_pickle,
-            saver = template.save_pickle),
-        'text': template.FileFormat(
+            loader = formats.load_pickle,
+            saver = formats.save_pickle),
+        'text': formats.FileFormat(
             name = 'text',
             module =  None,
             extension = ['.txt', 'text'],
-            loader = template.load_text,
-            saver = template.save_text)})
+            loader = formats.load_text,
+            saver = formats.save_text)})
 
    
 @dataclasses.dataclass
@@ -131,7 +138,7 @@ class Clerk(object):
         file_path: Union[str, pathlib.Path] = None,
         folder: Union[str, pathlib.Path] = None,
         file_name: Optional[str] = None,
-        file_format: Union[str, template.FileFormat] = None,
+        file_format: Union[str, formats.FileFormat] = None,
         **kwargs: Any) -> Any:
         """Imports file by calling appropriate method based on file_format.
 
@@ -171,7 +178,7 @@ class Clerk(object):
         file_path: Optional[Union[str, pathlib.Path]] = None,
         folder: Optional[Union[str, pathlib.Path]] = None,
         file_name: Optional[str] = None,
-        file_format: Optional[Union[str, template.FileFormat]] = None,
+        file_format: Optional[Union[str, formats.FileFormat]] = None,
         **kwargs: Any) -> None:
         """Exports file by calling appropriate method based on file_format.
 
@@ -299,7 +306,7 @@ def combine_path(
         return pathlib.Path(folder)
 
 def get_transfer_parameters(
-    file_format: template.FileFormat, 
+    file_format: formats.FileFormat, 
     shared: MutableMapping[str, str],
     **kwargs: Any) -> MutableMapping[Hashable, Any]:
     """Creates complete parameters for a file input/output method.
@@ -324,8 +331,8 @@ def prepare_transfer(
     file_path: Union[str, pathlib.Path],
     folder: Union[str, pathlib.Path],
     file_name: str,
-    file_format: Union[str, template.FileFormat]) -> (
-        tuple[pathlib.Path, template.FileFormat]):
+    file_format: Union[str, formats.FileFormat]) -> (
+        tuple[pathlib.Path, formats.FileFormat]):
     """Prepares file path related arguments for loading or saving a file.
 
     Args:
@@ -365,7 +372,7 @@ def prepare_transfer(
 """ Private Functions """
 
 def _validate_file_format(
-    file_format: Union[str, template.FileFormat]) -> template.FileFormat:
+    file_format: Union[str, formats.FileFormat]) -> formats.FileFormat:
     """Selects 'file_format' or returns FileFormat instance intact.
 
     Args:
@@ -381,11 +388,11 @@ def _validate_file_format(
     """
     if file_format in formats:
         return formats[file_format]
-    elif isinstance(file_format, template.FileFormat):
+    elif isinstance(file_format, formats.FileFormat):
         return file_format
     elif (
         inspect.isclass(file_format) 
-            and issubclass(file_format, template.FileFormat)):
+            and issubclass(file_format, formats.FileFormat)):
         return file_format()
     else:
         raise TypeError(f'{file_format} is not a recognized file format')
