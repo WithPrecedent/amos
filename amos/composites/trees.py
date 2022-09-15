@@ -31,18 +31,18 @@ from collections.abc import MutableSequence, Sequence
 import dataclasses
 from typing import Any, Callable, ClassVar, Optional, Type, TypeVar, Union
 
-from . import composites
-from . import sequences
+from . import core
+from ..containers import sequences
 
 
 """ Type Aliases """
 
-Changer: Type[Any] = Callable[[composites.Node], None]
-Finder: Type[Any] = Callable[[composites.Node], Optional[composites.Node]]
+Changer: Type[Any] = Callable[[core.Node], None]
+Finder: Type[Any] = Callable[[core.Node], Optional[core.Node]]
 
 
 @dataclasses.dataclass # type: ignore
-class Tree(sequences.Hybrid, composites.Composite, abc.ABC):
+class Tree(sequences.Hybrid, core.Composite, abc.ABC):
     """composites class for an tree data structures.
     
     The Tree class uses a Hybrid instead of a linked list for storing children
@@ -74,7 +74,7 @@ class Tree(sequences.Hybrid, composites.Composite, abc.ABC):
         parent (Optional[Tree]): parent Tree, if any. Defaults to None.
   
     """
-    contents: MutableSequence[composites.Node] = dataclasses.field(
+    contents: MutableSequence[core.Node] = dataclasses.field(
         default_factory = list)
     name: Optional[str] = None
     parent: Optional[Tree] = None 
@@ -82,22 +82,22 @@ class Tree(sequences.Hybrid, composites.Composite, abc.ABC):
     """ Properties """
     
     @property
-    def children(self) -> MutableSequence[composites.Node]:
+    def children(self) -> MutableSequence[core.Node]:
         return self.contents
     
     @children.setter
-    def children(self, value: MutableSequence[composites.Node]) -> None:
+    def children(self, value: MutableSequence[core.Node]) -> None:
         self.contents = value
         return
     
     @children.deleter
-    def children(self, key: composites.Node) -> None:
+    def children(self, key: core.Node) -> None:
         self.delete(key)
         return
            
     """ Dunder Methods """
 
-    def __add__(self, other: composites.Composite) -> None:
+    def __add__(self, other: core.Composite) -> None:
         """Adds 'other' to the stored tree using the 'append' method.
 
         Args:
@@ -108,7 +108,7 @@ class Tree(sequences.Hybrid, composites.Composite, abc.ABC):
         self.append(item = other)     
         return 
 
-    def __radd__(self, other: composites.Composite) -> None:
+    def __radd__(self, other: core.Composite) -> None:
         """Adds 'other' to the stored tree using the 'prepend' method.
 
         Args:
@@ -180,7 +180,7 @@ class Categorizer(Tree):
         parent (Optional[Tree]): parent Tree, if any. Defaults to None.
         
     """
-    contents: MutableSequence[composites.Node] = dataclasses.field(
+    contents: MutableSequence[core.Node] = dataclasses.field(
         default_factory = list)
     name: Optional[str] = None
     parent: Optional[Tree] = None 
@@ -193,7 +193,7 @@ class Categorizer(Tree):
         return self.nodes - self.leaves
     
     @property
-    def children(self) -> dict[str, composites.Node]:
+    def children(self) -> dict[str, core.Node]:
         """[summary]
 
         Returns:
@@ -220,7 +220,7 @@ class Categorizer(Tree):
         return self.parent is None
     
     @property
-    def leaves(self) -> list[composites.Node]:
+    def leaves(self) -> list[core.Node]:
         """Returns all stored leaf nodes in a list."""
         matches = []
         for node in self.nodes:
@@ -229,7 +229,7 @@ class Categorizer(Tree):
         return matches
      
     @property
-    def nodes(self) -> list[composites.Node]:
+    def nodes(self) -> list[core.Node]:
         """Returns all stored nodes in a list."""
         return depth_first_search(tree = self.contents)
 
@@ -249,7 +249,7 @@ class Categorizer(Tree):
     
     def add(
         self, 
-        item: Union[composites.Node, Sequence[composites.Node]],
+        item: Union[core.Node, Sequence[core.Node]],
         parent: Optional[str] = None) -> None:
         """Adds node(s) in item to 'contents'.
         
@@ -284,7 +284,7 @@ class Categorizer(Tree):
             parent_node.contents.append(item)
         return
     
-    def find(self, finder: Finder, **kwargs: Any) -> Optional[composites.Node]:
+    def find(self, finder: Finder, **kwargs: Any) -> Optional[core.Node]:
         """Finds first matching node in Tree using 'finder'.
 
         Args:
@@ -308,7 +308,7 @@ class Categorizer(Tree):
     def find_add(
         self, 
         finder: Finder, 
-        item: composites.Node, 
+        item: core.Node, 
         **kwargs: Any) -> None:
         """Finds first matching node in Tree using 'finder'.
 
@@ -338,7 +338,7 @@ class Categorizer(Tree):
                 'finder')
         return
     
-    def find_all(self, finder: Finder, **kwargs: Any) -> list[composites.Node]:
+    def find_all(self, finder: Finder, **kwargs: Any) -> list[core.Node]:
         """Finds all matching nodes in Tree using 'finder'.
 
         Args:
@@ -390,7 +390,7 @@ class Categorizer(Tree):
                 'found by finder')
         return
     
-    def get(self, item: str) -> Optional[composites.Node]:
+    def get(self, item: str) -> Optional[core.Node]:
         """Finds first matching node in Tree match 'item'.
 
         Args:
@@ -406,7 +406,7 @@ class Categorizer(Tree):
                 return node
         return self.__missing__()
                                     
-    def walk(self, depth_first: bool = True) -> composites.Pipeline:
+    def walk(self, depth_first: bool = True) -> core.Pipeline:
         """Returns all paths in tree from 'start' to 'stop'.
         
         Args:
@@ -423,7 +423,7 @@ class Categorizer(Tree):
 
     """ Dunder Methods """
 
-    def __add__(self, other: composites.Composite) -> None:
+    def __add__(self, other: core.Composite) -> None:
         """Adds 'other' to the stored tree using the 'append' method.
 
         Args:
@@ -434,7 +434,7 @@ class Categorizer(Tree):
         self.append(item = other)     
         return 
 
-    def __radd__(self, other: composites.Composite) -> None:
+    def __radd__(self, other: core.Composite) -> None:
         """Adds 'other' to the stored tree using the 'prepend' method.
 
         Args:
@@ -516,7 +516,7 @@ class Categorizer(Tree):
                      
 def depth_first_search(
     tree: Tree, 
-    visited: Optional[list[Tree]] = None) -> composites.Pipeline:
+    visited: Optional[list[Tree]] = None) -> core.Pipeline:
     """Returns a depth first search path through 'tree'.
 
     Args:

@@ -1,5 +1,5 @@
 """
-graph: lightweight graph data structures
+graphs: lightweight graph data structures
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
@@ -17,14 +17,8 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-    Edge (composites.Composite, ABC): an edge in a graph.
-    Graph (composites.Composite, ABC): base class for graphs. All subclasses 
-        must have 'connect' and 'disconnect' methods for changing edges between
-        nodes.
-    Adjacency (mappings.Dictionary, Graph): a graph stored as an adjacency list.
-    Edges (Graph): a graph stored as an edge list.
-    Matrix (Graph): a graph stored as an adjacency matrix.
-    System (Adjacency): a directed graph with unweighted edges.
+
+    Directed (Adjacency): a directed graph with unweighted edges.
         
 To Do:
     Complete Network which will use an adjacency matrix for internal storage.
@@ -40,137 +34,21 @@ import dataclasses
 import itertools
 from typing import Any, Optional, Type, TYPE_CHECKING, Union
 
-from . import mappings
+from . import core
+from . import forms
+from . import hybrids
+from ..containers import mappings
 from ..observe import report
 from ..change import convert
-from . import composites
 from ..observe import check
 from ..change import convert
-from . import hybrid
 
 if TYPE_CHECKING:
-    from . import tree
+    from . import trees
     
- 
-@dataclasses.dataclass # type: ignore
-class Graph(composites.Composite, abc.ABC):
-    """Base class for graph data structures.
-    
-    Args:
-        contents (Collection[Any]): stored collection of nodes and/or edges.
-                                      
-    """  
-    contents: Collection[Any]
-
-    """ Required Subclass Properties """
-
-    @abc.abstractmethod
-    def connect(self, start: composites.Node, stop: composites.Node) -> None:
-        """Creates a new edge in the stored graph.
-
-        Args:
-            start (Node): starting node for the new edge.
-            stop (Node): ending node for the new edge.
-        
-        Raises:
-            KeyError: if 'start' or 'stop' are not a nodes in the stored graph.
-
-        """
-        pass  
-    
-    @abc.abstractmethod
-    def disconnect(self, start: composites.Node, stop: composites.Node) -> None:
-        """Deletes edge from the stored graph.
-
-        Args:
-            start (Node): starting node for the edge to delete.
-            stop (Node): ending node for the edge to delete.
-        
-        Raises:
-            KeyError: if 'start' or 'stop' are not a nodes in the stored graph.
-
-        """
-        pass  
-    
-    """ Dunder Methods """
-    
-    @classmethod
-    def __instancecheck__(cls, instance: object) -> bool:
-        """Checks if 'instance' is a virtual or actual subclass instance."""
-        return check.is_graph(item = instance)
-
 
 @dataclasses.dataclass
-class Adjacency(mappings.Dictionary, Graph):
-    """Base class for adjacency-list graphs.
-    
-    Args:
-        contents (MutableMapping[composites.Node, Set[composites.Node]]): keys 
-            are nodes and values are sets of nodes (or hashable representations 
-            of nodes). Defaults to a defaultdict that has a set for its value 
-            type.
-                                      
-    """  
-    contents: MutableMapping[
-        composites.Node, Set[composites.Node]] = dataclasses.field(
-            default_factory = lambda: collections.defaultdict(set))
-    
-    """ Dunder Methods """
-    
-    @classmethod
-    def __instancecheck__(cls, instance: object) -> bool:
-        """Checks if 'instance' is a virtual or actual subclass instance."""
-        return check.is_adjacency(item = instance)
-
-
-@dataclasses.dataclass
-class Edges(Graph):
-    """Base class for edge-list graphs.
-    
-    Args:
-        contents (tuple[tuple[composites.Node, Node], ...]): tuple of tuple of 
-            edges. Defaults to an empty tuple.
-                                      
-    """   
-    contents: tuple[
-        tuple[composites.Node, composites.Node], ...] = dataclasses.field(
-            default_factory = tuple)
-    
-    """ Dunder Methods """
-           
-    @classmethod
-    def __instancecheck__(cls, instance: object) -> bool:
-        """Checks if 'instance' is a virtual or actual subclass instance."""
-        return check.is_edges(item = instance)
-    
-    
-@dataclasses.dataclass
-class Matrix(Graph):
-    """Base class for adjacency-matrix graphs.
-    
-    Args:
-        contents (Sequence[Sequence[int]]): a list of list of integers 
-            indicating edges between nodes in the matrix. Defaults to an empty
-            list.
-        labels (Sequence[composites.Node]): names of nodes in the matrix. 
-            Defaults to an empty list.
-                                      
-    """  
-    contents: Sequence[Sequence[int]] = dataclasses.field(
-        default_factory = list)
-    labels: Sequence[composites.Node] = dataclasses.field(
-        default_factory = list)
-    
-    """ Dunder Methods """
-        
-    @classmethod
-    def __instancecheck__(cls, instance: object) -> bool:
-        """Checks if 'instance' is a virtual or actual subclass instance."""
-        return check.is_matrix(item = instance)
-
-    
-@dataclasses.dataclass
-class System(Adjacency):
+class System(forms.Adjacency, Directed):
     """Directed graph with unweighted edges stored as an adjacency list.
     
     Args:
@@ -180,108 +58,78 @@ class System(Adjacency):
             format.
                   
     """  
-    contents: MutableMapping[composites.Node, Set[composites.Node]] = (
+    contents: MutableMapping[core.Node, Set[core.Node]] = (
         dataclasses.field(
             default_factory = lambda: collections.defaultdict(set)))
     
     """ Properties """
 
     @property
-    def endpoint(self) -> set[composites.Node]:
+    def endpoint(self) -> set[core.Node]:
         """Returns endpoint nodes in the stored graph in a list."""
         return {k for k in self.contents.keys() if not self.contents[k]}
                     
     @property
-    def root(self) -> set[composites.Node]:
+    def root(self) -> set[core.Node]:
         """Returns root nodes in the stored graph in a list."""
         stops = list(itertools.chain.from_iterable(self.contents.values()))
         return {k for k in self.contents.keys() if k not in stops}
-
-    @property
-    def adjacency(self) -> Adjacency:
-        """Returns the stored graph as an adjacency list."""
-        return self.contents
-
-    @property
-    def edges(self) -> Edges:
-        """Returns the stored graph as an edge list."""
-        return convert.adjacency_to_edges(item = self.contents)
-    
-    @property
-    def matrix(self) -> Matrix:
-        """Returns the stored graph as an adjacency matrix."""
-        return convert.adjacency_to_matrix(item = self.contents)
                       
     @property
-    def nodes(self) -> set[composites.Node]:
+    def nodes(self) -> set[core.Node]:
         """Returns all stored nodes in a set."""
         return set(self.contents.keys())
 
     @property
-    def paths(self) -> composites.Nodes:
+    def paths(self) -> core.Nodes:
         """Returns all paths through the stored as a list of nodes."""
         return self._find_all_paths(starts = self.root, stops = self.endpoint)
     
     @property
-    def pipeline(self) -> hybrid.Pipeline:
+    def pipeline(self) -> hybrids.Pipeline:
         """Returns stored graph as a pipeline."""
         pipeline = []
         for pipe in self.pipelines.values():
             pipeline.extend(pipe)
-        return hybrid.Pipeline(contents = pipeline)
+        return hybrids.Pipeline(contents = pipeline)
     
     @property
-    def pipelines(self) -> hybrid.Pipelines:
+    def pipelines(self) -> hybrids.Pipelines:
         """Returns stored graph as pipelines."""
         all_paths = self.paths
-        instances = [hybrid.Pipeline(contents = p) for p in all_paths]
-        pipelines = hybrid.Pipelines()
+        instances = [hybrids.Pipeline(contents = p) for p in all_paths]
+        pipelines = hybrids.Pipelines()
         for instance in instances:
             pipelines.add(instance, name = 'path')
         return pipelines
             
     @property
-    def tree(self) -> tree.Tree:
+    def tree(self) -> trees.Tree:
         """Returns the stored composite object as a tree.Tree."""
         raise NotImplementedError
 
     """ Class Methods """
- 
-    @classmethod
-    def from_adjacency(cls, item: Adjacency) -> System:
-        """Creates a System instance from an adjacency list."""
-        return cls(contents = item)
     
     @classmethod
-    def from_edges(cls, item: Edges) -> System:
-        """Creates a System instance from an edge list."""
-        return cls(contents = convert.edges_to_adjacency(item = item))
-    
-    @classmethod
-    def from_matrix(cls, item: Matrix) -> System:
-        """Creates a System instance from an adjacency matrix."""
-        return cls(contents = convert.matrix_to_adjacency(item = item))
-    
-    @classmethod
-    def from_nodes(cls, item: composites.Nodes) -> System:
+    def from_nodes(cls, item: core.Nodes) -> System:
         """Creates a System instance from a Nodes."""
         new_contents = convert.pipeline_to_adjacency(item = item)
         return cls(contents = new_contents)
 
     @classmethod
-    def from_pipeline(cls, item: hybrid.Pipeline) -> System:
+    def from_pipeline(cls, item: hybrids.Pipeline) -> System:
         """Creates a System instance from a Pipeline."""
         new_contents = convert.pipeline_to_adjacency(item = item)
         return cls(contents = new_contents)
     
     @classmethod
-    def from_pipelines(cls, item: hybrid.Pipelines) -> System:
+    def from_pipelines(cls, item: hybrids.Pipelines) -> System:
         """Creates a System instance from a Pipeline."""
         new_contents = convert.pipelines_to_adjacency(item = item)
         return cls(contents = new_contents)
 
     @classmethod
-    def from_tree(cls, item: tree.Tree) -> System:
+    def from_tree(cls, item: trees.Tree) -> System:
         """Creates a System instance from a Tree."""
         raise NotImplementedError
              
@@ -289,9 +137,9 @@ class System(Adjacency):
 
     def add(
         self, 
-        node: composites.Node,
-        ancestors: composites.Nodes = None,
-        descendants: composites.Nodes = None) -> None:
+        node: core.Node,
+        ancestors: core.Nodes = None,
+        descendants: core.Nodes = None) -> None:
         """Adds 'node' to the stored graph.
         
         Args:
@@ -335,7 +183,7 @@ class System(Adjacency):
                     self.connect(start = start, stop = node)                 
         return 
 
-    def append(self, item: composites.Composite) -> None:
+    def append(self, item: core.Composite) -> None:
         """Appends 'item' to the endpoints of the stored graph.
 
         Appending creates an edge between every endpoint of this instance's
@@ -351,7 +199,7 @@ class System(Adjacency):
                 or composites.Nodes type.
                 
         """
-        if isinstance(item, composites.Composite):
+        if isinstance(item, core.Composite):
             current_endpoints = list(self.endpoint)
             new_graph = self.create(item = item)
             self.merge(item = new_graph)
@@ -362,7 +210,7 @@ class System(Adjacency):
             raise TypeError('item must be a Node, Nodes, or Composite type')
         return
   
-    def connect(self, start: composites.Node, stop: composites.Node) -> None:
+    def connect(self, start: core.Node, stop: core.Node) -> None:
         """Adds an edge from 'start' to 'stop'.
 
         Args:
@@ -385,7 +233,7 @@ class System(Adjacency):
             self.contents[start].add(convert.namify(item = stop))
         return
 
-    def delete(self, node: composites.Node) -> None:
+    def delete(self, node: core.Node) -> None:
         """Deletes node from graph.
         
         Args:
@@ -402,7 +250,7 @@ class System(Adjacency):
         self.contents = {k: v.discard(node) for k, v in self.contents.items()}
         return
 
-    def disconnect(self, start: composites.Node, stop: composites.Node) -> None:
+    def disconnect(self, start: core.Node, stop: core.Node) -> None:
         """Deletes edge from graph.
 
         Args:
@@ -419,7 +267,7 @@ class System(Adjacency):
             raise KeyError(f'{start} does not exist in the graph')
         return
 
-    def merge(self, item: composites.Composite) -> None:
+    def merge(self, item: core.Composite) -> None:
         """Adds 'item' to this Graph.
 
         This method is roughly equivalent to a dict.update, just adding the
@@ -445,14 +293,14 @@ class System(Adjacency):
             adjacency = convert.matrix_to_adjacency(item = item)
         elif isinstance(item, (list, tuple, set)):
             adjacency = convert.pipeline_to_adjacency(item = item)
-        elif isinstance(item, composites.Node):
+        elif isinstance(item, core.Node):
             adjacency = {item: set()}
         else:
             raise TypeError('item must be a Node, Nodes, or Composite type')
         self.contents.update(adjacency)
         return
 
-    def prepend(self, item: composites.Composite) -> None:
+    def prepend(self, item: core.Composite) -> None:
         """Prepends 'item' to the roots of the stored graph.
 
         Prepending creates an edge between every endpoint of 'item' and every
@@ -467,7 +315,7 @@ class System(Adjacency):
                 or composites.Nodes type.
                 
         """
-        if isinstance(item, composites.Composite):
+        if isinstance(item, core.Composite):
             current_roots = list(self.root)
             new_graph = self.create(item = item)
             self.merge(item = new_graph)
@@ -476,8 +324,8 @@ class System(Adjacency):
                     self.connect(start = endpoint, stop = root)
         else:
             raise TypeError(
-                'item must be a System, Adjacency, Edges, Matrix, hybrid.Pipeline, '
-                'hybrid.Pipelines, or Node type')
+                'item must be a System, Adjacency, Edges, Matrix, hybrids.Pipeline, '
+                'hybrids.Pipelines, or Node type')
         return
       
     def subset(
@@ -517,9 +365,9 @@ class System(Adjacency):
     
     def walk(
         self, 
-        start: composites.Node,
-        stop: composites.Node, 
-        path: Optional[hybrid.Pipeline] = None) -> hybrid.Pipeline:
+        start: core.Node,
+        stop: core.Node, 
+        path: Optional[hybrids.Pipeline] = None) -> hybrids.Pipeline:
         """Returns all paths in graph from 'start' to 'stop'.
 
         The code here is adapted from: https://www.python.org/doc/essays/graphs/
@@ -527,11 +375,11 @@ class System(Adjacency):
         Args:
             start (composites.Node): node to start paths from.
             stop (composites.Node): node to stop paths.
-            path (hybrid.Pipeline): a path from 'start' to 'stop'. Defaults 
+            path (hybrids.Pipeline): a path from 'start' to 'stop'. Defaults 
                 to an empty list. 
 
         Returns:
-            hybrid.Pipeline: a list of possible paths (each path is a list 
+            hybrids.Pipeline: a list of possible paths (each path is a list 
                 nodes) from 'start' to 'stop'.
             
         """
@@ -557,8 +405,8 @@ class System(Adjacency):
 
     def _find_all_paths(
         self, 
-        starts: composites.Nodes, 
-        stops: composites.Nodes) -> hybrid.Pipeline:
+        starts: core.Nodes, 
+        stops: core.Nodes) -> hybrids.Pipeline:
         """Returns all paths between 'starts' and 'stops'.
 
         Args:
@@ -568,7 +416,7 @@ class System(Adjacency):
                 System.
 
         Returns:
-            hybrid.Pipeline: list of all paths through the System from all 
+            hybrids.Pipeline: list of all paths through the System from all 
                 'starts' to all 'ends'.
             
         """
@@ -577,7 +425,7 @@ class System(Adjacency):
             for end in convert.iterify(item = stops):
                 paths = self.walk(start = start, stop = end)
                 if paths:
-                    if all(isinstance(path, composites.Node) for path in paths):
+                    if all(isinstance(path, core.Node) for path in paths):
                         all_paths.append(paths)
                     else:
                         all_paths.extend(paths)
@@ -616,11 +464,11 @@ class System(Adjacency):
 #         return matrix_to_adjacency(item = self.contents)
 
 #     @property
-#     def breadths(self) -> hybrid.Pipeline:
+#     def breadths(self) -> hybrids.Pipeline:
 #         """Returns all paths through the Graph using breadth-first search.
         
 #         Returns:
-#             hybrid.Pipeline: returns all paths from 'roots' to 'endpoints' in a list 
+#             hybrids.Pipeline: returns all paths from 'roots' to 'endpoints' in a list 
 #                 of lists of nodes.
                 
 #         """
@@ -630,11 +478,11 @@ class System(Adjacency):
 #             depth_first = False)
 
 #     @property
-#     def depths(self) -> hybrid.Pipeline:
+#     def depths(self) -> hybrids.Pipeline:
 #         """Returns all paths through the Graph using depth-first search.
         
 #         Returns:
-#             hybrid.Pipeline: returns all paths from 'roots' to 'endpoints' in a list 
+#             hybrids.Pipeline: returns all paths from 'roots' to 'endpoints' in a list 
 #                 of lists of nodes.
                 
 #         """
@@ -764,11 +612,11 @@ class System(Adjacency):
 #         return cls(contents = matrix_to_adjacency(item = matrix))
     
 #     @classmethod
-#     def from_pipeline(cls, pipeline: hybrid.Pipeline) -> Graph:
+#     def from_pipeline(cls, pipeline: hybrids.Pipeline) -> Graph:
 #         """Creates a Graph instance from a Pipeline.
 
 #         Args:
-#             pipeline (hybrid.Pipeline): serial pipeline used to create a Graph
+#             pipeline (hybrids.Pipeline): serial pipeline used to create a Graph
 #                 instance.
  
 #         Returns:
@@ -993,8 +841,8 @@ class System(Adjacency):
 #     def walk(self, 
 #              start: composites.Node, 
 #              stop: composites.Node, 
-#              path: hybrid.Pipeline = None,
-#              depth_first: bool = True) -> hybrid.Pipeline:
+#              path: hybrids.Pipeline = None,
+#              depth_first: bool = True) -> hybrids.Pipeline:
 #         """Returns all paths in graph from 'start' to 'stop'.
 
 #         The code here is adapted from: https://www.python.org/doc/essays/graphs/
@@ -1002,11 +850,11 @@ class System(Adjacency):
 #         Args:
 #             start (composites.Node): node to start paths from.
 #             stop (composites.Node): node to stop paths.
-#             path (hybrid.Pipeline): a path from 'start' to 'stop'. Defaults to an 
+#             path (hybrids.Pipeline): a path from 'start' to 'stop'. Defaults to an 
 #                 empty list. 
 
 #         Returns:
-#             hybrid.Pipeline: a list of possible paths (each path is a list 
+#             hybrids.Pipeline: a list of possible paths (each path is a list 
 #                 nodes) from 'start' to 'stop'.
             
 #         """
@@ -1053,14 +901,14 @@ class System(Adjacency):
 #                 visited.add(connected)   
 #         return []
 
-#     def _breadth_first_search(self, node: composites.Node) -> hybrid.Pipeline:
+#     def _breadth_first_search(self, node: composites.Node) -> hybrids.Pipeline:
 #         """Returns a breadth first search path through the Graph.
 
 #         Args:
 #             node (composites.Node): node to start the search from.
 
 #         Returns:
-#             hybrid.Pipeline: nodes in a path through the Graph.
+#             hybrids.Pipeline: nodes in a path through the Graph.
             
 #         """        
 #         visited = set()
@@ -1074,7 +922,7 @@ class System(Adjacency):
        
 #     def _depth_first_search(self, 
 #         node: composites.Node, 
-#         visited: list[composites.Node]) -> hybrid.Pipeline:
+#         visited: list[composites.Node]) -> hybrids.Pipeline:
 #         """Returns a depth first search path through the Graph.
 
 #         Args:
@@ -1082,7 +930,7 @@ class System(Adjacency):
 #             visited (list[composites.Node]): list of visited nodes.
 
 #         Returns:
-#             hybrid.Pipeline: nodes in a path through the Graph.
+#             hybrids.Pipeline: nodes in a path through the Graph.
             
 #         """  
 #         if node not in visited:
@@ -1094,7 +942,7 @@ class System(Adjacency):
 #     def _find_all_paths(self, 
 #         starts: Union[composites.Node, Sequence[composites.Node]],
 #         stops: Union[composites.Node, Sequence[composites.Node]],
-#         depth_first: bool = True) -> hybrid.Pipeline:
+#         depth_first: bool = True) -> hybrids.Pipeline:
 #         """[summary]
 
 #         Args:
@@ -1104,7 +952,7 @@ class System(Adjacency):
 #                 through the Graph.
 
 #         Returns:
-#             hybrid.Pipeline: list of all paths through the Graph from all
+#             hybrids.Pipeline: list of all paths through the Graph from all
 #                 'starts' to all 'ends'.
             
 #         """

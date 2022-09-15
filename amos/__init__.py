@@ -63,10 +63,10 @@ from .change.validate import *
 from .containers.bases import *
 from .containers.mappings import *
 from .containers.sequences import *
-from .containers.composites import *
-from .containers.graph import *
-from .containers.hybrid import *
-from .containers.tree import *
+from .composites.core import *
+from .composites.graphs import *
+from .composites.hybrids import *
+from .composites.trees import *
 from .containers.configuration import *
 from .files.lazy import *
 from .files.manager import *

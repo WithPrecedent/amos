@@ -37,9 +37,8 @@ import dataclasses
 import inspect
 from typing import Any, Optional, Type, Union
 
-from ..observe import report
-from ..change import convert
 from . import bases
+from ..change import convert
                   
 
 _ALL_KEYS: list[Any] = ['all', 'All', ['all'], ['All']]
@@ -58,15 +57,14 @@ class Dictionary(bases.Bunch, MutableMapping):  # type: ignore
     and allowing the '+' operator to join Dictionary instances with other 
     mappings, including Dictionary instances. 
     
-    # In addition, it differs in 1 other significant way:
-    #     1) When returning 'keys', 'values' and 'items', this class returns them
-    #         as tuples instead of KeysView, ValuesView, and ItemsView.
+    In addition, it differs in 1 other significant way:
+        1) When returning 'keys', 'values' and 'items', this class returns them
+            as tuples instead of KeysView, ValuesView, and ItemsView.
     
     Args:
         contents (MutableMapping[Hashable, Any]): stored dictionary. Defaults 
             to an empty dict.
         default_factory (Optional[Any]): default value to return or default 
-            function to call when the 'get' method is used. Defaults to None. 
                           
     """
     contents: MutableMapping[Hashable, Any] = dataclasses.field(
@@ -87,6 +85,16 @@ class Dictionary(bases.Bunch, MutableMapping):  # type: ignore
         self.contents.update(item, **kwargs)
         return
 
+    def delete(self, item: Hashable) -> None:
+        """Deletes 'item' in 'contents'.
+
+        Args:
+            item (Hashable): key in 'contents' to delete the key/value pair.
+
+        """
+        del self.contents[item]
+        return
+    
     @classmethod
     def fromkeys(
         cls, 
@@ -172,8 +180,8 @@ class Dictionary(bases.Bunch, MutableMapping):  # type: ignore
         """Returns a new instance with a subset of 'contents'.
 
         This method applies 'include' before 'exclude' if both are passed. If
-        'include' is None, all existing keys will be added before items in 
-        'exclude' are dropped.
+        'include' is None, all existing items will be added to the new subset
+        class instance before 'exclude' is applied.
         
         Args:
             include (Optional[Union[Hashable, Sequence[Hashable]]]): key(s) to 
@@ -192,7 +200,7 @@ class Dictionary(bases.Bunch, MutableMapping):  # type: ignore
             raise ValueError('include or exclude must not be None')
         else:
             if include is None:
-                contents = self.contents
+                contents = copy.deepcopy(self.contents)
             else:
                 include = list(convert.iterify(item = include)) 
                 contents = {k: self.contents[k] for k in include}
@@ -239,16 +247,6 @@ class Dictionary(bases.Bunch, MutableMapping):  # type: ignore
         self.contents[key] = value
         return
 
-    def __delitem__(self, key: Hashable) -> None:
-        """Deletes 'key' in 'contents'.
-
-        Args:
-            key (Hashable): key in 'contents' to delete the key/value pair.
-
-        """
-        del self.contents[key]
-        return
-
 
 @dataclasses.dataclass  # type: ignore
 class Catalog(Dictionary):
@@ -280,7 +278,7 @@ class Catalog(Dictionary):
             empty dict.
         default_factory (Any): default value to return when the 'get' method is 
             used.
-        default (Sequence[Any]]): a list of keys in 'contents' which will be 
+        default (Optional[Any]]): a list of keys in 'contents' which will be 
             used to return items when 'default' is sought. If not passed, 
             'default' will be set to all keys.
         always_return_list (bool): whether to return a list even when the key 
@@ -295,6 +293,24 @@ class Catalog(Dictionary):
     default: Optional[Any] = 'all'
     always_return_list: bool = False
 
+    """ Public Methods """
+    
+    def delete(self, item: Union[Hashable, Sequence[Hashable]]) -> None:
+        """Deletes 'item' in 'contents'.
+
+        Args:
+            item: (Union[Hashable, Sequence[Hashable]]): name(s) of key(s) in 
+                'contents' to delete the key/value pair.
+
+        """
+        keys = list(convert.iterify(item = item))
+        if all(k in self for k in keys):
+            self.contents = {
+                i: self.contents[i] for i in self.contents if i not in keys}
+        else:
+            raise KeyError(f'{item} not found in the Catalog')
+        return
+    
     """ Dunder Methods """
 
     def __getitem__(
@@ -362,22 +378,6 @@ class Catalog(Dictionary):
             self.contents.update(dict(zip(key, value))) # type: ignore
         return
 
-    def __delitem__(self, key: Union[Hashable, Sequence[Hashable]]) -> None:
-        """Deletes 'key' in 'contents'.
-
-        Args:
-            key (Union[Hashable, Sequence[Hashable]]): name(s) of key(s) in 
-                'contents' to delete the key/value pair.
-
-        """
-        keys = list(convert.iterify(item = key))
-        if all(k in self for k in keys):
-            self.contents = {
-                i: self.contents[i] for i in self.contents if i not in keys}
-        else:
-            raise KeyError(f'{key} not found in the Catalog')
-        return
-
 
 @dataclasses.dataclass  # type: ignore
 class Library(MutableMapping):
@@ -430,7 +430,7 @@ class Library(MutableMapping):
             raise TypeError(f'item must be a class or a class instance')
         return
     
-    def remove(self, item: Hashable) -> None:
+    def delete(self, item: Hashable) -> None:
         """Removes an item from 'instances' or 'classes.'
         
         If 'item' is found in 'instances', it will not also be removed from 
@@ -532,16 +532,6 @@ class Library(MutableMapping):
 
         """
         self.deposit(item = value, name = key)
-        return
-
-    def __delitem__(self, key: Hashable) -> None:
-        """Deletes 'key' in 'contents'.
-
-        Args:
-            key (Hashable): key in 'contents' to delete the key/value pair.
-
-        """
-        self.remove(item = key)
         return
 
     def __iter__(self) -> Iterator[Any]:

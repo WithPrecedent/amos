@@ -88,11 +88,11 @@ from . import modify
 from ..observe import check
 
 if TYPE_CHECKING:
-    from ..containers import composites
-    from ..containers import graph
-    from ..containers import hybrid
+    from ..composites import core
+    from ..composites import graphs
+    from ..composites import hybrids
     from ..containers import sequences
-    from ..containers import tree
+    from ..composites import trees
     
 
 """ General Converters """
@@ -694,7 +694,7 @@ def datetime_to_string(
 """ Composite Converters """
 
 # @amos.dispatcher 
-def to_adjacency(item: Any) -> graph.Adjacency:
+def to_adjacency(item: Any) -> graphs.Adjacency:
     """Converts 'item' to an Adjacency.
     
     Args:
@@ -716,7 +716,7 @@ def to_adjacency(item: Any) -> graph.Adjacency:
             f'{type(item).__name__}')
 
 # @to_adjacency.register # type: ignore
-def edges_to_adjacency(item: graph.Edges) -> graph.Adjacency:
+def edges_to_adjacency(item: graphs.Edges) -> graphs.Adjacency:
     """Converts 'item' to an Adjacency.
 
     Args:
@@ -737,7 +737,7 @@ def edges_to_adjacency(item: graph.Edges) -> graph.Adjacency:
     return adjacency
 
 # @to_adjacency.register # type: ignore 
-def matrix_to_adjacency(item: graph.Matrix) -> graph.Adjacency:
+def matrix_to_adjacency(item: graphs.Matrix) -> graphs.Adjacency:
     """Converts 'item' to an Adjacency.
 
     Args:
@@ -763,7 +763,7 @@ def matrix_to_adjacency(item: graph.Matrix) -> graph.Adjacency:
     return adjacency
 
 # @to_adjacency.register # type: ignore 
-def pipeline_to_adjacency(item: hybrid.Pipeline) -> graph.Adjacency:
+def pipeline_to_adjacency(item: hybrids.Pipeline) -> graphs.Adjacency:
     """Converts 'item' to an Adjacency.
 
     Args:
@@ -788,7 +788,7 @@ def pipeline_to_adjacency(item: hybrid.Pipeline) -> graph.Adjacency:
     return adjacency
 
 # @to_adjacency.register # type: ignore 
-def pipelines_to_adjacency(item: hybrid.Pipelines) -> graph.Adjacency:
+def pipelines_to_adjacency(item: hybrids.Pipelines) -> graphs.Adjacency:
     """Converts 'item' to an Adjacency.
 
     Args:
@@ -811,7 +811,7 @@ def pipelines_to_adjacency(item: hybrid.Pipelines) -> graph.Adjacency:
     return adjacency
 
 # @to_adjacency.register # type: ignore 
-def tree_to_adjacency(item: tree.Tree) -> graph.Adjacency:
+def tree_to_adjacency(item: trees.Tree) -> graphs.Adjacency:
     """Converts 'item' to an Adjacency.
 
     Args:
@@ -824,7 +824,7 @@ def tree_to_adjacency(item: tree.Tree) -> graph.Adjacency:
     raise NotImplementedError
              
 # @to_adjacency.register # type: ignore 
-def nodes_to_adjacency(item: composites.Nodes) -> graph.Adjacency:
+def nodes_to_adjacency(item: core.Nodes) -> graphs.Adjacency:
     """Converts 'item' to an Adjacency.
 
     Args:
@@ -838,7 +838,7 @@ def nodes_to_adjacency(item: composites.Nodes) -> graph.Adjacency:
     return adjacency.update((k, set()) for k in item)
 
 # @amos.dispatcher   
-def to_edges(item: Any) -> graph.Edges:
+def to_edges(item: Any) -> graphs.Edges:
     """Converts 'item' to an Edges.
     
     Args:
@@ -859,7 +859,7 @@ def to_edges(item: Any) -> graph.Edges:
             f'{type(item).__name__}')
     
 # @to_edges.register # type: ignore
-def adjacency_to_edges(item: graph.Adjacency) -> graph.Edges:
+def adjacency_to_edges(item: graphs.Adjacency) -> graphs.Edges:
     """Converts 'item' to an Edges.
     
     Args:
@@ -876,7 +876,7 @@ def adjacency_to_edges(item: graph.Adjacency) -> graph.Edges:
     return tuple(edges)
 
 # @amos.dispatcher   
-def to_matrix(item: Any) -> graph.Matrix:
+def to_matrix(item: Any) -> graphs.Matrix:
     """Converts 'item' to a Matrix.
     
     Args:
@@ -897,7 +897,7 @@ def to_matrix(item: Any) -> graph.Matrix:
             f'{type(item).__name__}')
 
 # @to_matrix.register # type: ignore 
-def adjacency_to_matrix(item: graph.Adjacency) -> graph.Matrix:
+def adjacency_to_matrix(item: graphs.Adjacency) -> graphs.Matrix:
     """Converts 'item' to a Matrix.
     
     Args:
@@ -916,7 +916,7 @@ def adjacency_to_matrix(item: graph.Adjacency) -> graph.Matrix:
     return tuple([matrix, names])    
 
 # @amos.dispatcher   
-def to_tree(item: Any) -> tree.Tree:
+def to_tree(item: Any) -> trees.Tree:
     """Converts 'item' to a Tree.
     
     Args:
@@ -937,7 +937,7 @@ def to_tree(item: Any) -> tree.Tree:
             f'{type(item).__name__}')
 
 # @to_tree.register # type: ignore 
-def matrix_to_tree(item: graph.Matrix) -> tree.Tree:
+def matrix_to_tree(item: graphs.Matrix) -> trees.Tree:
     """Converts 'item' to a Tree.
     
     Args:

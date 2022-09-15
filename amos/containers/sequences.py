@@ -32,9 +32,9 @@ import copy
 import dataclasses
 from typing import Any, Optional, Union
 
-from ..observe import report
-from ..change import convert
 from . import bases
+from ..change import convert
+from ..observe import check
 
                           
 @dataclasses.dataclass # type: ignore
@@ -42,9 +42,9 @@ class Listing(bases.Bunch, MutableSequence): # type: ignore
     """Basic amos list replacement.
     
     A Listing differs from an ordinary python list in ways required by 
-    inheriting from Bunch: 'add' and 'subset' methods, storing data in 
-    'contents', and allowing the '+' operator to join Listings with other lists 
-    and Listings) and in 1 other way.
+    inheriting from Bunch: 'add', 'delete', and 'subset' methods, and allowing 
+    the '+' operator to join Listings with other list-like objects) and in 1 
+    other way:
         1) It includes a 'prepend' method for adding one or more items to the
             beginning of the stored list.
     
@@ -71,12 +71,22 @@ class Listing(bases.Bunch, MutableSequence): # type: ignore
                 attribute.
                 
         """
-        if isinstance(item, Sequence) and not isinstance(item, str):
+        if check.is_sequence(item = item):
             self.contents.extend(item)
         else:
             self.contents.append(item)
         return
 
+    def delete(self, item: int) -> None:
+        """Deletes item at the index in 'contents'.
+
+        Args:
+            item (Any): index in 'contents' to delete.
+
+        """
+        del self.contents[item]
+        return
+    
     def insert(self, index: int, item: Any) -> None:
         """Inserts 'item' at 'index' in 'contents'.
 
@@ -99,7 +109,7 @@ class Listing(bases.Bunch, MutableSequence): # type: ignore
                 'contents' attribute.
                 
         """
-        if isinstance(item, Sequence) and not isinstance(item, str):
+        if check.is_sequence(item = item):
             for thing in reversed(item):
                 self.prepend(item = thing)
         else:
@@ -113,8 +123,8 @@ class Listing(bases.Bunch, MutableSequence): # type: ignore
         """Returns a new instance with a subset of 'contents'.
 
         This method applies 'include' before 'exclude' if both are passed. If
-        'include' is None, all existing keys will be added before 'exclude' is
-        applied.
+        'include' is None, all existing items will be added to the new subset
+        class instance before 'exclude' is applied.
         
         Args:
             include (Optional[Union[Sequence[Any], Any]]): item(s) to include in 
@@ -133,7 +143,7 @@ class Listing(bases.Bunch, MutableSequence): # type: ignore
             raise ValueError('include or exclude must not be None')
         else:
             if include is None:
-                contents = self.contents
+                contents = copy.deepcopy(self.contents)
             else:
                 include = list(convert.iterify(item = include))
                 contents = [i for i in self.contents if i in include]
@@ -167,16 +177,6 @@ class Listing(bases.Bunch, MutableSequence): # type: ignore
 
         """
         self.contents[index] = value
-        return
-
-    def __delitem__(self, index: Any) -> None:
-        """Deletes item at 'key' index in 'contents'.
-
-        Args:
-            index (Any): index in 'contents' to delete.
-
-        """
-        del self.contents[index]
         return
 
 
@@ -228,6 +228,24 @@ class Hybrid(Listing):
         
     """ Public Methods """
 
+    def delete(self, item: Union[Any, int]) -> None:
+        """Deletes item in 'contents'.
+
+        If 'item' is not an int type, this method looks for a matching 'name'
+        attribute in the stored instances and deletes all such items. If 'key'
+        is an int type, only the item at that index is deleted.
+
+        Args:
+            key (Union[Any, int]): name or index in 'contents' to delete.
+
+        """
+        if isinstance(item, int):
+            del self.contents[item]
+        else:
+            self.contents = [
+                c for c in self.contents if convert.namify(c) != item]
+        return
+    
     def get(self, key: Hashable, default: Optional[Any] = None) -> Any: # type: ignore
         """Returns value in 'contents' or default options.
         
@@ -381,22 +399,3 @@ class Hybrid(Listing):
         else:
             self.add(value)
         return
-
-    def __delitem__(self, key: Union[Any, int]) -> None:
-        """Deletes item matching 'key' in 'contents'.
-
-        If 'key' is not an int type, this method looks for a matching 'name'
-        attribute in the stored instances and deletes all such items. If 'key'
-        is an int type, only the item at that index is deleted.
-
-        Args:
-            key (Union[Any, int]): name or index in 'contents' to delete.
-
-        """
-        if isinstance(key, int):
-            del self.contents[key]
-        else:
-            self.contents = [
-                c for c in self.contents if convert.namify(c) != key]
-        return
-
