@@ -17,7 +17,6 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-
     Directed (Adjacency): a directed graph with unweighted edges.
         
 To Do:

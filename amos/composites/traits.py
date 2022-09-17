@@ -64,17 +64,17 @@ class Directed(abc.ABC):
         
     @abc.abstractproperty
     def pipeline(self) -> hybrids.Pipeline:
-        """Returns the stored composite object as a hybrids.Pipeline."""
+        """Returns the stored composite object as a Pipeline."""
         pass
         
     @abc.abstractproperty
     def pipelines(self) -> hybrids.Pipelines:
-        """Returns the stored composite object as a hybrids.Pipelines."""
+        """Returns the stored composite object as a Pipelines."""
         pass
             
     @abc.abstractproperty
     def tree(self) -> tree.Tree:
-        """Returns the stored composite object as a tree.Tree."""
+        """Returns the stored composite object as a Tree."""
         pass
                  
     """ Required Subclass Class Methods """

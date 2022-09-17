@@ -47,12 +47,12 @@ class Adjacency(mappings.Dictionary, core.Graph):
     """Base class for adjacency-list graphs.
     
     Args:
-        contents (MutableMapping[Hashable, Set[Hashable]]): keys are nodes and 
+        contents (MutableMapping[core.Node, Set[core.Node]]): keys are nodes and 
             values are sets of nodes (or hashable representations of nodes). 
             Defaults to a defaultdict that has a set for its value type.
                                       
     """  
-    contents: MutableMapping[Hashable, Set[Hashable]] = dataclasses.field(
+    contents: MutableMapping[core.Node, Set[core.Node]] = dataclasses.field(
         default_factory = lambda: collections.defaultdict(set))
    
     """ Properties """
@@ -110,7 +110,7 @@ class Edges(sequences.Listing, core.Graph):
     """Base class for edge-list graphs.
     
     Args:
-        contents (tuple[tuple[Hashable, Hashable], ...]): tuple of tuple of 
+        contents (tuple[tuple[core.Node, core.Node], ...]): tuple of tuple of 
             edges. Defaults to an empty tuple.
                                       
     """   
