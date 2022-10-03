@@ -1,5 +1,5 @@
 """
-factories: easy-to-use factory mixins
+foundry: easy-to-use factory mixins
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
@@ -45,17 +45,18 @@ ToDo:
     Determine if there is any value to commented out RegistrarFactory class
 
 """
+
 from __future__ import annotations
 import abc
+import contextlib
 from collections.abc import Mapping, MutableMapping, Sequence
 import copy
 import dataclasses
 from typing import Any, ClassVar, Optional, Type, Union
 
-from ..containers import mappings
-# from . import registries
-from ..change import convert
-from ..change import modify
+from . import convert
+from . import mapping
+from . import modify
 
  
 @dataclasses.dataclass
@@ -86,10 +87,10 @@ class InstanceFactory(BaseFactory):
     """Mixin which automatically registers and stores subclass instances.
     
     Args:
-        instances (ClassVar[mappings.Catalog]): catalog of subclass instances.
+        instances (ClassVar[mapping.Catalog]): catalog of subclass instances.
             
     """
-    instances: ClassVar[mappings.Catalog] = mappings.Catalog()
+    instances: ClassVar[mapping.Catalog] = mapping.Catalog()
     
     """ Initialization Methods """
             
@@ -97,10 +98,8 @@ class InstanceFactory(BaseFactory):
         """Automatically registers subclass."""
         # Because InstanceFactory is used as a mixin, it is important to
         # call other base class '__init_subclass__' methods, if they exist.
-        try:
+        with contextlib.suppress(AttributeError):
             super().__post_init__(*args, **kwargs) # type: ignore
-        except AttributeError:
-            pass
         key = convert.namify(item = self)
         self.__class__.instances[key] = self
         
@@ -156,7 +155,6 @@ class InstanceFactory(BaseFactory):
             for key, value in kwargs.items():
                 setattr(instance, key, value)
         return instance   
-       
 
 
 @dataclasses.dataclass
@@ -170,11 +168,11 @@ class LibraryFactory(BaseFactory):
     attributes.
     
     Args:
-        library (ClassVar[mappings.Library]): library of subclasses and 
+        library (ClassVar[mapping.Library]): library of subclasses and 
             instances. 
             
     """
-    library: ClassVar[mappings.Library] = mappings.Library()
+    library: ClassVar[mapping.Library] = mapping.Library()
     
     """ Initialization Methods """
     
@@ -191,10 +189,8 @@ class LibraryFactory(BaseFactory):
         cls.library.deposit(item = cls, name = name)
             
     def __post_init__(self) -> None:
-        try:
+        with contextlib.suppress(AttributeError):
             super().__post_init__(*args, **kwargs) # type: ignore
-        except AttributeError:
-            pass
         key = convert.namify(item = self)
         self.__class__.library.deposit(item = self, name = key)
     
@@ -208,8 +204,8 @@ class LibraryFactory(BaseFactory):
         """Creates an instance of a LibraryFactory subclass from 'source'.
         
         Args:
-            source (Any): any supported data structure which acts as a source for
-                creating a LibraryFactory or a str which matches a key in 
+            source (Any): any supported data structure which acts as a source 
+                for creating a LibraryFactory or a str which matches a key in 
                 'library'.
                                 
         Returns:
@@ -338,10 +334,10 @@ class SubclassFactory(BaseFactory):
     subclass are not applied to future retrieved subclasses.
     
     Args:
-        subclasses (ClassVar[mappings.Catalog]): project catalog of subclasses.
+        subclasses (ClassVar[mapping.Catalog]): project catalog of subclasses.
             
     """
-    subclasses: ClassVar[mappings.Catalog] = mappings.Catalog()
+    subclasses: ClassVar[mapping.Catalog] = mapping.Catalog()
     
     """ Initialization Methods """
     
@@ -350,10 +346,8 @@ class SubclassFactory(BaseFactory):
         """Automatically registers subclass."""
         # Because SubclassFactory is used as a mixin, it is important to
         # call other base class '__init_subclass__' methods, if they exist.
-        try:
+        with contextlib.suppress(AttributeError):
             super().__init_subclass__(*args, **kwargs) # type: ignore
-        except AttributeError:
-            pass
         name = convert.namify(item = cls)
         cls.subclasses[name] = cls
     
@@ -463,7 +457,7 @@ class TypeFactory(BaseFactory, abc.ABC):
 #             except KeyError:
 #                 pass
 #         try:
-#             name = traits.namify(item = item)
+#             name = trait.namify(item = item)
 #             return cls.registry[name](item, **kwargs)
 #         except KeyError:
 #             for name, kind in cls.registry.items():

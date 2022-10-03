@@ -32,7 +32,7 @@ import functools
 import inspect
 from typing import Any, ClassVar, Optional, Type, Union
 
-from ..change import convert
+from . import convert
 
 
 """ Basic Registration System """

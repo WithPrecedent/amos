@@ -32,13 +32,14 @@ import copy
 import dataclasses
 from typing import Any, Optional, Union
 
-from . import bases
-from ..change import convert
-from ..observe import check
+import miller
+
+from . import base
+from . import convert
 
                           
 @dataclasses.dataclass # type: ignore
-class Listing(bases.Bunch, MutableSequence): # type: ignore
+class Listing(base.Bunch, MutableSequence): # type: ignore
     """Basic amos list replacement.
     
     A Listing differs from an ordinary python list in ways required by 
@@ -71,7 +72,7 @@ class Listing(bases.Bunch, MutableSequence): # type: ignore
                 attribute.
                 
         """
-        if check.is_sequence(item = item):
+        if miller.is_sequence(item = item):
             self.contents.extend(item)
         else:
             self.contents.append(item)
@@ -109,7 +110,7 @@ class Listing(bases.Bunch, MutableSequence): # type: ignore
                 'contents' attribute.
                 
         """
-        if check.is_sequence(item = item):
+        if miller.is_sequence(item = item):
             for thing in reversed(item):
                 self.prepend(item = thing)
         else:
@@ -370,11 +371,11 @@ class Hybrid(Listing):
             # for value in self.contents:
             #     if (
             #         hash(value) == key 
-            #         or traits.namify(item = value) == key):
+            #         or trait.namify(item = value) == key):
             #         matches.append(value)
             # matches = [
             #     i for i, c in enumerate(self.contents)
-            #     if traits.namify(c) == key]
+            #     if trait.namify(c) == key]
             if len(matches) == 0:
                 raise KeyError(f'{key} is not in {self.__class__.__name__}')
             elif len(matches) == 1:

@@ -54,24 +54,11 @@ __package__ = 'amos'
 __author__ = 'Corey Rayburn Yung'
 
 
-from .builders.factories import *
-from .builders.registries import *
-from .change.convert import *
-from .change.modify import *
-from .change.represent import *
-from .change.validate import *
-from .containers.bases import *
-from .containers.mappings import *
-from .containers.sequences import *
-from .composites.core import *
-from .composites.graphs import *
-from .composites.hybrids import *
-from .composites.trees import *
-from .containers.configuration import *
-from .files.lazy import *
-from .files.manager import *
-from .files.formats import *
-from .observe.check import *
-from .observe.clock import *
-from .observe.examiners import *
-from .observe.report import *
+from base import *
+from convert import *
+from foundry import *
+from mapping import *
+from modify import *
+from registry import *
+from sequence import *
+from validate import *

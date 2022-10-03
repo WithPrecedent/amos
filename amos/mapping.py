@@ -37,8 +37,8 @@ import dataclasses
 import inspect
 from typing import Any, Optional, Type, Union
 
-from . import bases
-from ..change import convert
+from . import base
+from . import convert
                   
 
 _ALL_KEYS: list[Any] = ['all', 'All', ['all'], ['All']]
@@ -49,7 +49,7 @@ _NONE_KEYS: list[Any] = ['none', 'None', ['none'], ['None']]
 
 
 @dataclasses.dataclass  # type: ignore
-class Dictionary(bases.Bunch, MutableMapping):  # type: ignore
+class Dictionary(base.Bunch, MutableMapping):  # type: ignore
     """Basic amos dict replacement.
     
     A Dictionary differs from an ordinary python dict in ways inherited from 
@@ -246,7 +246,7 @@ class Dictionary(bases.Bunch, MutableMapping):  # type: ignore
         """
         self.contents[key] = value
         return
-
+    
 
 @dataclasses.dataclass  # type: ignore
 class Catalog(Dictionary):
@@ -533,7 +533,20 @@ class Library(MutableMapping):
         """
         self.deposit(item = value, name = key)
         return
-
+    
+    def __delitem__(self, item: Hashable) -> None:
+        """Deletes 'item' from 'contents'.
+        
+        Args:
+            item (Any): item or key to delete in 'contents'.
+        
+        Raises:
+            KeyError: if 'item' is not in 'contents'.
+            
+        """
+        self.delete(item = item)
+        return
+    
     def __iter__(self) -> Iterator[Any]:
         """Returns iterable of 'contents'.
 

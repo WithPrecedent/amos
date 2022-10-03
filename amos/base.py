@@ -1,5 +1,5 @@
 """
-bases: base classes for extensible, flexible, lightweight containers
+base: base classes for extensible, flexible, lightweight containers
 Corey Rayburn Yung <coreyrayburnyung@gmail.com>
 Copyright 2020-2022, Corey Rayburn Yung
 License: Apache-2.0
@@ -17,35 +17,36 @@ License: Apache-2.0
     limitations under the License.
 
 Contents:
-    Bunch (Collection, ABC): base class for general containers in amos. It 
+    Bunch (Collection, Protocol): base class for general containers in amos. It 
         requires subclasses to have 'add', 'delete', and 'subset' methods.
-    Composite (ABC): base class for amos composite data structures. Requires 
-        'append', 'delete', 'merge', 'prepend', and 'walk' methods.
-    Proxy (Container): basic wrapper for a stored python object. Dunder methods 
-        attempt to intelligently apply access methods to either the wrapper or 
-        the wrapped item.   
+    Composite (Bunch, Protocol): base class for amos composite data structures. 
+        Requires 'append', 'delete', 'merge', 'prepend', and 'walk' methods.
+    Proxy (Container, Protocol): basic wrapper for a stored python object. 
+        Dunder methods attempt to intelligently apply access methods to either 
+        the wrapper or the wrapped item.   
           
 To Do:
     Integrate Kinds system when it is finished.
-    Restore 'beautify' str representations from amos once those are finished.
+    Restore 'beautify' str representations once those are finished.
     Fix Proxy setter. Currently, the wrapper and wrapped are not being set at
         the right time, likely due to the inner workings of 'hasattr'.
     Add more dunder methods to address less common and fringe cases for use
-            of a Proxy class.
+        of a Proxy class.
     
 """
 from __future__ import annotations
 import abc
-from collections.abc import Collection, Container, Hashable, Iterator, Sequence
+from collections.abc import Collection, Container, Hashable, Iterator
 import dataclasses
-from typing import Any, Optional, Type, Union
+from typing import Any, Optional, Protocol, runtime_checkable, Union
 
-# from ..change import represent
+# from ..inspectors import represent
 
   
 @dataclasses.dataclass # type: ignore
-class Bunch(Collection, abc.ABC): # type: ignore
-    """Abstract base class for general amos collections.
+@runtime_checkable
+class Bunch(Collection, Protocol): # type: ignore
+    """Base class for general amos collections.
   
     A Bunch differs from a general python Collection in 4 ways:
         1) It must include an 'add' method which provides the default mechanism
@@ -179,7 +180,8 @@ class Bunch(Collection, abc.ABC): # type: ignore
     
           
 @dataclasses.dataclass
-class Composite(Bunch, abc.ABC):
+@runtime_checkable
+class Composite(Bunch, Protocol):
     """Base class for composite data structures.
     
     Args:
@@ -190,21 +192,6 @@ class Composite(Bunch, abc.ABC):
     
                  
     """ Required Subclass Methods """
-    
-    @abc.abstractmethod
-    def append(
-        self, 
-        item: Union[Hashable, Collection[Hashable], Composite], 
-        *args: Any, 
-        **kwargs: Any) -> None:
-        """Appends 'item' to the endpoint(s) of the stored composite object.
-
-        Args:
-            item (Union[Hashable, Composite]): a single node or other Composite
-                object to add to the stored composite object.
-                
-        """
-        pass
     
     @abc.abstractmethod
     def connect(self, start: Hashable, stop: Hashable) -> None:
@@ -262,7 +249,7 @@ class Proxy(Container): # type: ignore
     """Mostly transparent wrapper class.
     
     A Proxy differs than an ordinary container in 2 significant ways:
-        1) Access methods for getting, setting, and deleting try to 
+        1) Access methods for getting, setting, and deleting that try to 
             intelligently direct the user's call to the proxy or stored object.
             So, for example, when a user tries to set an attribute on the proxy,
             the method will replace an attribute that exists in the proxy if
@@ -291,7 +278,7 @@ class Proxy(Container): # type: ignore
         """Returns whether 'item' is in or equivalent to 'contents'.
 
         Args:
-            item (Any): item to check versus 'contents'
+            item (Any): item to check versus 'contents'.
             
         Returns:
             bool: if 'item' is in or equivalent to 'contents' (True). Otherwise, 
