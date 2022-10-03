@@ -152,7 +152,7 @@ def test_library():
 
     assert 'another_class' in library.classes
     assert 'another' in library.instances
-    library.remove('random_name')
+    library.delete('random_name')
     # print('test library', library)
     assert 'random_name' not in library
     return

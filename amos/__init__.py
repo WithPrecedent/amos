@@ -18,7 +18,8 @@ License: Apache-2.0
     
     
 ToDo:
-   
+    increase test coverage
+ 
 """
 
 """
@@ -47,18 +48,18 @@ any other package maintainer - I want to ensure the package is as accessible and
 useful as possible.
      
 """
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 __package__ = 'amos'
 
 __author__ = 'Corey Rayburn Yung'
 
 
-from base import *
-from convert import *
-from foundry import *
-from mapping import *
-from modify import *
-from registry import *
-from sequence import *
-from validate import *
+from .base import *
+from .convert import *
+from .foundry import *
+from .mapping import *
+from .modify import *
+from .registry import *
+from .sequence import *
+from .validate import *
