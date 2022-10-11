@@ -263,7 +263,7 @@ class SourceFactory(BaseFactory, abc.ABC):
         """
         for kind, suffix in cls.sources.items():
             if isinstance(source, kind):
-                method_name = cls._get_create_method_name(item = suffix)
+                method_name = cls._get_create_method_name(source = suffix)
                 try:
                     method = getattr(cls, method_name)
                 except AttributeError:
