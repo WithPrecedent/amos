@@ -422,7 +422,7 @@ class Library(MutableMapping):
         if inspect.isclass(item):
             self.classes[key] = item
         elif isinstance(item, object):
-            self.instances[key] = copy.deepcopy(item)
+            self.instances[key] = item
             # Key for the class will be different because it is inferred from
             # the class and not any attributes.
             self.deposit(item = item.__class__)
