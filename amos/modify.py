@@ -837,7 +837,7 @@ def drop_suffix_from_str(item: str, suffix: str, divider: str = '') -> str:
     """
     suffix = ''.join([suffix, divider])
     if item.endswith(suffix):
-        return item[:len(suffix)]
+        return item.removesuffix(suffix)
     else:
         return item
 
