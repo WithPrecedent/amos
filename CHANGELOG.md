@@ -37,6 +37,11 @@ All notable changes to this project will be documented in this file.
   `random_state`, and exports the report, settings, environment, history,
   predictions, tables, and figures.
 * Added the `Findings` report.
+* Added an ROC curve and an importance plot from the README's breast cancer
+  study to the README, with `docs/scripts/readme_figures.py` to draw them
+  again.
+* Added tests that compare `amos` with each package that it wraps, using the
+  same data, parameters, and seed.
 * Removed the general-purpose containers, converters, factories, and
   registries of 0.1.x. They now live in `bunches`, `camina`, `holden`, and
   `wonka`.
