@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.2.1
 
 * Replaced the `scorecard` technique of the critic stage with `Scorecard`,
   which compares every branch of an analysis: one row for each combination of
@@ -63,6 +63,7 @@ All notable changes to this project will be documented in this file.
 * Added recipes for fairness and for fixed effects, and sections of the
   advanced user guide on groups and fairness, uncertainty, causal effects,
   and survival analysis.
+* Left private classes, methods, and functions out of the API documentation.
 
 ## 0.2.0
 
