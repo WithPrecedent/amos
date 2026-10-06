@@ -79,8 +79,9 @@ def test_histograms_hide_unused_axes(mixed: amos.Dataset) -> None:
 def test_importance_plot_uses_an_earlier_table(fitted: amos.Dataset) -> None:
     amos.evaluators.PermutationImportance().apply(fitted, n_repeats = 2)
     plots.ImportancePlot().apply(fitted, limit = 3)
-    bars = fitted.figures['importance_plot'].axes[0].patches
-    assert len(bars) == 3
+    axes = fitted.figures['importance_plot'].axes[0]
+    assert len(axes.patches) == 3
+    assert axes.get_xlabel() == 'drop in score when the feature is shuffled'
 
 
 def test_size_of_a_figure(fitted: amos.Dataset) -> None:

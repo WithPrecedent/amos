@@ -225,6 +225,13 @@ techniques = roc_curve, importance_plot
 
 [random_forest_parameters]
 n_estimators = 100
+
+[roc_curve_parameters]
+title = How well the best model separates the classes
+
+[importance_plot_parameters]
+title = The ten features that matter most
+limit = 10
 ```
 
 The "general" section names the label (the column that models predict) and
@@ -247,6 +254,17 @@ print(result.metrics["roc_auc"] > 0.95)
 print(sorted(result.figures))
 # ['importance_plot', 'roc_curve']
 ```
+
+The artist drew two figures, titled by the `roc_curve_parameters` and
+`importance_plot_parameters` sections. The ROC curve shows how well the best
+combination tells the two kinds of tumors apart on the test rows it never
+learned from. The importance plot shows how much its score drops when each
+feature is shuffled, which works for any model:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/roc_curve.png" alt="The ROC curve of the best model, with an area under the curve of 0.98" height="320"/>
+<img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/importance_plot.png" alt="The ten features whose shuffling lowers the model's score the most" height="320"/>
+</p>
 
 The result is a `Dataset`: the data, the fitted `model`, its `predictions`,
 `metrics`, `tables`, `figures`, and the `history` of every technique. The
@@ -277,10 +295,6 @@ especially the [tutorial](https://WithPrecedent.github.io/amos/tutorial/), the
 
 ## Contributing
 
-<p align="center">
-<img src="https://media.giphy.com/media/YkcyYCJCzLPAmO1TZo/giphy.gif" height="300"/>
-</p>
-
 Contributors are always welcome. Feel free to grab an
 [issue](https://www.github.com/WithPrecedent/amos/issues) to work on or make a
 suggested improvement. If you wish to contribute, please read the
@@ -310,11 +324,7 @@ Conduct](https://www.github.com/WithPrecedent/amos/blob/main/CODE_OF_CONDUCT.md)
 
 ## Acknowledgments
 
-`amos` grew out of `simplify`, an earlier project with the same goals. This
-project was generated from [@WithPrecedent](https://github.com/WithPrecedent)'s
-[![cookiecutter
-Template](https://img.shields.io/badge/snickerdoodle-bisque?style=flat-square&logo=cookiecutter&labelColor=gray)](https://www.github.com/WithPrecedent/snickerdoodle)
-template.
+`amos` grew out of `simplify`, an earlier project with the same goals.
 
 ## License
 

@@ -61,6 +61,13 @@ Most contributions to `amos` are new techniques. To add one:
 Examples in the README and the documentation are run by `tests/test_docs.py`.
 The comment lines after a `print` statement are its expected output.
 
+The figures in the README are drawn by the breast cancer study in the README
+itself. If that study changes, draw them again (they are saved in `docs/img`):
+
+```bash
+uv run python docs/scripts/readme_figures.py
+```
+
 ## Pull requests guidelines
 
 Link to any related issue in the Pull Request message.

@@ -34,6 +34,13 @@ import pandas as pd
 
 from . import base, describers, evaluators, utilities
 
+# Labels of the axis of an `importance_plot`, by the table it draws, in the
+# order that the tables are looked for.
+_IMPORTANCE_LABELS: dict[str, str] = {
+    'shap_importance': 'mean absolute SHAP value',
+    'permutation_importance': 'drop in score when the feature is shuffled',
+    'feature_importance': "the model's importance"}
+
 
 @dataclasses.dataclass
 class Plot(base.Operation, abc.ABC):
@@ -234,15 +241,17 @@ class ImportancePlot(Plot):
             **kwargs: not used.
 
         """
-        names = [source] if source else [
-            'shap_importance', 'permutation_importance', 'feature_importance']
-        table = next((item.tables[n] for n in names if n in item.tables), None)
-        if table is None:
+        names = [source] if source else list(_IMPORTANCE_LABELS)
+        found = next((n for n in names if n in item.tables), None)
+        if found is None:
+            found = 'feature_importance'
             table = evaluators.FeatureImportance().evaluate(item)
+        else:
+            table = item.tables[found]
         top = table['importance'].head(limit).iloc[::-1]
         axes = figure.subplots()
         axes.barh([str(i) for i in top.index], top.to_numpy())
-        axes.set_xlabel('importance')
+        axes.set_xlabel(_IMPORTANCE_LABELS.get(found, 'importance'))
 
 
 @dataclasses.dataclass
