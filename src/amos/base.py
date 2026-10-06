@@ -2,6 +2,7 @@
 
 Contents:
     Dataset: data and everything learned from it in a workflow.
+    Branch: one branch of an experiment and its result.
     Operation: base class for amos techniques, which work on a `Dataset`.
 
 """
@@ -96,6 +97,9 @@ class Dataset:
             `dict`.
         history: a record of each technique that was applied, in order, with
             the tool and parameters it used. Defaults to an empty `list`.
+        branches: the branches of the most recent `experiment` that the
+            dataset came from, with the result of each. A `scorecard`
+            compares them. Defaults to an empty `list`.
 
     """
 
@@ -113,6 +117,8 @@ class Dataset:
     figures: dict[str, Any] = dataclasses.field(default_factory = dict)
     fitted: dict[str, Any] = dataclasses.field(default_factory = dict)
     history: list[dict[str, Any]] = dataclasses.field(default_factory = list)
+    branches: list[Branch] = dataclasses.field(
+        default_factory = list, repr = False)
 
     """ Initialization Methods """
 
@@ -505,6 +511,33 @@ class Dataset:
         if self.model is not None:
             parts.append(f'model={type(self.model).__name__}')
         return f'Dataset({", ".join(parts)})'
+
+
+@dataclasses.dataclass
+class Branch:
+    """One branch of an experiment: a combination of techniques and its result.
+
+    An `experiment` tries every combination of one technique from each step.
+    Each combination is a branch. The winning dataset keeps a `Branch` for
+    every one of them, so that a `scorecard` can compare them after the
+    experiment.
+
+    Args:
+        label: the names of the nodes in the branch, joined by " > ".
+        steps: the technique used at each step, by the name of the step.
+        result: the outcome of the branch: a `Dataset` with only the label
+            column, and the branch's predictions, probabilities, and metrics.
+        score: the branch's score from the experiment's criteria. Higher is
+            better. Defaults to `None`.
+        criterion: the name of the experiment's criteria. Defaults to `None`.
+
+    """
+
+    label: str
+    steps: dict[str, str]
+    result: Dataset
+    score: float | None = None
+    criterion: str | None = None
 
 
 @dataclasses.dataclass

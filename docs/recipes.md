@@ -85,8 +85,8 @@ print(list(significant))
 
 When one class is rare, accuracy is misleading (always predicting the common
 class is accurate). Compare ways of balancing the training rows with a metric
-that weighs both classes, and put a `scorecard` at the end of each combination
-to compare them on every metric:
+that weighs both classes, and let the critic's `scorecard` compare them on
+every metric:
 
 ```python
 features, label = sklearn.datasets.make_classification(
@@ -95,24 +95,26 @@ data = pd.DataFrame(features, columns = [f"x{i}" for i in range(8)])
 data["rare"] = label
 settings = {
     "general": {"label": "rare", "seed": 43},
-    "rare_project": {"rare_workers": "explorer, analyst"},
+    "rare_project": {"rare_workers": "explorer, analyst, critic"},
     "explorer": {"techniques": "label_balance"},
     "analyst": {
         "design": "experiment",
         "criterion": "balanced_accuracy",
-        "steps": "split, sample, model, evaluate",
+        "steps": "split, sample, model",
         "split_techniques": "stratified",
         "sample_techniques": "none, smote, random_under",
         "model_techniques": "logit",
-        "evaluate_techniques": "scorecard",
     },
+    "critic": {"techniques": "scorecard"},
 }
 project = amos.Project.create(settings, item = data)
 print(project.result.tables["label_balance"]["count"].tolist())
 # [944, 56]
-comparison = project.result.tables["analyst_comparison"]
-print(len(comparison), "recall" in comparison.columns)
-# 3 True
+scorecard = project.scorecard
+print(sorted(scorecard.table["sample"]))
+# ['none', 'random_under', 'smote']
+print(list(scorecard.table.columns[4:7]))
+# ['balanced_accuracy', 'accuracy', 'precision']
 ```
 
 Only the training rows are resampled. The test rows keep their real balance,

@@ -133,6 +133,7 @@ def test_a_clerk_can_be_passed(tmp_path: pathlib.Path) -> None:
 def test_export_saves_everything(tmp_path: pathlib.Path) -> None:
     requires('matplotlib')
     requires('seaborn')
+    requires('docx')
     settings = _settings()
     settings['critic']['techniques'] = 'scorecard, confusion, confusion_heatmap'
     project = amos.Project.create(settings, item = make_numeric(), id = 'run')
@@ -147,6 +148,10 @@ def test_export_saves_everything(tmp_path: pathlib.Path) -> None:
         'metrics.csv',
         'predictions.csv',
         'report.txt',
+        'scorecard.csv',
+        'scorecard.docx',
+        'scorecard.md',
+        'scorecard.png',
         'settings.json',
         'tables/analyst_comparison.csv',
         'tables/confusion.csv',

@@ -11,7 +11,8 @@ Contents:
     FeatureImportance: the importance that the model gives each feature.
     PermutationImportance: how much the score drops when each feature is
         shuffled.
-    Scorecard: every standard metric for the task.
+    Scorecard: every standard metric for every branch of an analysis, ready
+        to publish as csv, Markdown, Word, or an image.
     ShapImportance: the mean absolute SHAP value of each feature.
 
 """
@@ -21,7 +22,9 @@ from __future__ import annotations
 import abc
 import dataclasses
 import importlib
-from collections.abc import Sequence
+import math
+import pathlib
+from collections.abc import Iterable, Sequence
 from typing import Any, ClassVar
 
 import chrisjen
@@ -220,14 +223,46 @@ class PermutationImportance(Evaluator):
 
 @dataclasses.dataclass
 class Scorecard(Evaluator):
-    """Every standard metric for the task, in one table.
+    """The results of every branch of an analysis, ready to publish.
 
-    The scores are also stored in the dataset's `metrics`, so a scorecard at
-    the end of each combination in an `experiment` puts every metric in its
-    comparison table. Metrics that need probabilities are skipped if the
-    model does not predict them.
+    A scorecard has one row for each branch of the most recent `experiment`
+    (each combination of techniques that it tried): its rank, the technique
+    used at each step, and every standard metric for the task, computed from
+    that branch's own predictions. If the data did not come from an
+    experiment, it has one row for the final model and the techniques that
+    made it. The table is stored in the dataset's `tables` under the
+    technique's name, and the final model's metrics are stored in its
+    `metrics`.
+
+    A scorecard can be saved as a csv file (`to_csv`), a Markdown table
+    (`to_markdown`), a Word document (`to_word`, which needs python-docx), or
+    an image (`to_image`, which needs matplotlib), or in all of them at once
+    (`export`). Make one from a dataset or an applied project with `create`,
+    or use `Project.scorecard`.
+
+    Args:
+        name: name used to refer to the technique in a workflow. Defaults to
+            an empty `str`, in which case it is "scorecard".
+        contents: not used. Defaults to `None`.
+        parameters: keyword arguments for `evaluate`, such as "metrics".
+            Defaults to an empty `dict`.
+        title: title of the scorecard in Word documents and images. Defaults
+            to `None`, in which case it describes the branches (such as "8
+            branches ranked by roc_auc").
+        digits: digits after the decimal point when scores are written as
+            text. Defaults to 3.
+
+    Attributes:
+        table: the most recent scorecard. Its columns are "rank", the steps,
+            and the metrics.
+        summary: a description of the most recent scorecard.
 
     """
+
+    title: str | None = None
+    digits: int = 3
+    table: pd.DataFrame | None = dataclasses.field(default = None, repr = False)
+    summary: str | None = dataclasses.field(default = None, repr = False)
 
     # The metrics in a scorecard for each task, by name.
     defaults: ClassVar[dict[str, tuple[str, ...]]] = {
@@ -240,36 +275,448 @@ class Scorecard(Evaluator):
             'roc_auc',
             'log_loss'),
         'regress': ('r2', 'rmse', 'mae')}
+    # Genres of the techniques that are listed as steps of a dataset that did
+    # not come from an experiment.
+    step_genres: ClassVar[tuple[str, ...]] = (
+        'splitter',
+        'imputer',
+        'scaler',
+        'encoder',
+        'mixer',
+        'reducer',
+        'sampler',
+        'model')
+
+    """ Class Methods """
+
+    @classmethod
+    def create(
+        cls,
+        item: base.Dataset | chrisjen.Project,
+        **kwargs: Any) -> Scorecard:
+        """Returns the scorecard of a dataset or of an applied project.
+
+        Args:
+            item: a `Dataset`, or a `Project` that has been applied.
+            **kwargs: arguments for the scorecard (such as `title` and
+                `digits`) and for `evaluate` (such as `metrics`).
+
+        Raises:
+            TypeError: if `item` is not a `Dataset` or an applied project.
+
+        Returns:
+            A scorecard, with its `table` filled in.
+
+        """
+        if isinstance(item, chrisjen.Project):
+            item = item.result
+        if not isinstance(item, base.Dataset):
+            message = (
+                f'a scorecard needs a Dataset or an applied Project, not '
+                f'{type(item).__name__}'
+            )
+            raise TypeError(message)
+        fields = {field.name for field in dataclasses.fields(cls)}
+        scorecard = cls(**{k: v for k, v in kwargs.items() if k in fields})
+        scorecard.evaluate(
+            item, **{k: v for k, v in kwargs.items() if k not in fields})
+        return scorecard
+
+    """ Properties """
+
+    @property
+    def heading(self) -> str:
+        """Returns `title`, or `summary` if there is no title."""
+        return self.title or self.summary or 'Scorecard'
+
+    """ Public Methods """
 
     def evaluate(
         self,
         item: base.Dataset,
         metrics: Sequence[str] | None = None,
         **kwargs: Any) -> pd.DataFrame:
-        """Returns the score of each metric.
+        """Returns the scorecard of `item`, which is also stored in `table`.
+
+        Args:
+            item: the dataset with a fitted model.
+            metrics: names of the metrics to use. Defaults to `None`, which
+                uses `defaults` for the task (with the experiment's criterion
+                first). Other metrics that the branches computed are added
+                after them.
+            **kwargs: not used.
+
+        Returns:
+            One row for each branch, best first, with a "rank" column, a
+                column for each step, and a column for each metric.
+
+        """
+        branches = item.branches or [base.Branch(
+            label = 'result', steps = self._history_steps(item), result = item)]
+        names = self._metric_names(item, branches, metrics)
+        extras = list(dict.fromkeys(
+            name for branch in branches for name in branch.result.metrics
+            if name not in names))
+        rows = []
+        for branch in branches:
+            row: dict[str, Any] = dict(branch.steps)
+            row.update(self._measure(branch.result, names))
+            row.update({
+                name: branch.result.metrics[name] for name in extras
+                if name in branch.result.metrics})
+            rows.append(row)
+        steps = list(dict.fromkeys(k for b in branches for k in b.steps))
+        table = pd.DataFrame(rows)
+        columns = steps + [n for n in [*names, *extras] if n in table.columns]
+        table = table.reindex(columns = columns)
+        criterion = branches[0].criterion
+        scores = [branch.score for branch in branches]
+        if any(score is not None for score in scores):
+            if criterion not in table.columns:
+                table['score'] = scores
+            # Sorts from best to worst. Ties keep the order of the branches.
+            order = sorted(range(len(scores)), key = lambda i: _worst_first(
+                scores[i]))
+            table = table.iloc[order].reset_index(drop = True)
+        table.insert(0, 'rank', range(1, len(table) + 1))
+        self.table = table
+        if item.branches:
+            ranked = f' ranked by {criterion}' if criterion else ''
+            self.summary = f'{len(branches)} branches{ranked}'
+        else:
+            self.summary = 'The final model'
+        return table
+
+    def export(
+        self,
+        folder: pathlib.Path | str,
+        *,
+        name: str | None = None,
+        formats: Sequence[str] = ('csv', 'md', 'docx', 'png')) -> dict[str, pathlib.Path]:
+        """Saves the scorecard in several formats.
+
+        Args:
+            folder: folder to save the files in. It is created if needed.
+            name: name of the files, without extensions. Defaults to `None`,
+                in which case the name of the technique is used.
+            formats: extensions of the files to save: "csv", "md", "docx",
+                and any image format that matplotlib saves (such as "png",
+                "svg", or "pdf"). Defaults to csv, md, docx, and png.
+
+        Returns:
+            The path of each file, by its format.
+
+        """
+        folder = pathlib.Path(folder)
+        folder.mkdir(parents = True, exist_ok = True)
+        paths = {}
+        for extension in formats:
+            path = folder / f'{name or self.name}.{extension}'
+            if extension == 'csv':
+                self.to_csv(path)
+            elif extension == 'md':
+                self.to_markdown(path)
+            elif extension == 'docx':
+                self.to_word(path)
+            else:
+                self.to_image(path)
+            paths[extension] = path
+        return paths
+
+    def implement(
+        self,
+        item: base.Dataset,
+        metrics: Sequence[str] | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Adds the scorecard to `item` and the final model's metrics.
 
         Args:
             item: the dataset with a fitted model.
             metrics: names of the metrics to use. Defaults to `None`, which
                 uses `defaults` for the task.
-            **kwargs: not used.
+            **kwargs: other parameters for `evaluate`.
 
         Returns:
-            One row for each metric, with a "value" column.
+            The dataset, with the scorecard in `tables` and the final model's
+                scores in `metrics`.
 
         """
-        names = list(metrics or self.defaults[item.task or 'classify'])
+        names = list(metrics or self.defaults.get(item.task or 'classify', ()))
+        item.metrics.update(self._measure(item, names))
+        return super().implement(item, metrics = metrics, **kwargs)
+
+    def to_csv(self, path: pathlib.Path | str | None = None) -> str:
+        """Returns the scorecard as csv text, and saves it if `path` is given.
+
+        Args:
+            path: file to save the text in. Defaults to `None`.
+
+        Returns:
+            The csv text. Scores are saved at full precision.
+
+        """
+        text = self._require_table().to_csv(index = False, lineterminator = '\n')
+        if path is not None:
+            pathlib.Path(path).write_text(text, encoding = 'utf-8')
+        return text
+
+    def to_figure(self) -> Any:
+        """Returns the scorecard drawn as a table in a `matplotlib` figure.
+
+        The header is bold, and the best branch is shaded.
+
+        Returns:
+            A `matplotlib.figure.Figure`.
+
+        """
+        figures = utilities.import_tool('matplotlib.figure')
+        text = self._text()
+        rows = len(text)
+        lengths = [
+            max([len(str(c)), *(len(v) for v in text[c])]) + 2
+            for c in text.columns]
+        width = max(4.0, 0.085 * sum(lengths))
+        height = 0.3 * (rows + 1) + 0.5
+        figure = figures.Figure(figsize = (width, height))
+        axes = figure.add_axes((0, 0, 1, 1))
+        axes.set_axis_off()
+        grid = axes.table(
+            cellText = text.to_numpy(),
+            colLabels = list(text.columns),
+            colWidths = [length / sum(lengths) for length in lengths],
+            cellLoc = 'center',
+            bbox = (0, 0, 1, (rows + 1) / (rows + 1 + 1.6)))
+        grid.auto_set_font_size(value = False)
+        grid.set_fontsize(9)
+        for (row, _), cell in grid.get_celld().items():
+            cell.set_edgecolor('#bbbbbb')
+            if row == 0:
+                cell.set_text_props(weight = 'bold')
+                cell.set_facecolor('#e6e6e6')
+            elif row == 1 and rows > 1:
+                cell.set_facecolor('#e3f1e3')
+        figure.text(
+            0.5, 0.98, self.heading,
+            ha = 'center', va = 'top', fontsize = 11, weight = 'bold')
+        return figure
+
+    def to_image(
+        self,
+        path: pathlib.Path | str,
+        dpi: int = 200) -> pathlib.Path:
+        """Saves the scorecard as an image.
+
+        Args:
+            path: file to save the image in. Its extension (such as ".png",
+                ".svg", or ".pdf") sets the format.
+            dpi: dots per inch of an image with pixels. Defaults to 200.
+
+        Returns:
+            The path of the image.
+
+        """
+        path = pathlib.Path(path)
+        self.to_figure().savefig(path, dpi = dpi, bbox_inches = 'tight')
+        return path
+
+    def to_markdown(self, path: pathlib.Path | str | None = None) -> str:
+        """Returns the scorecard as a Markdown table, and saves it if asked.
+
+        Numbers are aligned to the right.
+
+        Args:
+            path: file to save the table in. Defaults to `None`.
+
+        Returns:
+            The Markdown table.
+
+        """
+        text = self._text()
+        numeric = self._numeric_columns()
+        lines = [
+            _markdown_row(str(c) for c in text.columns),
+            _markdown_row(
+                '---:' if c in numeric else '---' for c in text.columns)]
+        lines.extend(
+            _markdown_row(row) for row in text.itertuples(index = False))
+        markdown = '\n'.join(lines) + '\n'
+        if path is not None:
+            pathlib.Path(path).write_text(markdown, encoding = 'utf-8')
+        return markdown
+
+    def to_word(self, path: pathlib.Path | str) -> pathlib.Path:
+        """Saves the scorecard as a table in a Word document.
+
+        The document has the scorecard's heading and a table in the "Table
+        Grid" style, with a bold header and numbers aligned to the right.
+
+        Args:
+            path: file to save the document in (usually ending in ".docx").
+
+        Returns:
+            The path of the document.
+
+        """
+        docx = utilities.import_tool('docx')
+        alignment = utilities.import_tool('docx.enum.text.WD_ALIGN_PARAGRAPH')
+        text = self._text()
+        numeric = self._numeric_columns()
+        document = docx.Document()
+        document.add_heading(self.heading, level = 2)
+        grid = document.add_table(rows = len(text) + 1, cols = len(text.columns))
+        grid.style = 'Table Grid'
+        for column, label in enumerate(text.columns):
+            cell = grid.cell(0, column)
+            cell.text = str(label)
+            for run in cell.paragraphs[0].runs:
+                run.font.bold = True
+        for row, values in enumerate(text.itertuples(index = False), start = 1):
+            for column, value in enumerate(values):
+                cell = grid.cell(row, column)
+                cell.text = value
+                if text.columns[column] in numeric:
+                    cell.paragraphs[0].alignment = alignment.RIGHT
+        path = pathlib.Path(path)
+        document.save(str(path))
+        return path
+
+    """ Private Methods """
+
+    def _history_steps(self, item: base.Dataset) -> dict[str, str]:
+        """Returns the techniques that made a dataset, by their genres.
+
+        Args:
+            item: a dataset that did not come from an experiment.
+
+        Returns:
+            The names of the techniques in `history` whose genres are in
+                `steps`, by genre. Several techniques of one genre are
+                joined with commas.
+
+        """
+        found: dict[str, str] = {}
+        for entry in item.history:
+            technique = str(entry.get('technique'))
+            try:
+                genre = chrisjen.library.classify(technique)
+            except ValueError:
+                continue
+            if genre in self.step_genres:
+                found[genre] = (
+                    f'{found[genre]}, {technique}' if genre in found
+                    else technique)
+        return {
+            genre: found[genre] for genre in self.step_genres if genre in found}
+
+    def _measure(
+        self,
+        item: base.Dataset,
+        names: Sequence[str]) -> dict[str, float]:
+        """Returns the score of each metric in `names` that applies to `item`.
+
+        Args:
+            item: a dataset with predictions.
+            names: names of metrics in the library.
+
+        Raises:
+            TypeError: if a name is not the name of a metric.
+
+        Returns:
+            The scores. Metrics for another task, metrics that need
+                probabilities that the model did not make, and every metric
+                of a dataset without predictions are left out.
+
+        """
         values = {}
         for name in names:
             metric = chrisjen.library.borrow(name, genre = 'metric')()
             if not isinstance(metric, metrics_.Metric):
                 message = f'{name!r} is not a metric'
                 raise TypeError(message)
-            if metric.uses_probabilities and item.probabilities is None:
+            if (
+                item.predictions is None
+                or item.task not in metric.tasks
+                or (metric.uses_probabilities and item.probabilities is None)):
                 continue
             values[name] = metric.measure(item, **metric._keywords())
-            item.metrics[name] = values[name]
-        return pd.DataFrame({'value': pd.Series(values, dtype = float)})
+        return values
+
+    def _metric_names(
+        self,
+        item: base.Dataset,
+        branches: Sequence[base.Branch],
+        metrics: Sequence[str] | None) -> list[str]:
+        """Returns the names of the metrics to put in the scorecard.
+
+        Args:
+            item: the dataset with a fitted model.
+            branches: the branches in the scorecard.
+            metrics: names of metrics chosen by the user, or `None`.
+
+        Returns:
+            `metrics`, or `defaults` for the task with the experiment's
+                criterion first (if it is a metric).
+
+        """
+        if metrics:
+            return list(metrics)
+        names = list(self.defaults.get(item.task or 'classify', ()))
+        criterion = branches[0].criterion if branches else None
+        kind = chrisjen.library.all.get(criterion) if criterion else None
+        if (
+            criterion is not None
+            and isinstance(kind, type)
+            and issubclass(kind, metrics_.Metric)):
+            names = [criterion, *(n for n in names if n != criterion)]
+        return names
+
+    def _numeric_columns(self) -> set[str]:
+        """Returns the names of the columns of `table` that hold numbers."""
+        table = self._require_table()
+        return {
+            c for c in table.columns
+            if pd.api.types.is_numeric_dtype(table[c].dtype)}
+
+    def _require_table(self) -> pd.DataFrame:
+        """Returns `table`.
+
+        Raises:
+            ValueError: if there is no table yet.
+
+        Returns:
+            The most recent scorecard.
+
+        """
+        if self.table is None:
+            message = (
+                'the scorecard is empty: make one with Scorecard.create or '
+                'apply it to a dataset first'
+            )
+            raise ValueError(message)
+        return self.table
+
+    def _text(self) -> pd.DataFrame:
+        """Returns `table` with every value written as text.
+
+        Returns:
+            The table, with scores rounded to `digits` and missing values
+                shown as a dash.
+
+        """
+        digits = self.digits
+
+        def write(value: Any) -> str:
+            if isinstance(value, str):
+                return value
+            if value is None or pd.isna(value):
+                return '—'
+            if isinstance(value, bool | int | np.integer):
+                return str(value)
+            if isinstance(value, float | np.floating):
+                return f'{value:.{digits}f}'
+            return str(value)
+
+        return self._require_table().map(write)
 
 
 @dataclasses.dataclass
@@ -359,6 +806,20 @@ def _explain(
         return explainer(x)
 
 
+def _worst_first(score: float | None) -> float:
+    """Returns a key that sorts scores from best to worst.
+
+    Args:
+        score: a score (higher is better), or `None`.
+
+    Returns:
+        The negative of `score`, or infinity if there is no score (so that
+            branches without scores come last).
+
+    """
+    return math.inf if score is None else -score
+
+
 def _importance_table(
     features: list[str],
     importances: np.ndarray) -> pd.DataFrame:
@@ -377,6 +838,20 @@ def _importance_table(
         {'importance': np.asarray(importances, dtype = float)},
         index = pd.Index(features, name = 'feature'))
     return table.sort_values('importance', ascending = False)
+
+
+def _markdown_row(values: Iterable[str]) -> str:
+    """Returns a row of a Markdown table.
+
+    Args:
+        values: the text of each cell.
+
+    Returns:
+        The row, with any "|" in the text escaped.
+
+    """
+    cells = [str(value).replace('|', r'\|') for value in values]
+    return f'| {" | ".join(cells)} |'
 
 
 def _model(item: base.Dataset) -> Any:

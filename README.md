@@ -97,24 +97,15 @@ you can name your workers whatever you like.
 
 Open scholarship means that others can check your work. `amos` helps by:
 
-* Passing one **seed** to every tool that takes a `random_state`, so a project
-  gives the same result every time.
-* Applying a project to a **copy** of your data, so running it twice gives the
-  same answer and your data is never changed.
-* Keeping a **history** of every technique that was applied, with the exact
-  tool and parameters it used.
-* Learning only from the **training rows**. Every scaler, encoder, imputer,
-  and sampler is fitted to the training rows and then applied to the test
-  rows, so nothing leaks from the test set.
-* **Exporting** the settings, the versions of Python and every package, the
-  history, the predictions, and every table and figure with one call to
-  `export`.
+* Passing one seed to every tool that takes a `random_state`, so a projectngives the same result every time.
+* Applying a project to a copy of your data, so running it twice gives thensame answer and your data is never changed.
+* Keeping a history of every technique that was applied, with the exact tool and parameters it used.
+* Isolating training and testing data. Every scaler, encoder, imputer, and sampler is fitted to the training rows and then applied to the test rows, so nothing leaks from the test set.
+* All settings and parameters can be implemented through a single settings file that will produce the same results on any computer.
 
 ### Comprehensive
 
-`amos` wraps the major Python data science packages behind one interface, so
-you can compare their methods side by side without learning each package's
-quirks:
+`amos` wraps the major Python data science packages behind one interface, so you can compare their methods side by side without learning each package'snquirks:
 
 | Package | What `amos` uses it for |
 | --- | --- |
@@ -124,7 +115,8 @@ quirks:
 | [xgboost](https://xgboost.readthedocs.io) and [lightgbm](https://lightgbm.readthedocs.io) | Gradient boosting. |
 | [statsmodels](https://www.statsmodels.org) | Regressions with standard errors, p-values, and confidence intervals. |
 | [shap](https://shap.readthedocs.io) | Explaining models with SHAP values. |
-| [matplotlib](https://matplotlib.org) and [seaborn](https://seaborn.pydata.org) | Figures. |
+| [matplotlib](https://matplotlib.org) and [seaborn](https://seaborn.pydata.org) | Figures, and scorecards as images. |
+| [python-docx](https://python-docx.readthedocs.io) | Scorecards as Word documents. |
 
 Unlike scikit-learn, every technique keeps your data in a `pandas.DataFrame`
 with named columns, can be limited to some `columns`, and is given the label
@@ -137,7 +129,8 @@ depending on your label.
 A result that depends on one arbitrary choice of preprocessing or model is
 fragile. The `experiment` design tries **every combination** of the techniques
 you list for each step and reports how each one did, so readers can see that
-your conclusions are robust (or not). Any step can include `none`, which tests
+your conclusions are robust (or not). The critic's `scorecard` puts every
+combination side by side, on every metric, in a table ready for a paper. Any step can include `none`, which tests
 whether a technique helps at all.
 
 ### Extensible
@@ -179,8 +172,9 @@ package is missing. Install them all with `pip install amos[all]`, or choose:
 | `sampling` | imbalanced-learn | Samplers such as `smote`. |
 | `boosting` | xgboost, lightgbm | `xgboost` and `lightgbm` models. |
 | `statistics` | statsmodels | `ols` and `glm` models with inference. |
+| `word` | python-docx | Scorecards as Word documents. |
 | `explain` | shap | `shap_importance`. |
-| `plots` | matplotlib, seaborn | The artist's figures. |
+| `plots` | matplotlib, seaborn | The artist's figures, and scorecards as images. |
 
 ### Usage
 
@@ -255,7 +249,7 @@ print(sorted(result.figures))
 # ['importance_plot', 'roc_curve']
 ```
 
-The artist drew two figures, titled by the `roc_curve_parameters` and
+The `artist` drew two figures, titled by the `roc_curve_parameters` and
 `importance_plot_parameters` sections. The ROC curve shows how well the best
 combination tells the two kinds of tumors apart on the test rows it never
 learned from. The importance plot shows how much its score drops when each
@@ -275,15 +269,40 @@ print(project.report.contents.splitlines()[:5])
 # ['project: cancer', 'id: first_run', 'workflow: wrangler > explorer > analyst > critic > artist', 'data: 569 rows and 31 columns', 'label: target (classify)']
 ```
 
+#### Compare every branch
+
+The critic's `scorecard` compares every branch of the analysis: each
+combination of techniques that the experiment tried, ranked by the criterion,
+with every standard metric for the task computed from that branch's own
+predictions on the test rows. It can be saved as a csv file, a Markdown table,
+a Word document, or an image:
+
+```python
+scorecard = project.scorecard
+print(len(scorecard.table), list(scorecard.table.columns[:5]))
+# 8 ['rank', 'split', 'scale', 'sample', 'model']
+scorecard.to_csv("scorecard.csv")
+scorecard.to_markdown("scorecard.md")
+scorecard.to_word("scorecard.docx")
+scorecard.to_image("scorecard.png")
+```
+
+This is the scorecard of the study, saved as an image. The best branch is
+shaded:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/scorecard.png" alt="A table of the eight branches of the study, ranked by ROC AUC, with the scaler, sampler, and model of each and seven metrics" width="100%"/>
+</p>
+
 #### Export the results
 
 `export` saves everything needed to report and reproduce the results in a
-folder named for the run:
+folder named for the run, including the scorecard in all four formats:
 
 ```python
 folder = project.export()
 print(sorted(path.name for path in folder.iterdir()))
-# ['environment.json', 'figures', 'history.json', 'metrics.csv', 'predictions.csv', 'report.txt', 'settings.json', 'tables']
+# ['environment.json', 'figures', 'history.json', 'metrics.csv', 'predictions.csv', 'report.txt', 'scorecard.csv', 'scorecard.docx', 'scorecard.md', 'scorecard.png', 'settings.json', 'tables']
 ```
 
 There is much more to `amos`, including hyperparameter searches, statistical

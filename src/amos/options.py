@@ -40,6 +40,7 @@ _DEFAULT_TEST_SIZE: float = 0.25
 # a helpful message when a technique's package is missing.
 _EXTRAS: dict[str, str] = {
     'category_encoders': 'encoders',
+    'docx': 'word',
     'imblearn': 'sampling',
     'lightgbm': 'boosting',
     'matplotlib': 'plots',
@@ -60,6 +61,7 @@ _RECORDED_PACKAGES: tuple[str, ...] = (
     'imbalanced-learn',
     'lightgbm',
     'matplotlib',
+    'python-docx',
     'seaborn',
     'shap',
     'statsmodels',

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import importlib
 import json
 import pathlib
 from collections.abc import MutableMapping
@@ -18,11 +19,15 @@ import chrisjen
 import nagata
 import pandas as pd
 
-from . import base, options, utilities
+from . import base, evaluators, options, utilities
 
 # Arguments of a `nagata.FileManager` that can be set in the "files" section
 # of the settings.
 _FOLDERS: tuple[str, ...] = ('input_folder', 'interim_folder', 'output_folder')
+# Formats of the scorecard that need an optional package, and the package.
+_SCORECARD_FORMATS: tuple[tuple[str, str], ...] = (
+    ('docx', 'docx'),
+    ('png', 'matplotlib'))
 
 
 @dataclasses.dataclass
@@ -153,6 +158,9 @@ class Project(chrisjen.Project):
         | predictions.csv | The labels, predictions, and probabilities. |
         | tables/{name}.csv | Each table. |
         | figures/{name}.png | Each figure. |
+        | scorecard.csv, .md | The scorecard of every branch (see `scorecard`). |
+        | scorecard.docx | The scorecard as a Word document (with python-docx). |
+        | scorecard.png | The scorecard as an image (with matplotlib). |
         | data.csv | The data after the workflow (if `data` is `True`). |
 
         Args:
@@ -199,9 +207,49 @@ class Project(chrisjen.Project):
                 folder = folder / 'figures',
                 file_name = name,
                 file_format = 'png')
+        if result.predictions is not None:
+            # The Word and image versions are saved if their optional
+            # packages are installed.
+            formats = ['csv', 'md'] + [
+                extension for extension, package in _SCORECARD_FORMATS
+                if _importable(package)]
+            self.scorecard.export(folder, name = 'scorecard', formats = formats)
         if data:
             self._save_table(result.data, folder, 'data')
         return folder
+
+    """ Properties """
+
+    @property
+    def scorecard(self) -> evaluators.Scorecard:
+        """Returns the scorecard of every branch of the most recent run.
+
+        If the workflow has a `scorecard` technique, it is returned with the
+        scorecard it made (so its settings, such as "metrics" or "digits",
+        are kept). Otherwise, a new scorecard of the result is made. Save it
+        with its `to_csv`, `to_markdown`, `to_word`, `to_image`, or `export`
+        methods.
+
+        Raises:
+            TypeError: if the result is not a `Dataset`.
+            ValueError: if the project has not been applied.
+
+        Returns:
+            The scorecard.
+
+        """
+        if self.result is None:
+            message = 'apply the project before making its scorecard'
+            raise ValueError(message)
+        if not isinstance(self.result, base.Dataset):
+            message = f'only a Dataset has a scorecard, not {type(self.result)}'
+            raise TypeError(message)
+        made = [
+            node for node in _nodes(self.workflow)
+            if isinstance(node, evaluators.Scorecard) and node.table is not None]
+        if made:
+            return made[-1]
+        return evaluators.Scorecard.create(self.result)
 
     """ Private Methods """
 
@@ -312,6 +360,45 @@ def _make_clerk(
         root = files.get('root_folder', options._DEFAULT_ROOT)
     folders = {k: v for k, v in files.items() if k in _FOLDERS}
     return nagata.FileManager(root_folder = pathlib.Path(root), **folders)
+
+
+def _importable(package: str) -> bool:
+    """Returns whether `package` can be imported.
+
+    Args:
+        package: name of the package.
+
+    Returns:
+        Whether importing it succeeds.
+
+    """
+    try:
+        importlib.import_module(package)
+    except Exception:  # noqa: BLE001
+        return False
+    return True
+
+
+def _nodes(worker: Any) -> list[Any]:
+    """Returns every node in a workflow, in order, at every level.
+
+    Args:
+        worker: a `chrisjen.Worker`, or another node.
+
+    Returns:
+        The nodes of `worker` and of the workers and steps inside it.
+
+    """
+    found = []
+    if isinstance(worker, chrisjen.Worker):
+        for node in worker:
+            found.append(node)
+            found.extend(_nodes(node))
+    elif isinstance(getattr(worker, 'contents', None), chrisjen.Vertex):
+        # A step that wraps a technique or a worker.
+        found.append(worker.contents)
+        found.extend(_nodes(worker.contents))
+    return found
 
 
 def _predictions(item: base.Dataset) -> pd.DataFrame:

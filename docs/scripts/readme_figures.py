@@ -2,8 +2,8 @@
 
 The figures come from the breast cancer study in the README itself: this
 script reads the `cancer.ini` settings from the README, runs the study, and
-saves each figure that its artist drew in `docs/img`. Run it again whenever the
-study in the README changes:
+saves each figure that its artist drew, and its scorecard, in `docs/img`. Run
+it again whenever the study in the README changes:
 
     uv run python docs/scripts/readme_figures.py
 
@@ -43,6 +43,8 @@ def main() -> None:
         path = FOLDER / f'{name}.png'
         figure.savefig(path, dpi = 150, bbox_inches = 'tight')
         print(f'saved {path.relative_to(ROOT)}')  # noqa: T201
+    path = project.scorecard.to_image(FOLDER / 'scorecard.png', dpi = 150)
+    print(f'saved {path.relative_to(ROOT)}')  # noqa: T201
 
 
 if __name__ == '__main__':

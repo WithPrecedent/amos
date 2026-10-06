@@ -59,31 +59,6 @@ def test_permutation_importance_for_regression(
     assert 'permutation_importance' in fitted_regression.tables
 
 
-def test_scorecard_for_classification(fitted: amos.Dataset) -> None:
-    evaluators.Scorecard().apply(fitted)
-    table = fitted.tables['scorecard']
-    assert list(table.index) == list(
-        evaluators.Scorecard.defaults['classify'])
-    assert set(fitted.metrics) == set(table.index)
-
-
-def test_scorecard_skips_metrics_that_need_probabilities(
-    fitted: amos.Dataset) -> None:
-    fitted.probabilities = None
-    evaluators.Scorecard().apply(fitted, metrics = ['accuracy', 'roc_auc'])
-    assert list(fitted.tables['scorecard'].index) == ['accuracy']
-
-
-def test_scorecard_for_regression(fitted_regression: amos.Dataset) -> None:
-    evaluators.Scorecard().apply(fitted_regression)
-    assert list(fitted_regression.metrics) == ['r2', 'rmse', 'mae']
-
-
-def test_scorecard_only_uses_metrics(fitted: amos.Dataset) -> None:
-    with pytest.raises(KeyError):
-        evaluators.Scorecard().apply(fitted, metrics = ['standard'])
-
-
 @pytest.mark.parametrize('model', ['logit', 'random_forest', 'knn'])
 def test_shap_importance(model: str, classified: amos.Dataset) -> None:
     requires('shap')

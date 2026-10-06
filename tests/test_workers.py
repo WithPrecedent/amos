@@ -31,6 +31,11 @@ def test_experiment_keeps_the_best_path_and_compares_them(
         'winner': 'logit',
         'criterion': 'accuracy',
         'paths': 2}
+    branches = {branch.label: branch for branch in result.branches}
+    assert set(branches) == {'baseline', 'logit'}
+    assert branches['logit'].steps == {'model': 'logit'}
+    assert branches['logit'].score == experiment.scores['logit']
+    assert branches['logit'].result.predictions is not None
 
 
 def test_experiment_reports_the_real_value_of_a_lower_is_better_metric(

@@ -51,7 +51,8 @@ explain = ["shap>=0.45"]
 plots = ["matplotlib>=3.8", "seaborn>=0.13"]
 sampling = ["imbalanced-learn>=0.12"]
 statistics = ["statsmodels>=0.14"]
-all = ["amos[boosting,encoders,explain,plots,sampling,statistics]"]
+word = ["python-docx>=1.1"]
+all = ["amos[boosting,encoders,explain,plots,sampling,statistics,word]"]
 
 [project.urls]
 Documentation = "https://WithPrecedent.github.io/amos"
@@ -84,6 +85,7 @@ tests = [
     "imbalanced-learn>=0.12",
     "lightgbm>=4.0",
     "matplotlib>=3.8",
+    "python-docx>=1.1",
     "seaborn>=0.13",
     "shap>=0.45",
     "statsmodels>=0.14",

@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* Replaced the `scorecard` technique of the critic stage with `Scorecard`,
+  which compares every branch of an analysis: one row for each combination of
+  techniques that the most recent `experiment` tried, ranked by its criterion,
+  with the technique used at each step and every standard metric for the
+  task, computed from each branch's own predictions. It still stores the final
+  model's scores in the dataset's `metrics`. Its table now has one row for
+  each branch (instead of one row for each metric).
+* A scorecard can be saved as a csv file (`to_csv`), a Markdown table
+  (`to_markdown`), a Word document (`to_word`), or an image (`to_image`), or
+  in all four formats at once (`export`). `Scorecard.create` makes one from a
+  dataset or an applied project, and `Project.scorecard` returns the
+  project's scorecard. `Project.export` saves it in every format.
+* An `experiment` now keeps a `Branch` (the technique used at each step, the
+  score, and the predictions) for every combination in the winning dataset's
+  `branches`.
+* Added the `word` extra, which installs python-docx for Word documents.
+* Added the scorecard of the README's breast cancer study to the README.
+
 ## 0.2.0
 
 * Rebuilt `amos` as **A**utomated **M**odeling for **O**pen **S**cholarship: a

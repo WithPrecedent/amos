@@ -408,7 +408,7 @@ imported when a technique that needs them is used. Most models do both tasks.
 | `confusion` | How many rows of each class were predicted to be each class. |
 | `feature_importance` | The importance that the model itself gives each feature. |
 | `permutation_importance` | How much the model's score drops when each feature is shuffled. |
-| `scorecard` | Every standard metric for the task, in one table. |
+| `scorecard` | The results of every branch of an analysis, ready to publish. |
 | `shap_importance` | The mean absolute SHAP value of each feature. |
 
 #### Plots (artist)
@@ -529,7 +529,55 @@ print(result.tables["models_comparison"].shape)
 `scores` has the score of each combination, `results` the dataset that each
 made, and `winner` the label of the best. The criterion of an experiment can be
 a metric for which lower is better (such as `log_loss`). It is negated to rank
-the combinations, but the table shows its real value.
+the combinations, but the table shows its real value. The winning dataset also
+keeps a `Branch` for every combination in its `branches`: the technique used at
+each step, its score, and its predictions, which is what a scorecard compares.
+
+## Scorecards
+
+The `scorecard` is the critic's summary of an analysis. It has one row for
+each branch of the most recent experiment (each combination of techniques),
+ranked by the experiment's criterion:
+
+| Column | Meaning |
+| --- | --- |
+| `rank` | 1 for the best branch. |
+| One for each step | The technique used at that step. Steps are named as in the settings (such as "scale"), or by their genre (such as "scaler") in an experiment built in code. |
+| One for each metric | The branch's score, computed from its own predictions on the test rows: the criterion first, then the other standard metrics for the task, then any other metrics the branches computed. |
+
+A dataset that did not come from an experiment gets one row for its final
+model, with the techniques that made it. As a technique in the critic,
+`scorecard` stores its table in the dataset's `tables` and the final model's
+scores in its `metrics`. Its "metrics" parameter chooses the metrics, and the
+`scorecard_digits` and `scorecard_title` settings (in the critic's section) set
+the digits shown and the title.
+
+In Python, use `Project.scorecard` (which returns the critic's scorecard, or
+makes one) or `Scorecard.create` with a dataset or a project:
+
+```python
+scorecard = amos.evaluators.Scorecard.create(result)
+print(scorecard.heading)
+# 4 branches ranked by f1
+print(list(scorecard.table.columns[:4]))
+# ['rank', 'scaler', 'model', 'f1']
+print(scorecard.to_markdown().splitlines()[1])
+# | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+```
+
+A scorecard can be saved in four formats:
+
+| Method | Saves | Needs |
+| --- | --- | --- |
+| `to_csv(path)` | A csv file, with scores at full precision. It also returns the text. | |
+| `to_markdown(path)` | A Markdown table, with numbers aligned to the right. It also returns the text. | |
+| `to_word(path)` | A Word document with a heading and a table. | python-docx (`amos[word]`) |
+| `to_image(path)` | An image of the table, in the format of the file's extension (such as png, svg, or pdf). `to_figure` returns the `matplotlib` figure instead. | matplotlib (`amos[plots]`) |
+| `export(folder)` | All four, named "scorecard". | |
+
+Scores in the Markdown table, Word document, and image are rounded to `digits`
+(3 by default). The title of the Word document and image is `title`, or a
+description of the branches if there is no title.
 
 ## Reports and exports
 
@@ -551,6 +599,7 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | predictions.csv | The labels, predictions, and probabilities of the predicted rows. |
 | tables/{name}.csv | Each table. |
 | figures/{name}.png | Each figure. |
+| scorecard.csv, .md, .docx, .png | The scorecard in each format. The Word document and image are saved if python-docx and matplotlib are installed. |
 | data.csv | The data after the workflow, if `export(data = True)`. |
 
 ## Errors you may see

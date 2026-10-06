@@ -29,8 +29,10 @@ class Experiment(chrisjen.Contest):
     dataset, and keeps the dataset with the best score from its `criteria`.
     It also adds a comparison table to the tables of the winning dataset,
     named "{name}_comparison", with one row for each combination: its score,
-    its rank, and every metric it computed. This is the table that a paper
-    reports to show that a result does not depend on one arbitrary choice of
+    its rank, and every metric it computed. And it keeps a `Branch` for each
+    combination in the winning dataset's `branches`, so that a `scorecard` can
+    compare every combination on every metric. This is what a paper reports
+    to show that a result does not depend on one arbitrary choice of
     preprocessing or model.
 
     If the criteria is a `Metric`, its score is also stored in the `metrics`
@@ -87,6 +89,7 @@ class Experiment(chrisjen.Contest):
         self.winner = max(self.scores, key = self.scores.__getitem__)
         best = results[self.winner]
         if isinstance(best, base.Dataset):
+            best.branches = self._branches(results)
             best.tables[f'{self.name}_comparison'] = self.tabulate()
             best.record(
                 str(self.name),
@@ -114,3 +117,115 @@ class Experiment(chrisjen.Contest):
         table = table.sort_values('score', ascending = False, kind = 'stable')
         table.insert(0, 'rank', range(1, len(table) + 1))
         return table
+
+    """ Private Methods """
+
+    def _branches(self, results: dict[str, Any]) -> list[base.Branch]:
+        """Returns a record of every path that made a `Dataset`.
+
+        Args:
+            results: the result of each path, by its label.
+
+        Returns:
+            A `Branch` for each path, in the order of the paths.
+
+        """
+        paths = self.walk()
+        columns = _step_names(paths)
+        criterion = getattr(self.criteria, 'name', None)
+        branches = []
+        for path in paths:
+            label = ' > '.join(str(getattr(n, 'name', n)) for n in path)
+            result = results.get(label)
+            if not isinstance(result, base.Dataset):
+                continue
+            steps = {
+                columns[position]: _technique_of(node)
+                for position, node in enumerate(path) if position in columns}
+            branches.append(base.Branch(
+                label = label,
+                steps = steps,
+                result = _outcome(result),
+                score = self.scores.get(label),
+                criterion = criterion))
+        return branches
+
+
+""" Private Functions """
+
+
+def _outcome(item: base.Dataset) -> base.Dataset:
+    """Returns the outcome of a branch: its label, predictions, and metrics.
+
+    Keeping only the label column (not every feature) lets the winning dataset
+    remember every branch without keeping a copy of the data for each.
+
+    Args:
+        item: the dataset that a branch made.
+
+    Returns:
+        A `Dataset` with only the label column, and the predictions,
+            probabilities, and metrics of `item`.
+
+    """
+    columns = [] if item.label is None else [item.label]
+    return base.Dataset(
+        data = item.data[columns].copy(),
+        label = item.label,
+        task = item.task,
+        seed = item.seed,
+        train = item.train,
+        test = item.test,
+        predictions = item.predictions,
+        probabilities = item.probabilities,
+        metrics = dict(item.metrics))
+
+
+def _step_names(paths: list[list[Any]]) -> dict[int, str]:
+    """Returns a name for each position in the paths that holds alternatives.
+
+    A position is named for its step (as in the settings) if it holds steps,
+    or else for the genre of the techniques in it (such as "scaler"), or else
+    "step_{n}". Positions that hold workers, which are part of every path
+    rather than alternatives, are not named.
+
+    Args:
+        paths: the paths of a worker, as lists of nodes.
+
+    Returns:
+        The name of each position, by its index in a path.
+
+    """
+    names: dict[int, str] = {}
+    for position in range(max((len(p) for p in paths), default = 0)):
+        nodes = [p[position] for p in paths if position < len(p)]
+        if all(isinstance(n, chrisjen.Worker) for n in nodes):
+            continue
+        name = None
+        for node in nodes:
+            if isinstance(node, chrisjen.Step) and node.contents is not None:
+                name = str(node.name).removeprefix(f'{node.contents.name}_')
+                break
+            if isinstance(node, base.Operation):
+                name = chrisjen.library.classify(type(node))
+                break
+        name = name or f'step_{position + 1}'
+        while name in names.values():
+            name = f'{name}_{position + 1}'
+        names[position] = name
+    return names
+
+
+def _technique_of(node: Any) -> str:
+    """Returns the name of the technique that a node in a path applies.
+
+    Args:
+        node: a node in a path: a step or a technique.
+
+    Returns:
+        The name of the technique that a step wraps, or the node's name.
+
+    """
+    if isinstance(node, chrisjen.Step) and node.contents is not None:
+        return str(node.contents.name)
+    return str(node.name)

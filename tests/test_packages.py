@@ -21,7 +21,10 @@ import amos
 
 ROOT = pathlib.Path(__file__).parent.parent
 # The packages that do not use their own names when imported.
-IMPORT_NAMES = {'scikit-learn': 'sklearn', 'imbalanced-learn': 'imblearn'}
+IMPORT_NAMES = {
+    'imbalanced-learn': 'imblearn',
+    'python-docx': 'docx',
+    'scikit-learn': 'sklearn'}
 
 
 def _readme_packages() -> list[str]:
@@ -39,7 +42,7 @@ def _readme_packages() -> list[str]:
 def test_every_package_in_the_readme_has_a_test() -> None:
     packages = _readme_packages()
     assert 'scikit-learn' in packages
-    assert len(packages) == 9
+    assert len(packages) == 10
     for package in packages:
         name = IMPORT_NAMES.get(package, package.replace('-', '_'))
         assert callable(globals().get(f'test_{name}')), package
@@ -181,6 +184,19 @@ def test_matplotlib(classified: amos.Dataset, tmp_path: pathlib.Path) -> None:
     path = tmp_path / 'histograms.png'
     figure.savefig(path)
     assert path.read_bytes().startswith(b'\x89PNG')
+
+
+def test_docx(fitted: amos.Dataset, tmp_path: pathlib.Path) -> None:
+    requires('docx')
+    docx = importlib.import_module('docx')
+    scorecard = amos.evaluators.Scorecard.create(fitted)
+    path = scorecard.to_word(tmp_path / 'scorecard.docx')
+    table = docx.Document(str(path)).tables[0]
+    cells = [[cell.text for cell in row.cells] for row in table.rows]
+    expected = scorecard.table.columns.tolist()
+    assert cells[0] == expected
+    assert float(cells[1][expected.index('roc_auc')]) == pytest.approx(
+        scorecard.table.loc[0, 'roc_auc'], abs = 0.0005)
 
 
 def test_seaborn(fitted: amos.Dataset) -> None:

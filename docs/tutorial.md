@@ -153,9 +153,9 @@ print(table.index[0].startswith("stratified_split > "))
 # True
 ```
 
-The order of the combinations follows the order of the techniques in the
-settings, and ties go to the first, so the comparison is the same every time.
-A `contest` (from `chrisjen`) does the same thing without the table.
+The combinations are always tried in the same order, and ties go to the
+first, so the comparison is the same every time. A `contest` (from
+`chrisjen`) does the same thing without the table.
 
 ## 5. Use a settings file
 
@@ -198,7 +198,20 @@ print(sorted(project.result.metrics)[:4])
 # ['accuracy', 'balanced_accuracy', 'f1', 'log_loss']
 ```
 
-The `scorecard` stored every standard metric for the task.
+The `scorecard` compared every branch of the experiment on every standard
+metric for the task, and stored the final model's scores in `metrics`. It is
+ready to publish:
+
+```python
+scorecard = project.scorecard
+print(len(scorecard.table), scorecard.heading)
+# 6 6 branches ranked by roc_auc
+print(scorecard.to_markdown().splitlines()[0])
+# | rank | split | scale | model | roc_auc | accuracy | balanced_accuracy | precision | recall | f1 | log_loss |
+```
+
+Save it with `to_csv`, `to_markdown`, `to_word` (a Word document), or
+`to_image` (such as a png file), or in all four formats with `export`.
 
 ## 6. Set parameters
 
