@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.2.2
 
 * Added eleven plots from shap to the artist: `shap_bar`, `shap_beeswarm`,
   `shap_violin`, `shap_heatmap`, `shap_decision`, `shap_embedding`,
