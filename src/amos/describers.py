@@ -10,9 +10,11 @@ Contents:
     Correlations: correlations between the numeric columns.
     Describe: the `pandas` description of every column.
     Frequencies: the count and share of each value of the categorical columns.
+    KaplanMeier: the share of rows without an event over time (survival).
     LabelBalance: the count and share of each value of the label.
     MissingValues: the count and share of missing values in each column.
     Summarize: summary statistics of the numeric columns.
+    survival_curves: fits a Kaplan-Meier estimator for each group.
 
 """
 
@@ -25,7 +27,7 @@ from typing import Any, Literal, TypeAlias
 
 import pandas as pd
 
-from . import base
+from . import base, utilities
 
 # Methods of correlation that `pandas` supports.
 CorrelationMethod: TypeAlias = Literal['pearson', 'kendall', 'spearman']
@@ -165,6 +167,50 @@ class Frequencies(Describer):
 
 
 @dataclasses.dataclass
+class KaplanMeier(Describer):
+    """The share of rows without an event over time (a survival curve).
+
+    The label is the time until the event (such as rearrest) or until the row
+    stopped being observed. Set "event" to the column that is 1 if the event
+    happened and 0 if the row was censored (by default, every event was
+    observed), and "group" to a column to make a curve for each group. It
+    wraps lifelines' `KaplanMeierFitter`.
+
+    """
+
+    def describe(
+        self,
+        item: base.Dataset,
+        event: str | None = None,
+        group: str | None = None,
+        **kwargs: Any) -> pd.DataFrame:
+        """Returns the estimated survival at each time.
+
+        Args:
+            item: the dataset to describe. Its label is the time.
+            event: name of the column that is 1 if the event happened.
+                Defaults to `None`, which means every event was observed.
+            group: name of a column of groups. Defaults to `None`, which
+                makes one curve for every row.
+            **kwargs: not used.
+
+        Returns:
+            One row for each time in each group, with "group", "time",
+                "survival" (the share without the event), and "at_risk".
+
+        """
+        tables = []
+        for name, fitter in survival_curves(item, event, group).items():
+            survival = fitter.survival_function_
+            tables.append(pd.DataFrame({
+                'group': name,
+                'time': survival.index.to_numpy(),
+                'survival': survival.iloc[:, 0].to_numpy(),
+                'at_risk': fitter.event_table['at_risk'].to_numpy()}))
+        return pd.concat(tables, ignore_index = True)
+
+
+@dataclasses.dataclass
 class LabelBalance(Describer):
     """The count and share of each value of the label."""
 
@@ -245,3 +291,41 @@ class Summarize(Describer):
             'max': data.max(),
             'skew': data.skew(),
             'kurtosis': data.kurt()})
+
+
+""" Public Functions """
+
+
+def survival_curves(
+    item: base.Dataset,
+    event: str | None = None,
+    group: str | None = None) -> dict[str, Any]:
+    """Returns a fitted Kaplan-Meier estimator for each group.
+
+    `kaplan_meier` and `survival_curves` (in the plots) both use this.
+
+    Args:
+        item: the dataset. Its label is the time until the event.
+        event: name of the column that is 1 if the event happened. Defaults
+            to `None`, which means every event was observed.
+        group: name of a column of groups. Defaults to `None`, which makes
+            one estimate, called "all", for every row.
+
+    Returns:
+        The fitted `lifelines.KaplanMeierFitter` of each group, by its name.
+
+    """
+    lifelines = utilities.import_tool('lifelines')
+    times = item.y
+    observed = None if event is None else item.data[event].astype(int)
+    if group is None:
+        groups = {'all': item.data.index}
+    else:
+        groups = {
+            str(name): rows
+            for name, rows in item.data.groupby(group).groups.items()}
+    fitters = {}
+    for name, rows in groups.items():
+        fitters[name] = lifelines.KaplanMeierFitter(label = name).fit(
+            times.loc[rows], None if observed is None else observed.loc[rows])
+    return fitters

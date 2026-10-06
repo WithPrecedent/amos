@@ -81,10 +81,10 @@ your methods:
 | Stage | What it does | Techniques |
 | --- | --- | --- |
 | wrangler | Cleans the data. | `drop_duplicates`, `drop_missing`, `filter_rows`, `auto_categorize`, ... |
-| explorer | Describes the data in tables. | `summarize`, `frequencies`, `correlations`, `missing_values`, ... |
-| analyst | Splits, preprocesses, and models the data. | `stratified`, `median_impute`, `standard`, `one_hot`, `smote`, `k_best`, `logit`, `random_forest`, `ols`, ... |
-| critic | Evaluates the model. | `scorecard`, `roc_auc`, `confusion`, `permutation_importance`, `shap_importance`, ... |
-| artist | Draws figures. | `roc_curve`, `confusion_heatmap`, `importance_plot`, `histograms`, ... |
+| explorer | Describes the data in tables. | `summarize`, `frequencies`, `correlations`, `missing_values`, `kaplan_meier`, ... |
+| analyst | Splits, preprocesses, and models the data, or estimates causal effects. | `stratified`, `median_impute`, `standard`, `one_hot`, `date_parts`, `smote`, `logit`, `catboost`, `fixest`, `cox`, `partially_linear`, ... |
+| critic | Evaluates the model. | `scorecard`, `roc_auc`, `fairness`, `conformal`, `permutation_importance`, `shap_importance`, ... |
+| artist | Draws figures. | `roc_curve`, `confusion_heatmap`, `importance_plot`, `survival_curves`, ... |
 
 The stages are only a convention: any technique can be used in any worker, and
 you can name your workers whatever you like.
@@ -110,13 +110,21 @@ Open scholarship means that others can check your work. `amos` helps by:
 | Package | What `amos` uses it for |
 | --- | --- |
 | [scikit-learn](https://scikit-learn.org) | Splitting, imputing, scaling, feature selection, models, metrics, and permutation importance. |
-| [category_encoders](https://contrib.scikit-learn.org/category_encoders/) | Target, weight of evidence, James-Stein, and a dozen other encoders. |
+| [category_encoders](https://contrib.scikit-learn.org/category_encoders/) and [skrub](https://skrub-data.org) | Target, weight of evidence, and a dozen other encoders, and encoders for messy text and for dates. |
 | [imbalanced-learn](https://imbalanced-learn.org) | SMOTE and other ways to balance the classes of the training rows. |
-| [xgboost](https://xgboost.readthedocs.io) and [lightgbm](https://lightgbm.readthedocs.io) | Gradient boosting. |
-| [statsmodels](https://www.statsmodels.org) | Regressions with standard errors, p-values, and confidence intervals. |
-| [shap](https://shap.readthedocs.io) | Explaining models with SHAP values. |
+| [xgboost](https://xgboost.readthedocs.io), [lightgbm](https://lightgbm.readthedocs.io), and [catboost](https://catboost.ai) | Gradient boosting (catboost uses categories directly). |
+| [InterpretML](https://interpret.ml) | Explainable Boosting Machines: accurate models whose every effect can be shown. |
+| [TabPFN](https://github.com/PriorLabs/TabPFN) | A pretrained model that is often the most accurate on small data. |
+| [Optuna](https://optuna.org) | Hyperparameter searches that learn from each try. |
+| [statsmodels](https://www.statsmodels.org) and [pyfixest](https://py-econometrics.github.io/pyfixest/) | Regressions with standard errors, p-values, and confidence intervals, including fixed effects and clustered standard errors. |
+| [DoubleML](https://docs.doubleml.org) | Causal effects of a treatment, estimated with double machine learning. |
+| [lifelines](https://lifelines.readthedocs.io) | Survival analysis: Kaplan-Meier curves and Cox regression of the time until an event. |
+| [fairlearn](https://fairlearn.org) | Fairness metrics that compare a model across groups. |
+| [MAPIE](https://mapie.readthedocs.io) | Conformal prediction: intervals and sets with a known rate of coverage. |
+| [shap](https://shap.readthedocs.io) and [eli5](https://eli5.readthedocs.io) | Explaining models with SHAP values and weights. |
 | [matplotlib](https://matplotlib.org) and [seaborn](https://seaborn.pydata.org) | Figures, and scorecards as images. |
-| [python-docx](https://python-docx.readthedocs.io) | Scorecards as Word documents. |
+| [great_tables](https://posit-dev.github.io/great-tables/) and [python-docx](https://python-docx.readthedocs.io) | Scorecards as HTML tables and Word documents. |
+| [Polars](https://pola.rs) | Reading data from Polars data frames. |
 
 Unlike scikit-learn, every technique keeps your data in a `pandas.DataFrame`
 with named columns, can be limited to some `columns`, and is given the label
@@ -130,7 +138,14 @@ A result that depends on one arbitrary choice of preprocessing or model is
 fragile. The `experiment` design tries **every combination** of the techniques
 you list for each step and reports how each one did, so readers can see that
 your conclusions are robust (or not). The critic's `scorecard` puts every
-combination side by side, on every metric, in a table ready for a paper. Any step can include `none`, which tests
+combination side by side, on every metric, in a table ready for a paper (as
+csv, Markdown, LaTeX, HTML, Word, or an image).
+
+Name the columns that identify groups of people or places (such as race,
+court, or judge) as `groups`, and `amos` keeps them out of the model's
+features while it uses them to check fairness across groups, to add fixed
+effects and cluster standard errors, and to keep each group in one set when
+it splits the data. Any step can include `none`, which tests
 whether a technique helps at all.
 
 ### Extensible
@@ -164,17 +179,26 @@ pip install amos
 
 The other packages that `amos` wraps are optional. A technique imports its
 package only when it is used, and tells you which extra to install if the
-package is missing. Install them all with `pip install amos[all]`, or choose:
+package is missing. Install them all (except TabPFN) with `pip install
+amos[all]`, or choose:
 
 | Extra | Installs | For |
 | --- | --- | --- |
-| `encoders` | category_encoders | Target and other encoders. |
-| `sampling` | imbalanced-learn | Samplers such as `smote`. |
-| `boosting` | xgboost, lightgbm | `xgboost` and `lightgbm` models. |
-| `statistics` | statsmodels | `ols` and `glm` models with inference. |
-| `word` | python-docx | Scorecards as Word documents. |
-| `explain` | shap | `shap_importance`. |
+| `boosting` | xgboost, lightgbm, catboost | Gradient boosting models. |
+| `causal` | DoubleML | Causal effects (`partially_linear` and `interactive_regression`). |
+| `encoders` | category_encoders, skrub | Target encoders, and encoders for text and dates. |
+| `explain` | shap, eli5, InterpretML | `shap_importance`, `explain_weights`, and `explainable_boosting`. |
+| `fairness` | fairlearn | Fairness metrics and the `fairness` table. |
 | `plots` | matplotlib, seaborn | The artist's figures, and scorecards as images. |
+| `polars` | Polars, pyarrow | Reading Polars data frames. |
+| `sampling` | imbalanced-learn | Samplers such as `smote`. |
+| `statistics` | statsmodels, pyfixest | `ols`, `glm`, and `fixest` models with inference. |
+| `survival` | lifelines | `cox`, `kaplan_meier`, `survival_curves`, and `concordance`. |
+| `tables` | great_tables | Scorecards as HTML tables. |
+| `tuning` | Optuna | `search = "optuna"` for any model. |
+| `uncertainty` | MAPIE | `conformal` intervals and sets. |
+| `word` | python-docx | Scorecards as Word documents. |
+| `tabpfn` | TabPFN | The `tabpfn` model. It needs PyTorch, which is large, so it is not part of `all`. |
 
 ### Usage
 

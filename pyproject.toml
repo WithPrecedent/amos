@@ -45,14 +45,23 @@ dependencies = [
 # Each extra adds the packages that one group of techniques wraps. A technique
 # imports its package only when it is used, so the extras can be installed in
 # any combination.
-boosting = ["lightgbm>=4.0", "xgboost>=2.0"]
-encoders = ["category-encoders>=2.6"]
-explain = ["shap>=0.45"]
+boosting = ["catboost>=1.2", "lightgbm>=4.0", "xgboost>=2.0"]
+causal = ["doubleml>=0.9"]
+encoders = ["category-encoders>=2.6", "skrub>=0.5"]
+explain = ["eli5>=0.16", "interpret-core>=0.6", "shap>=0.45"]
+fairness = ["fairlearn>=0.12"]
 plots = ["matplotlib>=3.8", "seaborn>=0.13"]
+polars = ["polars>=1.0", "pyarrow>=15"]
 sampling = ["imbalanced-learn>=0.12"]
-statistics = ["statsmodels>=0.14"]
+statistics = ["pyfixest>=0.30", "statsmodels>=0.14"]
+survival = ["lifelines>=0.29"]
+tables = ["great-tables>=0.15"]
+tuning = ["optuna>=4.0", "optuna-integration[sklearn]>=4.0"]
+uncertainty = ["mapie>=1.0"]
 word = ["python-docx>=1.1"]
-all = ["amos[boosting,encoders,explain,plots,sampling,statistics,word]"]
+# TabPFN needs PyTorch, which is large, so it is not part of "all".
+tabpfn = ["tabpfn>=2.0"]
+all = ["amos[boosting,causal,encoders,explain,fairness,plots,polars,sampling,statistics,survival,tables,tuning,uncertainty,word]"]
 
 [project.urls]
 Documentation = "https://WithPrecedent.github.io/amos"
@@ -81,13 +90,27 @@ dev = [
     "ruff",
     {include-group = "tests"}]
 tests = [
+    "catboost>=1.2",
     "category-encoders>=2.6",
+    "doubleml>=0.9",
+    "eli5>=0.16",
+    "fairlearn>=0.12",
+    "great-tables>=0.15",
     "imbalanced-learn>=0.12",
+    "interpret-core>=0.6",
+    "lifelines>=0.29",
     "lightgbm>=4.0",
+    "mapie>=1.0",
     "matplotlib>=3.8",
+    "optuna>=4.0",
+    "optuna-integration[sklearn]>=4.0",
+    "polars>=1.0",
+    "pyarrow>=15",
+    "pyfixest>=0.30",
     "python-docx>=1.1",
     "seaborn>=0.13",
     "shap>=0.45",
+    "skrub>=0.5",
     "statsmodels>=0.14",
     "xgboost>=2.0",
     "coverage",

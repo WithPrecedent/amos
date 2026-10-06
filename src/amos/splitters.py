@@ -121,16 +121,20 @@ class GroupSplit(Splitter):
             item: the dataset to split.
             test_size: share of the groups to put in the test set.
             groups: name of the column that identifies each row's group.
-                Defaults to `None`, but it is required.
+                Defaults to `None`, in which case the dataset's first group
+                is used.
             **kwargs: not used.
 
         Raises:
-            ValueError: if `groups` is not given.
+            ValueError: if `groups` is not given and the dataset has no
+                groups.
 
         Returns:
             The training rows and the test rows.
 
         """
+        if groups is None and item.groups:
+            groups = item.groups[0]
         if groups is None:
             message = f'{self.name!r} needs the name of a "groups" column'
             raise ValueError(message)

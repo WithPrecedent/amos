@@ -274,36 +274,40 @@ class FilterRows(Cleaner):
 
 @dataclasses.dataclass
 class KeepColumns(Cleaner):
-    """Keeps only some columns. The label is always kept."""
+    """Keeps only some columns. The label and groups are always kept."""
 
     def clean(
         self,
         data: pd.DataFrame,
         columns: Sequence[str] | None = None,
         label: str | None = None,
+        groups: Sequence[str] = (),
         **kwargs: Any) -> pd.DataFrame:
-        """Keeps `columns` (and `label`).
+        """Keeps `columns` (and `label` and `groups`).
 
         Args:
             data: the data to clean.
             columns: names of the columns to keep. Defaults to `None`, which
                 keeps every column.
             label: name of the label, which is always kept. Defaults to `None`.
+            groups: names of the group columns, which are always kept.
+                Defaults to an empty tuple.
             **kwargs: not used.
 
         Returns:
-            The data, with only `columns` and the label.
+            The data, with only `columns`, the label, and the groups.
 
         """
         if columns is None:
             return data
         kept = _columns(data, columns)
-        if label is not None and label not in kept:
-            kept.append(label)
+        for name in [label, *groups]:
+            if name is not None and name not in kept:
+                kept.append(name)
         return data[kept]
 
     def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
-        """Keeps the chosen columns of `item` and its label.
+        """Keeps the chosen columns of `item`, its label, and its groups.
 
         Args:
             item: the dataset to clean.
@@ -313,12 +317,13 @@ class KeepColumns(Cleaner):
             The cleaned dataset.
 
         """
-        return super().implement(item, **{'label': item.label, **kwargs})
+        return super().implement(
+            item, **{'label': item.label, 'groups': item.groups, **kwargs})
 
 
 @dataclasses.dataclass
 class RenameColumns(Cleaner):
-    """Renames columns. Renaming the label also renames it in the dataset."""
+    """Renames columns, including the label and groups of the dataset."""
 
     def clean(
         self,
@@ -351,11 +356,15 @@ class RenameColumns(Cleaner):
 
         """
         names = dict(kwargs.get('names') or {})
-        if item.label in names:
-            # The label is renamed before the data so that `replace` finds it.
-            label = names[item.label]
-            item.data = item.data.rename(columns = {item.label: label})
-            item.label = label
+        # The label and groups are renamed before the data so that `replace`
+        # finds them.
+        special = [c for c in [item.label, *item.groups] if c in names]
+        if special:
+            item.data = item.data.rename(
+                columns = {c: names[c] for c in special})
+            item.groups = [names.get(g, g) for g in item.groups]
+            if item.label in names:
+                item.label = names[item.label]
         return super().implement(item, **kwargs)
 
 

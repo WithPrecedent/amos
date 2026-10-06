@@ -40,7 +40,7 @@ class Project(chrisjen.Project):
     * The item is made into a `Dataset`. Pass a `pandas.DataFrame`, a path to
       a data file, or anything else that `Dataset.create` accepts. The
       "general" section of the settings can set the dataset's "label",
-      "task", and "seed".
+      "task", "seed", and "groups".
     * Each call to `apply` works on a copy of the item, so applying a project
       twice gives the same result, and the item is never changed. A project
       created without an item is drafted but not applied.
@@ -246,7 +246,8 @@ class Project(chrisjen.Project):
             raise TypeError(message)
         made = [
             node for node in _nodes(self.workflow)
-            if isinstance(node, evaluators.Scorecard) and node.table is not None]
+            if isinstance(node, evaluators.Scorecard)
+            and node.table is not None]
         if made:
             return made[-1]
         return evaluators.Scorecard.create(self.result)
@@ -317,8 +318,8 @@ class Project(chrisjen.Project):
             ValueError: if `item` is `None`.
 
         Returns:
-            A `Dataset`, with the "label", "task", and "seed" from the
-                "general" section of the settings if it did not have them.
+            A `Dataset`, with the "label", "task", "seed", and "groups" from
+                the "general" section of the settings if it did not have them.
 
         """
         if item is None:
@@ -334,7 +335,8 @@ class Project(chrisjen.Project):
             item,
             label = general.get('label'),
             task = general.get('task'),
-            seed = general.get('seed'))
+            seed = general.get('seed'),
+            groups = general.get('groups'))
 
 
 """ Private Functions """

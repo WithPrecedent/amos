@@ -75,3 +75,49 @@ def test_evaluators_need_a_model(classified: amos.Dataset) -> None:
         evaluators.Confusion().apply(classified)
     with pytest.raises(ValueError, match = 'apply a model first'):
         evaluators.FeatureImportance().apply(classified)
+
+
+def test_conformal_sets_for_classification(fitted: amos.Dataset) -> None:
+    requires('mapie')
+    evaluators.Conformal().apply(fitted, confidence = 0.9, cv = 3)
+    table = fitted.tables['conformal']
+    assert list(table.columns) == [
+        'actual', 'prediction', 'set', 'size', 'covered']
+    assert len(table) == len(fitted.test)
+    assert fitted.metrics['coverage'] == pytest.approx(table['covered'].mean())
+    assert fitted.metrics['coverage'] >= 0.8
+    assert fitted.metrics['set_size'] >= 1
+
+
+def test_conformal_intervals_for_regression(
+    fitted_regression: amos.Dataset) -> None:
+    requires('mapie')
+    evaluators.Conformal().apply(fitted_regression, confidence = 0.8, cv = 3)
+    table = fitted_regression.tables['conformal']
+    assert (table['lower'] <= table['upper']).all()
+    assert fitted_regression.metrics['interval_width'] > 0
+    assert fitted_regression.metrics['coverage'] >= 0.6
+
+
+def test_explain_weights(fitted: amos.Dataset) -> None:
+    requires('eli5')
+    evaluators.ExplainWeights().apply(fitted, top = 4)
+    table = fitted.tables['explain_weights']
+    assert {'feature', 'weight'} <= set(table.columns)
+    assert len(table) == 4
+
+
+def test_explain_weights_of_trees(classified: amos.Dataset) -> None:
+    requires('eli5')
+    amos.models.RandomForest().apply(classified, n_estimators = 10)
+    evaluators.ExplainWeights().apply(classified)
+    assert 'std' in classified.tables['explain_weights'].columns
+
+
+def test_feature_importance_of_explainable_boosting(
+    classified: amos.Dataset) -> None:
+    requires('interpret')
+    amos.models.ExplainableBoosting().apply(classified, interactions = 0)
+    evaluators.FeatureImportance().apply(classified)
+    table = classified.tables['feature_importance']
+    assert set(table.index) == set(classified.features)

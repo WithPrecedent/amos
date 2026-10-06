@@ -5,13 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from conftest import SEED, make_mixed, requires
+from conftest import SEED, make_mixed, package_of, requires, techniques
 
 import amos
 from amos import transformers
 
 SCALERS = sorted(amos.library.get_genre('scaler').items())
-ENCODERS = sorted(amos.library.get_genre('encoder').items())
+# `date_parts` encodes dates, so it is tested on its own.
+ENCODERS = [(n, k) for n, k in techniques('encoder') if n != 'date_parts']
 IMPUTERS = sorted(amos.library.get_genre('imputer').items())
 MIXERS = sorted(amos.library.get_genre('mixer').items())
 REDUCERS = sorted(amos.library.get_genre('reducer').items())
@@ -44,8 +45,7 @@ def test_scalers_change_only_numeric_features(
 def test_encoders_make_categories_numeric(
     name: str,
     kind: type[amos.Encoder]) -> None:
-    if kind.contents.startswith('category_encoders'):
-        requires('category_encoders')
+    requires(package_of(kind))
     dataset = _split_mixed()
     kind().apply(dataset)
     assert dataset.categoricals == []
@@ -156,3 +156,26 @@ def test_output_without_names_is_named(classified: amos.Dataset) -> None:
     amos.Transformer(name = 'halves', contents = Halves).apply(classified)
     assert 'halves_0' in classified.features
     assert 'halves_1' in classified.features
+
+
+def test_date_parts_lets_models_use_dates(mixed: amos.Dataset) -> None:
+    requires('skrub')
+    amos.splitters.Stratified().apply(mixed)
+    transformers.DateParts().apply(mixed)
+    assert mixed.dates == []
+    assert 'joined_year' in mixed.numerics
+    assert mixed.history[-1]['columns'] == ['joined']
+
+
+def test_column_wise_fits_a_copy_to_each_column() -> None:
+    requires('skrub')
+    data = make_mixed()
+    data['county'] = data['region'].str.upper()
+    dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
+    transformers.MinHash().apply(
+        dataset, columns = ['region', 'county'], n_components = 2)
+    tool = dataset.fitted['min_hash']
+    assert isinstance(tool, transformers.ColumnWise)
+    assert set(tool.transformers_) == {'region', 'county'}
+    assert list(tool.get_feature_names_out()) == [
+        'region_0', 'region_1', 'county_0', 'county_1']

@@ -37,6 +37,40 @@ def requires(package: str) -> None:
         pytest.skip(f'{package} cannot be imported: {error}')
 
 
+def techniques(genre: str) -> list[tuple[str, type]]:
+    """Returns the name and class of every technique in a genre, sorted.
+
+    Techniques in the genre's own genres (such as the group metrics in the
+    metrics) are included.
+    """
+    found: list[tuple[str, type]] = []
+
+    def collect(layer: dict) -> None:
+        for name, value in layer.items():
+            if isinstance(value, dict):
+                collect(value)
+            else:
+                found.append((name, value))
+
+    collect(amos.library.get_genre(genre))
+    return sorted(found)
+
+
+def package_of(kind: type) -> str:
+    """Returns the package that a technique's tool comes from."""
+    tools = [getattr(kind, 'contents', None), *getattr(kind, 'tools', {}).values()]
+    adapters = {
+        'FixedEffects': 'pyfixest',
+        'ProportionalHazards': 'lifelines',
+        'Statsmodel': 'statsmodels'}
+    for tool in tools:
+        if isinstance(tool, str):
+            return tool.split('.')[0]
+        if tool is not None:
+            return adapters.get(tool.__name__, 'sklearn')
+    return 'sklearn'
+
+
 def make_mixed(rows: int = 200, seed: int = 7) -> pd.DataFrame:
     """Returns data with every kind of column and a text label.
 

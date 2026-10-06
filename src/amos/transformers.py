@@ -1,11 +1,12 @@
 """Techniques that learn from the training rows and then change every row.
 
 These are the preprocessing techniques of the "analyst" stage. Each one wraps a
-transformer from scikit-learn or category_encoders. A transformer is fitted to
-the training rows only and then changes every row, so nothing is learned from
-the test rows. Unlike scikit-learn, every transformer keeps the data in a
-`pandas.DataFrame` with named columns, can be limited to some `columns`, and
-is given the label when it is fitted (which target encoders need).
+transformer from scikit-learn, category_encoders, or skrub. A transformer is
+fitted to the training rows only and then changes every row, so nothing is
+learned from the test rows. Unlike scikit-learn, every transformer keeps the
+data in a `pandas.DataFrame` with named columns, can be limited to some
+`columns`, and is given the label when it is fitted (which target encoders
+need).
 
 Each genre chooses the columns it changes by default:
 
@@ -13,7 +14,7 @@ Each genre chooses the columns it changes by default:
 | --- | --- |
 | `Imputer` | Features with missing values. |
 | `Scaler` | Numeric features. |
-| `Encoder` | Categorical and text features. |
+| `Encoder` | Categorical and text features (dates, for `date_parts`). |
 | `Mixer` | Numeric features. |
 | `Reducer` | Numeric and boolean features. |
 
@@ -21,6 +22,8 @@ Pass `columns` as a parameter to choose others.
 
 Contents:
     Transformer: base class for techniques that fit and transform data.
+    ColumnWise: applies a transformer that takes one column to each of
+        several columns.
     Imputer: genre of techniques that fill missing values.
     Scaler: genre of techniques that rescale numbers.
     Encoder: genre of techniques that turn categories into numbers.
@@ -30,9 +33,10 @@ Contents:
         imputers.
     Bins, Binarize, Gauss, MaxAbs, MinMax, Normalize, Quantile, Robust,
         Standard: scalers.
-    BackwardDifference, BaseN, Binary, CatBoost, Count, Hashing, Helmert,
-        JamesStein, LeaveOneOut, MEstimate, OneHot, Ordinal,
-        PolynomialCoding, SumCoding, Target, WeightOfEvidence: encoders.
+    BackwardDifference, BaseN, Binary, CatBoost, Count, DateParts, Gap,
+        Hashing, Helmert, JamesStein, LeaveOneOut, MEstimate, MinHash,
+        OneHot, Ordinal, PolynomialCoding, SumCoding, Target, Tfidf,
+        WeightOfEvidence: encoders.
     Interactions, Polynomial, Splines: mixers.
     KBest, PCA, SelectPercentile, VarianceThreshold: reducers.
 
@@ -85,6 +89,9 @@ class Transformer(base.Operation, abc.ABC):
 
     # The kinds of features (see `Dataset`) that are transformed by default.
     kinds: ClassVar[tuple[str, ...]] = ('numerics', 'categoricals', 'booleans')
+    # Whether the tool takes one column at a time (as skrub's encoders do), so
+    # that a copy of it is fitted to each column.
+    columnwise: ClassVar[bool] = False
 
     """ Public Methods """
 
@@ -114,6 +121,8 @@ class Transformer(base.Operation, abc.ABC):
                 note = 'there were no columns to transform')
             return item
         tool = self._make_tool(item, kwargs)
+        if self.columnwise:
+            tool = ColumnWise(transformer = tool)
         _use_pandas_output(tool)
         self._fit(tool, item.x_train[columns], _target(item))
         values = self._to_frame(
@@ -200,6 +209,103 @@ class Transformer(base.Operation, abc.ABC):
             else:
                 names = [f'{self.name}_{i}' for i in range(array.shape[1])]
         return pd.DataFrame(array, index = index, columns = names)
+
+
+# `eq` is `False` so that adapters are compared by identity, as scikit-learn
+# transformers are.
+@dataclasses.dataclass(eq = False)
+class ColumnWise:
+    """Applies a transformer that takes one column to each of several columns.
+
+    skrub's encoders, for example, encode one column at a time. A copy of the
+    transformer is fitted to each column, and their outputs are joined.
+
+    Args:
+        transformer: the transformer to copy for each column.
+
+    Attributes:
+        transformers_: the fitted copy for each column, by its name.
+
+    """
+
+    transformer: Any
+    transformers_: dict[str, Any] = dataclasses.field(
+        default_factory = dict, init = False, repr = False)
+
+    """ Public Methods """
+
+    def fit(self, x: pd.DataFrame, y: Any = None) -> ColumnWise:
+        """Fits a copy of the transformer to each column of `x`.
+
+        Args:
+            x: the columns to transform.
+            y: the labels, passed to transformers that take them. Defaults to
+                `None`.
+
+        Returns:
+            This adapter.
+
+        """
+        sklearn_base = importlib.import_module('sklearn.base')
+        self.transformers_ = {}
+        for column in x.columns:
+            transformer = sklearn_base.clone(self.transformer)
+            if y is not None and _accepts_target(transformer.fit):
+                transformer.fit(x[column], y)
+            else:
+                transformer.fit(x[column])
+            self.transformers_[column] = transformer
+        return self
+
+    def get_feature_names_out(self, *args: Any) -> np.ndarray:
+        """Returns the names of the columns that `transform` makes.
+
+        Args:
+            *args: not used.
+
+        Returns:
+            The names, in order.
+
+        """
+        names = [
+            name for transformer in self.transformers_.values()
+            for name in transformer.get_feature_names_out()]
+        return np.asarray(names, dtype = object)
+
+    def get_params(
+        self,
+        deep: bool = True) -> dict[str, Any]:  # noqa: ARG002, FBT002
+        """Returns the parameters, as scikit-learn expects.
+
+        Args:
+            deep: not used.
+
+        Returns:
+            The parameters.
+
+        """
+        return {'transformer': self.transformer}
+
+    def transform(self, x: pd.DataFrame) -> pd.DataFrame:
+        """Transforms each column with its fitted copy and joins the results.
+
+        Args:
+            x: the columns to transform.
+
+        Returns:
+            The joined output, with the index of `x`.
+
+        """
+        outputs = []
+        for column, transformer in self.transformers_.items():
+            output = transformer.transform(x[column])
+            if not isinstance(output, pd.DataFrame):
+                output = pd.DataFrame(
+                    np.asarray(output),
+                    columns = transformer.get_feature_names_out())
+            output.index = x.index
+            outputs.append(output)
+        return pd.concat(outputs, axis = 1)
 
 
 @dataclasses.dataclass
@@ -462,6 +568,37 @@ class Count(Encoder):
 
 
 @dataclasses.dataclass
+class DateParts(Encoder):
+    """Splits dates and times into parts: year, month, day, and so on.
+
+    This is the only encoder that changes dates (and only dates) by default,
+    so it lets models use them. It wraps skrub's `DatetimeEncoder`.
+
+    """
+
+    kinds: ClassVar[tuple[str, ...]] = ('dates',)
+    columnwise: ClassVar[bool] = True
+
+    contents: str = 'skrub.DatetimeEncoder'
+
+
+@dataclasses.dataclass
+class Gap(Encoder):
+    """Encodes messy text as a mix of topics of its substrings.
+
+    Useful for text with typos or variations (such as "District Ct." and
+    "district court"). Each new column is named for the most common
+    substrings of its topic, so it can be interpreted. It wraps skrub's
+    `GapEncoder` (10 topics by default).
+
+    """
+
+    columnwise: ClassVar[bool] = True
+
+    contents: str = 'skrub.GapEncoder'
+
+
+@dataclasses.dataclass
 class Hashing(Encoder):
     """Hashes the categories into a fixed number of columns."""
 
@@ -496,6 +633,20 @@ class MEstimate(Encoder):
     """Target encoding shrunk toward the overall mean by m rows."""
 
     contents: str = 'category_encoders.MEstimateEncoder'
+
+
+@dataclasses.dataclass
+class MinHash(Encoder):
+    """Encodes messy text by hashing its substrings, which is fast and robust.
+
+    It wraps skrub's `MinHashEncoder` (30 columns for each column by
+    default).
+
+    """
+
+    columnwise: ClassVar[bool] = True
+
+    contents: str = 'skrub.MinHashEncoder'
 
 
 @dataclasses.dataclass
@@ -547,6 +698,20 @@ class Target(Encoder):
     """Replaces each category with the mean label of its training rows."""
 
     contents: str = 'category_encoders.TargetEncoder'
+
+
+@dataclasses.dataclass
+class Tfidf(Encoder):
+    """Encodes text by the TF-IDF of its substrings, reduced with SVD.
+
+    A strong default for text categories with many distinct values. It wraps
+    skrub's `StringEncoder` (30 columns for each column by default).
+
+    """
+
+    columnwise: ClassVar[bool] = True
+
+    contents: str = 'skrub.StringEncoder'
 
 
 @dataclasses.dataclass

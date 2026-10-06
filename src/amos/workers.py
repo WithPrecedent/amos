@@ -157,21 +157,23 @@ class Experiment(chrisjen.Contest):
 def _outcome(item: base.Dataset) -> base.Dataset:
     """Returns the outcome of a branch: its label, predictions, and metrics.
 
-    Keeping only the label column (not every feature) lets the winning dataset
-    remember every branch without keeping a copy of the data for each.
+    Keeping only the label and group columns (not every feature) lets the
+    winning dataset remember every branch without keeping a copy of the data
+    for each. The groups let fairness metrics score each branch.
 
     Args:
         item: the dataset that a branch made.
 
     Returns:
-        A `Dataset` with only the label column, and the predictions,
-            probabilities, and metrics of `item`.
+        A `Dataset` with only the label and group columns, and the
+            predictions, probabilities, and metrics of `item`.
 
     """
-    columns = [] if item.label is None else [item.label]
+    columns = ([] if item.label is None else [item.label]) + item.groups
     return base.Dataset(
         data = item.data[columns].copy(),
         label = item.label,
+        groups = item.groups,
         task = item.task,
         seed = item.seed,
         train = item.train,

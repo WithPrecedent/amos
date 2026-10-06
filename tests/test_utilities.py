@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import statistics
 
 import pytest
@@ -103,3 +104,27 @@ def test_random_search_space_makes_ranges() -> None:
 def test_search_space_rejects_unknown_searches() -> None:
     with pytest.raises(ValueError, match = 'grid'):
         utilities.search_space({}, 'bayes')
+
+
+def test_optuna_search_space() -> None:
+    requires('optuna')
+    _, space = utilities.search_space({
+        'depth': [3, 9],
+        'rate': [0.001, 0.1],
+        'share': [0.2, 0.8],
+        'kind': ['gini', 'entropy']}, 'optuna')
+    assert type(space['depth']).__name__ == 'IntDistribution'
+    assert (space['depth'].low, space['depth'].high) == (3, 9)
+    assert space['rate'].log
+    assert not space['share'].log
+    assert type(space['kind']).__name__ == 'CategoricalDistribution'
+
+
+def test_preserved_logging_restores_the_root_logger() -> None:
+    root = logging.getLogger()
+    level, handlers = root.level, list(root.handlers)
+    with utilities.preserved_logging():
+        logging.basicConfig(level = logging.INFO, force = True)
+        assert root.level == logging.INFO
+    assert root.level == level
+    assert root.handlers == handlers

@@ -77,6 +77,12 @@ class Dataset:
         seed: seed for every random process, which makes a workflow
             reproducible. It is passed as `random_state` to every tool that
             accepts one. Defaults to `None`.
+        groups: names of columns that identify groups of rows (such as race,
+            court, or judge). They stay in the data but are not features, so
+            transformers and models do not use them directly. Fairness metrics
+            compare predictions across them, `fixest` can use them as fixed
+            effects or clusters, and `group_split` can keep each group in one
+            set. Defaults to an empty `list`.
         train: index labels of the rows in the training set. Defaults to
             `None`, which means that every row is used for training.
         test: index labels of the rows in the test set. Defaults to `None`,
@@ -107,6 +113,7 @@ class Dataset:
     label: str | None = None
     task: str | None = None
     seed: int | None = None
+    groups: list[str] = dataclasses.field(default_factory = list)
     train: pd.Index | None = None
     test: pd.Index | None = None
     model: Any = None
@@ -123,12 +130,13 @@ class Dataset:
     """ Initialization Methods """
 
     def __post_init__(self) -> None:
-        """Validates `data`, `label`, and `task`."""
+        """Validates `data`, `label`, `groups`, and `task`."""
         if not isinstance(self.data, pd.DataFrame):
             self.data = pd.DataFrame(self.data)
         if self.label is not None and self.label not in self.data.columns:
             message = f'the label {self.label!r} is not a column of the data'
             raise KeyError(message)
+        self.groups = _validate_groups(self.groups, self.data, self.label)
         if self.task is None and self.label is not None:
             self.task = self.infer_task()
         elif self.task is not None and self.task not in _TASKS:
@@ -144,27 +152,32 @@ class Dataset:
         *,
         label: str | None = None,
         task: str | None = None,
-        seed: int | None = None) -> Dataset:
+        seed: int | None = None,
+        groups: Sequence[str] | str | None = None) -> Dataset:
         """Returns a `Dataset` made from `item`.
 
         Args:
-            item: a `Dataset`, a `pandas.DataFrame` or `Series`, a `numpy`
-                array, a `dict` of columns, the path to a data file (csv, tsv,
-                Excel, parquet, feather, json, Stata, SPSS, or pickle), or an
-                object with a `frame` attribute (such as a scikit-learn
-                dataset loaded with `as_frame = True`).
+            item: a `Dataset`, a `pandas.DataFrame` or `Series`, a Polars
+                `DataFrame` or `LazyFrame`, a `numpy` array, a `dict` of
+                columns, the path to a data file (csv, tsv, Excel, parquet,
+                feather, json, Stata, SPSS, or pickle), or an object with a
+                `frame` attribute (such as a scikit-learn dataset loaded with
+                `as_frame = True`).
             label: name of the label column. Defaults to `None`. If `item` has
                 a `target` (as a scikit-learn dataset does), its name is used.
             task: "classify" or "regress". Defaults to `None`, in which case
                 it is inferred from the label.
             seed: seed for every random process. Defaults to `None`.
+            groups: names of the columns that identify groups of rows.
+                Defaults to `None`.
 
         Raises:
             TypeError: if `item` cannot be made into a `Dataset`.
 
         Returns:
             A `Dataset`. If `item` is already a `Dataset`, it is returned
-                with any of `label`, `task`, and `seed` that it lacks.
+                with any of `label`, `task`, `seed`, and `groups` that it
+                lacks.
 
         """
         if isinstance(item, Dataset):
@@ -178,9 +191,16 @@ class Dataset:
                 item.task = task
             if item.seed is None:
                 item.seed = seed
+            if not item.groups and groups:
+                item.groups = _validate_groups(groups, item.data, item.label)
             return item
         if isinstance(item, str | pathlib.Path):
             data = _read(pathlib.Path(item))
+        elif type(item).__module__.startswith('polars'):
+            # Polars is optional, so its frames are recognized by their module.
+            # A `LazyFrame` is collected first.
+            frame = item.collect() if hasattr(item, 'collect') else item
+            data = frame.to_pandas()
         elif isinstance(item, pd.DataFrame):
             data = item
         elif isinstance(item, pd.Series):
@@ -197,7 +217,12 @@ class Dataset:
         else:
             message = f'a Dataset cannot be made from {type(item).__name__}'
             raise TypeError(message)
-        return cls(data = data, label = label, task = task, seed = seed)
+        return cls(
+            data = data,
+            label = label,
+            task = task,
+            seed = seed,
+            groups = _listify(groups))
 
     """ Properties """
 
@@ -228,9 +253,16 @@ class Dataset:
             return values
 
     @property
+    def dates(self) -> list[str]:
+        """Returns the names of the features that are dates or times."""
+        return self._kind('dates')
+
+    @property
     def features(self) -> list[str]:
-        """Returns the names of every column except the label."""
-        return [c for c in self.data.columns if c != self.label]
+        """Returns the names of every column except the label and groups."""
+        return [
+            c for c in self.data.columns
+            if c != self.label and c not in self.groups]
 
     @property
     def is_split(self) -> bool:
@@ -322,11 +354,15 @@ class Dataset:
             data: the new data.
 
         Raises:
-            KeyError: if the label is not a column of `data`.
+            KeyError: if the label or a group is not a column of `data`.
 
         """
         if self.label is not None and self.label not in data.columns:
             message = f'the label {self.label!r} is not a column of the data'
+            raise KeyError(message)
+        missing = [g for g in self.groups if g not in data.columns]
+        if missing:
+            message = f'the groups {missing} are not columns of the data'
             raise KeyError(message)
         self.data = data
         if self.train is not None:
@@ -334,7 +370,11 @@ class Dataset:
         if self.test is not None:
             self.test = self.test[self.test.isin(data.index)]
 
-    def resample(self, x: pd.DataFrame, y: Sequence[Any]) -> None:
+    def resample(
+        self,
+        x: pd.DataFrame,
+        y: Sequence[Any],
+        origins: Sequence[int] | np.ndarray | None = None) -> None:
         """Replaces the training rows with `x` and `y`.
 
         Samplers add or remove training rows. The test rows (and their index
@@ -345,11 +385,25 @@ class Dataset:
         Args:
             x: features of the new training rows.
             y: labels of the new training rows.
+            origins: for each new row, the position (in the training rows) of
+                the row it copies, which gives it that row's groups, or -1 for
+                a synthetic row, which has no groups. Defaults to `None`, in
+                which case no new row has groups.
 
         """
         label = self._require_label()
         rows = x.copy()
         rows[label] = np.asarray(y)
+        if self.groups:
+            training = self.data.loc[self._train_rows(), self.groups]
+            positions = np.full(len(rows), -1) if origins is None else (
+                np.asarray(origins))
+            copied = positions >= 0
+            for group in self.groups:
+                values = pd.Series(
+                    pd.NA, index = rows.index, dtype = training[group].dtype)
+                values[copied] = training[group].to_numpy()[positions[copied]]
+                rows[group] = values
         rows.index = self._new_labels(len(rows))
         rows = rows[self.data.columns]
         test = self.data.loc[self._test_rows()] if self.is_split else None
@@ -505,6 +559,8 @@ class Dataset:
         if self.label is not None:
             parts.append(f'label={self.label!r}')
             parts.append(f'task={self.task!r}')
+        if self.groups:
+            parts.append(f'groups={self.groups!r}')
         if self.is_split:
             parts.append(f'train={len(self._train_rows())}')
             parts.append(f'test={len(self._test_rows())}')
@@ -697,6 +753,53 @@ class Operation(chrisjen.Technique, abc.ABC):
 
 
 """ Private Functions """
+
+
+def _listify(item: Sequence[str] | str | None) -> list[str]:
+    """Returns column names as a `list`.
+
+    Args:
+        item: a name, a sequence of names, or `None`.
+
+    Returns:
+        The names (an empty `list` for `None`).
+
+    """
+    if item is None:
+        return []
+    if isinstance(item, str):
+        return [item]
+    return list(item)
+
+
+def _validate_groups(
+    groups: Sequence[str] | str | None,
+    data: pd.DataFrame,
+    label: str | None) -> list[str]:
+    """Returns the names of the group columns, checking them.
+
+    Args:
+        groups: a name, a sequence of names, or `None`.
+        data: the data.
+        label: name of the label, which cannot be a group.
+
+    Raises:
+        KeyError: if a group is not a column of `data`.
+        ValueError: if the label is a group.
+
+    Returns:
+        The names of the group columns.
+
+    """
+    names = _listify(groups)
+    missing = [g for g in names if g not in data.columns]
+    if missing:
+        message = f'the groups {missing} are not columns of the data'
+        raise KeyError(message)
+    if label is not None and label in names:
+        message = f'the label {label!r} cannot also be a group'
+        raise ValueError(message)
+    return names
 
 
 def _kind_of(column: pd.Series) -> str:

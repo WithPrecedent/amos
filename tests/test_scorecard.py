@@ -248,3 +248,32 @@ def test_word_needs_python_docx(
     monkeypatch.setitem(sys.modules, 'docx', None)
     with pytest.raises(ImportError, match = r'amos\[word\]'):
         project.scorecard.to_word(tmp_path / 'card.docx')
+
+
+def test_to_latex(project: amos.Project, tmp_path: pathlib.Path) -> None:
+    text = project.scorecard.to_latex(tmp_path / 'card.tex')
+    lines = text.splitlines()
+    assert lines[0] == r'\begin{table}[htbp]'
+    assert lines[2] == r'\caption{4 branches ranked by roc\_auc}'
+    assert lines[3].startswith(r'\begin{tabular}{rlll')
+    assert r'rank & split & scale & model & roc\_auc' in lines[5]
+    assert lines[-1] == r'\end{table}'
+    assert (tmp_path / 'card.tex').read_text(encoding = 'utf-8') == text
+
+
+def test_to_html(project: amos.Project, tmp_path: pathlib.Path) -> None:
+    requires('great_tables')
+    html = project.scorecard.to_html(tmp_path / 'card.html')
+    assert '4 branches ranked by roc_auc' in html
+    assert '<table' in html
+    assert 'stratified' in html
+    assert (tmp_path / 'card.html').read_text(encoding = 'utf-8') == html
+
+
+def test_export_latex_and_html(
+    project: amos.Project,
+    tmp_path: pathlib.Path) -> None:
+    requires('great_tables')
+    paths = project.scorecard.export(tmp_path, formats = ['tex', 'html'])
+    assert paths['tex'].read_text(encoding = 'utf-8').startswith(r'\begin')
+    assert paths['html'].is_file()

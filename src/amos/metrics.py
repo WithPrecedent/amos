@@ -1,9 +1,10 @@
 """Metrics that score a model's predictions.
 
 These are techniques of the "critic" stage. Each one wraps a scoring function
-from `sklearn.metrics`, compares the model's predictions (or predicted
-probabilities) with the true labels of the same rows, and stores the score in
-the dataset's `metrics` under the technique's name.
+(from `sklearn.metrics`, fairlearn, or lifelines), compares the model's
+predictions (or predicted probabilities) with the true labels of the same
+rows, and stores the score in the dataset's `metrics` under the technique's
+name.
 
 Every metric is also a `chrisjen.Criteria`, so the same name can be the
 "criterion" of an `experiment` or `contest`, which keeps the combination of
@@ -20,9 +21,14 @@ parameters.
 
 Contents:
     Metric: base class for metrics.
+    GroupMetric: genre of fairness metrics that compare groups of rows.
     Accuracy, AveragePrecision, BalancedAccuracy, Brier, CohenKappa, F1,
         LogLoss, Matthews, Precision, Recall, RocAuc: classification metrics.
-    ExplainedVariance, MAE, MAPE, MSE, R2, RMSE: regression metrics.
+    DemographicParity, DemographicParityRatio, EqualOpportunity,
+        EqualOpportunityRatio, EqualizedOdds, EqualizedOddsRatio: fairness
+        metrics.
+    Concordance, ExplainedVariance, MAE, MAPE, MSE, R2, RMSE: regression
+        metrics.
 
 """
 
@@ -33,6 +39,7 @@ import dataclasses
 from typing import Any, ClassVar
 
 import chrisjen
+import numpy as np
 import pandas as pd
 
 from . import base, utilities
@@ -189,7 +196,65 @@ class Metric(base.Operation, chrisjen.Criteria, abc.ABC):
             parameters.setdefault('average', 'macro')
             parameters.setdefault('multi_class', 'ovr')
             if self.uses_probabilities and item.probabilities is not None:
-                parameters.setdefault('labels', list(item.probabilities.columns))
+                parameters.setdefault(
+                    'labels', list(item.probabilities.columns))
+        return parameters
+
+
+@dataclasses.dataclass
+class GroupMetric(Metric, abc.ABC):
+    """Genre of fairness metrics, which compare a model across groups of rows.
+
+    Each wraps a fairlearn metric. It compares the model's predictions for
+    the groups in the column named by the "group" parameter, which defaults
+    to the dataset's first `groups` column. The label must have two classes;
+    the positive class is the last of `Dataset.classes`. A "difference" is
+    the largest gap between groups (0 is equal treatment, and lower is
+    better). A "ratio" is the smallest group's value divided by the largest
+    (1 is equal treatment, and higher is better).
+
+    """
+
+    """ Private Methods """
+
+    def _observed(self, item: base.Dataset) -> tuple[pd.Series, Any]:
+        """Returns whether each true label and prediction is the positive class.
+
+        Args:
+            item: the dataset to score.
+
+        Raises:
+            ValueError: if the label does not have two classes.
+
+        Returns:
+            The true labels and the predictions, as 1 (positive) or 0.
+
+        """
+        y_true, y_pred = super()._observed(item)
+        return _positive(item, y_true, y_pred, self.name)
+
+    def _prepare(
+        self,
+        item: base.Dataset,
+        parameters: dict[str, Any]) -> dict[str, Any]:
+        """Adds the group of each predicted row.
+
+        Args:
+            item: the dataset to score.
+            parameters: parameters for the scoring function, which may
+                include "group" (the name of a column).
+
+        Raises:
+            ValueError: if no group is given and the dataset has no groups.
+
+        Returns:
+            The parameters, with "sensitive_features".
+
+        """
+        group = _group(item, parameters.pop('group', None), self.name)
+        rows: Any = (
+            [] if item.predictions is None else item.predictions.index)
+        parameters['sensitive_features'] = item.data.loc[rows, group]
         return parameters
 
 
@@ -283,7 +348,93 @@ class RocAuc(Metric):
     uses_probabilities: ClassVar[bool] = True
 
 
+""" Fairness Metrics """
+
+
+@dataclasses.dataclass
+class DemographicParity(GroupMetric):
+    """The largest gap between groups in the share predicted to be positive."""
+
+    contents: str = 'fairlearn.metrics.demographic_parity_difference'
+    greater_is_better: ClassVar[bool] = False
+
+
+@dataclasses.dataclass
+class DemographicParityRatio(GroupMetric):
+    """The smallest group's share predicted positive over the largest's."""
+
+    contents: str = 'fairlearn.metrics.demographic_parity_ratio'
+
+
+@dataclasses.dataclass
+class EqualOpportunity(GroupMetric):
+    """The largest gap between groups in the true positive rate."""
+
+    contents: str = 'fairlearn.metrics.equal_opportunity_difference'
+    greater_is_better: ClassVar[bool] = False
+
+
+@dataclasses.dataclass
+class EqualOpportunityRatio(GroupMetric):
+    """The smallest group's true positive rate over the largest's."""
+
+    contents: str = 'fairlearn.metrics.equal_opportunity_ratio'
+
+
+@dataclasses.dataclass
+class EqualizedOdds(GroupMetric):
+    """The larger gap between groups in true or false positive rates."""
+
+    contents: str = 'fairlearn.metrics.equalized_odds_difference'
+    greater_is_better: ClassVar[bool] = False
+
+
+@dataclasses.dataclass
+class EqualizedOddsRatio(GroupMetric):
+    """The smaller ratio between groups of true or false positive rates."""
+
+    contents: str = 'fairlearn.metrics.equalized_odds_ratio'
+
+
 """ Regression Metrics """
+
+
+@dataclasses.dataclass
+class Concordance(Metric):
+    """How often the model orders pairs of times correctly (Harrell's C).
+
+    This is the usual measure of a model of the time until an event, such as
+    `cox`. Censored rows are compared only where their order is known. The
+    "event" parameter names the column that is 1 if the event happened; it
+    defaults to the event column of a `cox` model. 0.5 is chance, and 1 is
+    perfect.
+
+    """
+
+    contents: str = 'lifelines.utils.concordance_index'
+    tasks: ClassVar[tuple[str, ...]] = ('regress',)
+
+    def _prepare(
+        self,
+        item: base.Dataset,
+        parameters: dict[str, Any]) -> dict[str, Any]:
+        """Adds whether each predicted row's event happened.
+
+        Args:
+            item: the dataset to score.
+            parameters: parameters for the scoring function, which may
+                include "event" (the name of a column).
+
+        Returns:
+            The parameters, with "event_observed" if there is an event column.
+
+        """
+        event = parameters.pop('event', None) or getattr(
+            item.model, 'event', None)
+        if event is not None and item.predictions is not None:
+            parameters['event_observed'] = item.data.loc[
+                item.predictions.index, event].astype(int)
+        return parameters
 
 
 @dataclasses.dataclass
@@ -336,3 +487,61 @@ class RMSE(Metric):
     contents: str = 'sklearn.metrics.root_mean_squared_error'
     greater_is_better: ClassVar[bool] = False
     tasks: ClassVar[tuple[str, ...]] = ('regress',)
+
+
+""" Private Functions """
+
+
+def _group(item: base.Dataset, group: str | None, name: str) -> str:
+    """Returns the name of the column of groups to compare.
+
+    Args:
+        item: the dataset.
+        group: name of the column chosen by the user, or `None`.
+        name: name of the technique, for the error message.
+
+    Raises:
+        ValueError: if no group is given and the dataset has no groups.
+
+    Returns:
+        `group`, or the dataset's first group.
+
+    """
+    if group is None and item.groups:
+        group = item.groups[0]
+    if group is None:
+        message = (
+            f'{name!r} needs a group: set "groups" in the "general" section '
+            f'of the settings or pass "group"'
+        )
+        raise ValueError(message)
+    return group
+
+
+def _positive(
+    item: base.Dataset,
+    y_true: pd.Series,
+    y_pred: Any,
+    name: str) -> tuple[pd.Series, pd.Series]:
+    """Returns whether each true label and prediction is the positive class.
+
+    Args:
+        item: the dataset.
+        y_true: the true labels.
+        y_pred: the predictions of the same rows.
+        name: name of the technique, for the error message.
+
+    Raises:
+        ValueError: if the label does not have two classes.
+
+    Returns:
+        The true labels and the predictions, as 1 (positive) or 0.
+
+    """
+    classes = item.classes
+    if len(classes) != 2:  # noqa: PLR2004
+        message = f'{name!r} needs a label with two classes'
+        raise ValueError(message)
+    positive = classes[-1]
+    predicted = pd.Series(np.asarray(y_pred), index = y_true.index)
+    return (y_true == positive).astype(int), (predicted == positive).astype(int)

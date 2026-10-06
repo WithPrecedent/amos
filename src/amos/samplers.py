@@ -28,6 +28,9 @@ import abc
 import dataclasses
 from typing import Any
 
+import numpy as np
+import pandas as pd
+
 from . import base, utilities
 
 
@@ -64,7 +67,10 @@ class Sampler(base.Operation, abc.ABC):
         before = item.y_train.value_counts().to_dict()
         tool = self._make_tool(item, kwargs)
         x, y = tool.fit_resample(item.x_train, item.y_train)
-        item.resample(x, y)
+        origins = getattr(tool, 'sample_indices_', None)
+        if origins is None:
+            origins = _leading_copies(item.x_train, x)
+        item.resample(x, y, origins = origins)
         item.fitted[self.name] = tool
         item.record(
             self.name,
@@ -137,3 +143,35 @@ class TomekLinks(Sampler):
     """Removes rows of the common class that are paired with rare rows."""
 
     contents: str = 'imblearn.under_sampling.TomekLinks'
+
+
+""" Private Functions """
+
+
+def _leading_copies(
+    original: pd.DataFrame,
+    resampled: pd.DataFrame) -> np.ndarray:
+    """Returns the position of the original row that each resampled row copies.
+
+    Samplers that report which rows they kept (in `sample_indices_`) do not
+    need this. SMOTE and the other over-samplers instead return the original
+    rows first, in order, followed by the synthetic rows.
+
+    Args:
+        original: the training rows given to the sampler.
+        resampled: the rows it returned.
+
+    Returns:
+        For each resampled row, its position in `original`, or -1 if it is
+            synthetic. If the first rows are not the original rows, every row
+            is -1.
+
+    """
+    positions = np.full(len(resampled), -1)
+    count = len(original)
+    if len(resampled) >= count and np.array_equal(
+        resampled.iloc[:count].to_numpy(dtype = float),
+        original.to_numpy(dtype = float),
+        equal_nan = True):
+        positions[:count] = np.arange(count)
+    return positions

@@ -23,6 +23,46 @@ All notable changes to this project will be documented in this file.
   `branches`.
 * Added the `word` extra, which installs python-docx for Word documents.
 * Added the scorecard of the README's breast cancer study to the README.
+* Added `groups` to `Dataset` (and a "groups" setting in the "general"
+  section): columns that identify groups of people or places, which stay in
+  the data but are not features. Cleaners and samplers keep them (synthetic
+  rows have none), and `group_split` uses the first group by default.
+* Added support for 13 more packages, for 139 techniques in ten genres:
+  * fairlearn: six fairness metrics (`demographic_parity`, `equalized_odds`,
+    and `equal_opportunity`, with a "_ratio" version of each) in the new
+    `GroupMetric` genre, and the `fairness` evaluator, which compares the
+    model across groups. The `scorecard` adds `demographic_parity` and
+    `equalized_odds` for every branch when a dataset has groups and a label
+    with two classes.
+  * MAPIE: the `conformal` evaluator, which makes prediction intervals (or
+    sets of classes) with a known rate of coverage.
+  * eli5: the `explain_weights` evaluator.
+  * InterpretML: the `explainable_boosting` model, whose term importances
+    `feature_importance` reports.
+  * CatBoost: the `catboost` model, which uses categorical columns directly.
+  * TabPFN: the `tabpfn` model (in its own `tabpfn` extra, which is not part
+    of `all` because it needs PyTorch).
+  * pyfixest: the `fixest` model, a regression (or logit) with fixed effects
+    and clustered standard errors, whose coefficients are stored in a table.
+  * lifelines: the `cox` model, the `concordance` metric, the `kaplan_meier`
+    describer, and the `survival_curves` plot.
+  * DoubleML: the new `Effect` genre, with `partially_linear` and
+    `interactive_regression`, which estimate the causal effect of a
+    treatment with double machine learning.
+  * skrub: the `date_parts`, `gap`, `min_hash`, and `tfidf` encoders.
+  * Optuna: `search = "optuna"` for any model.
+  * Polars: `Dataset.create` accepts Polars data frames (lazy or not).
+  * great_tables: scorecards as HTML tables (`to_html`). Scorecards can also
+    be saved as LaTeX tables (`to_latex`), and `export` saves both.
+* Added the `causal`, `fairness`, `polars`, `survival`, `tables`, `tuning`,
+  `uncertainty`, and `tabpfn` extras, and added packages to the `boosting`,
+  `encoders`, `explain`, and `statistics` extras.
+* Added `Dataset.dates`, the names of the date and time columns.
+* Code that calls pyfixest no longer changes the level or handlers of the root
+  logger.
+* Added recipes for fairness and for fixed effects, and sections of the
+  advanced user guide on groups and fairness, uncertainty, causal effects,
+  and survival analysis.
 
 ## 0.2.0
 

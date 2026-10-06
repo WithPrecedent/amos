@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
 import pandas as pd
 import pytest
-from conftest import SEED, make_mixed, requires
+from conftest import SEED, make_mixed, package_of, requires, techniques
 
 import amos
 from amos import models
 
-MODELS = sorted(amos.library.get_genre('model').items())
-# Packages that each model needs, beyond scikit-learn.
-PACKAGES = {
-    'glm': 'statsmodels',
-    'lightgbm': 'lightgbm',
-    'ols': 'statsmodels',
-    'xgboost': 'xgboost'}
+MODELS = techniques('model')
 
 
 def _check(item: amos.Dataset, task: str) -> None:
@@ -37,7 +33,7 @@ def test_classifiers(
     name: str,
     kind: type[amos.Model],
     classified: amos.Dataset) -> None:
-    requires(PACKAGES.get(name, 'sklearn'))
+    requires(package_of(kind))
     kind().apply(classified)
     _check(classified, 'classify')
     if classified.probabilities is not None:
@@ -52,7 +48,7 @@ def test_regressors(
     name: str,
     kind: type[amos.Model],
     regressed: amos.Dataset) -> None:
-    requires(PACKAGES.get(name, 'sklearn'))
+    requires(package_of(kind))
     kind().apply(regressed)
     _check(regressed, 'regress')
     assert regressed.probabilities is None
@@ -214,3 +210,87 @@ def test_statsmodel_without_a_constant(regressed: amos.Dataset) -> None:
     models.OLS().apply(regressed, constant = False)
     assert 'const' not in regressed.tables['ols_coefficients'].index
     assert len(regressed.model.coef_) == len(regressed.features)
+
+
+def _courts(rows: int = 300) -> amos.Dataset:
+    """Returns a regression with judge and court groups (fixed effects)."""
+    rng = np.random.default_rng(9)
+    judge = rng.integers(0, 6, rows)
+    x = rng.normal(size = rows)
+    data = pd.DataFrame({
+        'x': x,
+        'judge': [f'j{j}' for j in judge],
+        'court': [f'c{j % 3}' for j in judge],
+        'target': 2.0 * x + judge + rng.normal(0, 1, rows)})
+    dataset = amos.Dataset(
+        data, label = 'target', seed = SEED, groups = ['judge', 'court'])
+    return amos.splitters.TrainTest().apply(dataset)
+
+
+def test_fixest_with_fixed_effects_and_clusters() -> None:
+    requires('pyfixest')
+    dataset = _courts()
+    models.Fixest().apply(dataset, fixed_effects = 'judge', cluster = 'court')
+    table = dataset.tables['fixest_coefficients']
+    # The judge effects are absorbed, so only "x" is a coefficient.
+    assert list(table.index) == ['x']
+    assert table.loc['x', 'ci_lower'] < 2.0 < table.loc['x', 'ci_upper']
+    assert dataset.model.fixed_effects == 'judge'
+    assert dataset.predictions.notna().all()
+
+
+def test_fixest_matches_pyfixest() -> None:
+    requires('pyfixest')
+    pyfixest = importlib.import_module('pyfixest')
+    dataset = _courts()
+    models.Fixest().apply(dataset, fixed_effects = 'judge', cluster = 'court')
+    data = dataset.data.loc[dataset.train]
+    expected = pyfixest.feols(
+        'target ~ x | judge', data = data, vcov = {'CRV1': 'court'}).tidy()
+    table = dataset.tables['fixest_coefficients']
+    assert table.loc['x', 'coefficient'] == pytest.approx(
+        expected.loc['x', 'Estimate'])
+    assert table.loc['x', 'standard_error'] == pytest.approx(
+        expected.loc['x', 'Std. Error'])
+
+
+def test_fixest_logit_for_classification(classified: amos.Dataset) -> None:
+    requires('pyfixest')
+    models.Fixest().apply(classified)
+    assert classified.model.family == 'logit'
+    assert list(classified.probabilities.columns) == [0, 1]
+
+
+def test_column_parameters_must_name_columns(regressed: amos.Dataset) -> None:
+    requires('pyfixest')
+    with pytest.raises(KeyError, match = 'fixed_effects column'):
+        models.Fixest().apply(regressed, fixed_effects = 'missing')
+
+
+def test_catboost_uses_categories_directly() -> None:
+    requires('catboost')
+    dataset = amos.Dataset(make_mixed(), label = 'outcome', seed = SEED)
+    amos.cleaners.DropColumns().apply(dataset, columns = ['joined'])
+    amos.cleaners.AutoCategorize().apply(dataset, columns = ['region'])
+    amos.splitters.Stratified().apply(dataset)
+    models.Catboost().apply(dataset, iterations = 20)
+    assert dataset.model.get_params()['cat_features'] == ['region']
+    assert set(dataset.predictions) <= {'no', 'yes'}
+
+
+def test_optuna_search(classified: amos.Dataset) -> None:
+    requires('optuna_integration')
+    models.RandomForest().apply(
+        classified,
+        search = 'optuna',
+        n_estimators = [5, 20],
+        max_features = [0.3, 0.9],
+        criterion = ['gini', 'entropy'],
+        n_iter = 4,
+        cv = 3)
+    table = classified.tables['random_forest_search']
+    assert len(table) == 4
+    assert {'param_n_estimators', 'param_criterion'} <= set(table.columns)
+    assert table['param_n_estimators'].between(5, 20).all()
+    assert list(table['rank_test_score'])[0] == 1
+    assert classified.history[-1]['search'] == 'optuna'

@@ -222,7 +222,7 @@ only receives the parameters it accepts. A section for a worker (such as
 `analyst_parameters`) passes its parameters to every technique in the worker.
 
 Any model can search for the best value of parameters given as lists. Add
-"search" ("grid" or "random") and list the values:
+"search" ("grid", "random", or "optuna") and list the values:
 
 ```python
 settings["analyst"]["model_techniques"] = "random_forest"
@@ -239,8 +239,10 @@ print(len(search), list(search.columns[-3:]))
 ```
 
 The search used 3-fold cross-validation on the training rows only and refitted
-the best combination to all of them. For a random search, a list of two
-numbers is a range to draw from, and "n_iter" sets the number of draws.
+the best combination to all of them. For a random or Optuna search, a list
+of two numbers is a range to draw from, and "n_iter" sets the number of
+draws. An Optuna search (which needs the `tuning` extra) learns from each
+draw which values to try next.
 
 ## 7. Evaluate and draw
 

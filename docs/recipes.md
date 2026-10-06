@@ -231,3 +231,65 @@ print("importance_plot" in project.result.figures)
 
 `permutation_importance` works with any model, and `feature_importance` reports
 a model's own importances (or the size of its coefficients).
+
+## Check fairness across groups
+
+Name the columns that identify groups in the "groups" setting of the
+"general" section. They are kept out of the features, and the `scorecard`
+adds fairness metrics for every branch when the label has two classes. The
+`fairness` table compares the final model across the groups:
+
+```python
+data = cancer.frame.copy()
+data["clinic"] = np.where(np.arange(len(data)) % 3 == 0, "north", "south")
+settings = {
+    "general": {"label": "target", "seed": 43, "groups": "clinic"},
+    "cancer_project": {"cancer_workers": "analyst, critic"},
+    "analyst": {
+        "design": "experiment",
+        "criterion": "roc_auc",
+        "steps": "split, scale, model",
+        "split_techniques": "stratified",
+        "scale_techniques": "standard",
+        "model_techniques": "logit, random_forest",
+    },
+    "critic": {"techniques": "scorecard, fairness"},
+}
+project = amos.Project.create(settings, item = data)
+print(list(project.scorecard.table.columns[-2:]))
+# ['demographic_parity', 'equalized_odds']
+print(list(project.result.tables["fairness"].index))
+# ['north', 'south', 'difference', 'ratio']
+```
+
+## Fixed effects and clustered standard errors
+
+Panel data, such as cases decided by many judges, often calls for fixed
+effects and standard errors clustered by group. `fixest` wraps pyfixest:
+
+```python
+rng = np.random.default_rng(7)
+judges = rng.integers(0, 20, 1000)
+severity = rng.normal(0, 1, 1000)
+represented = rng.integers(0, 2, 1000)
+sentence = (
+    12 + 3 * severity - 2 * represented + judges / 4 + rng.normal(0, 2, 1000))
+cases = pd.DataFrame({
+    "severity": severity,
+    "represented": represented,
+    "judge": [f"judge {j}" for j in judges],
+    "sentence": sentence,
+})
+settings = {
+    "general": {"label": "sentence", "seed": 43, "groups": "judge"},
+    "sentencing_project": {"techniques": "train_test, fixest"},
+    "fixest_parameters": {"fixed_effects": "judge", "cluster": "judge"},
+}
+project = amos.Project.create(settings, item = cases)
+coefficients = project.result.tables["fixest_coefficients"]
+print(coefficients["coefficient"].round().to_dict())
+# {'severity': 3.0, 'represented': -2.0}
+```
+
+The table also has the standard errors, p-values, and confidence intervals.
+For a label with two classes, `fixest` fits a logit model.

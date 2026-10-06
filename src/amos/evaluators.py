@@ -8,11 +8,14 @@ Contents:
     Evaluator: base class for techniques that evaluate a model with a table.
     ClassificationReport: precision, recall, and f1 for each class.
     Confusion: how many rows of each class were predicted to be each class.
+    Conformal: prediction intervals (or sets) with a known rate of coverage.
+    ExplainWeights: eli5's explanation of the weights of the features.
+    Fairness: how the model does for each group, and the gaps between them.
     FeatureImportance: the importance that the model gives each feature.
     PermutationImportance: how much the score drops when each feature is
         shuffled.
     Scorecard: every standard metric for every branch of an analysis, ready
-        to publish as csv, Markdown, Word, or an image.
+        to publish as csv, Markdown, LaTeX, HTML, Word, or an image.
     ShapImportance: the mean absolute SHAP value of each feature.
 
 """
@@ -33,6 +36,20 @@ import pandas as pd
 
 from . import base, models, utilities
 from . import metrics as metrics_
+
+# Replacements for the characters that LaTeX treats specially. Each character
+# is replaced once, so the braces in a replacement are not escaped again.
+_LATEX_ESCAPES: dict[int, str] = str.maketrans({
+    '\\': r'\textbackslash{}',
+    '&': r'\&',
+    '%': r'\%',
+    '$': r'\$',
+    '#': r'\#',
+    '_': r'\_',
+    '{': r'\{',
+    '}': r'\}',
+    '~': r'\textasciitilde{}',
+    '^': r'\textasciicircum{}'})
 
 
 @dataclasses.dataclass
@@ -133,13 +150,218 @@ class Confusion(Evaluator):
 
 
 @dataclasses.dataclass
+class Conformal(Evaluator):
+    """Prediction intervals (or sets) with a known rate of coverage.
+
+    Conformal prediction turns any model's predictions into intervals (for
+    regression) or sets of classes (for classification) that contain the
+    true value for at least a chosen share of rows ("confidence", 90% by
+    default), without assumptions about the data's distribution. It wraps
+    MAPIE's cross-conformal methods, which refit copies of the model on folds
+    of the training rows ("cv", 5 by default). The table has a row for each
+    test row. The share of rows covered ("coverage") and the mean width of
+    the intervals ("interval_width") or size of the sets ("set_size") are
+    stored in the dataset's `metrics`.
+
+    """
+
+    def evaluate(
+        self,
+        item: base.Dataset,
+        confidence: float = 0.9,
+        cv: int = 5,
+        **kwargs: Any) -> pd.DataFrame:
+        """Returns the interval (or set) of each test row.
+
+        Args:
+            item: the dataset with a fitted model.
+            confidence: share of rows that the intervals should cover.
+                Defaults to 0.9.
+            cv: number of folds of the training rows. Defaults to 5.
+            **kwargs: not used.
+
+        Returns:
+            One row for each test row, with "actual", "prediction", "lower"
+                and "upper" (or "set" and "size"), and "covered".
+
+        """
+        sklearn_base = importlib.import_module('sklearn.base')
+        model = _model(item)
+        columns = list(getattr(model, 'feature_names_in_', item.features))
+        rows = item.y_test.index if item.is_split else item.data.index
+        train = item.y_train.index
+        estimator = sklearn_base.clone(model)
+        actual = item.y.loc[rows]
+        if item.task == 'regress':
+            regression = utilities.import_tool('mapie.regression')
+            conformal = regression.CrossConformalRegressor(
+                estimator,
+                confidence_level = confidence,
+                cv = cv,
+                random_state = item.seed)
+            conformal.fit_conformalize(
+                item.data.loc[train, columns], item.y_train)
+            predicted, intervals = conformal.predict_interval(
+                item.data.loc[rows, columns])
+            lower = intervals[:, 0, 0]
+            upper = intervals[:, 1, 0]
+            return pd.DataFrame({
+                'actual': actual,
+                'prediction': predicted,
+                'lower': lower,
+                'upper': upper,
+                'covered': (actual >= lower) & (actual <= upper)},
+                index = rows)
+        classification = utilities.import_tool('mapie.classification')
+        conformal = classification.CrossConformalClassifier(
+            estimator,
+            confidence_level = confidence,
+            cv = cv,
+            random_state = item.seed)
+        conformal.fit_conformalize(item.data.loc[train, columns], item.y_train)
+        predicted, sets = conformal.predict_set(item.data.loc[rows, columns])
+        classes = np.unique(np.asarray(item.y_train))
+        members = [
+            [c for c, inside in zip(classes, row, strict = True) if inside]
+            for row in sets[:, :, 0]]
+        return pd.DataFrame({
+            'actual': actual,
+            'prediction': predicted,
+            'set': [', '.join(str(c) for c in m) for m in members],
+            'size': [len(m) for m in members],
+            'covered': [
+                a in m for a, m in zip(actual, members, strict = True)]},
+            index = rows)
+
+    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+        """Adds the table and stores the coverage and width (or set size).
+
+        Args:
+            item: the dataset with a fitted model.
+            **kwargs: parameters for `evaluate`.
+
+        Returns:
+            The dataset, with the table in `tables` and the coverage in
+                `metrics`.
+
+        """
+        super().implement(item, **kwargs)
+        table = item.tables[self.name]
+        item.metrics['coverage'] = float(table['covered'].mean())
+        if 'lower' in table.columns:
+            item.metrics['interval_width'] = float(
+                (table['upper'] - table['lower']).mean())
+        else:
+            item.metrics['set_size'] = float(table['size'].mean())
+        return item
+
+
+@dataclasses.dataclass
+class ExplainWeights(Evaluator):
+    """eli5's explanation of the weights of the model's features.
+
+    For a linear model, the weights are its coefficients (for each class);
+    for trees and boosting, they are the importances and their spread across
+    the trees. The table is eli5's, with the 20 largest weights by default.
+
+    """
+
+    def evaluate(
+        self,
+        item: base.Dataset,
+        top: int = 20,
+        **kwargs: Any) -> pd.DataFrame:
+        """Returns eli5's table of the model's weights.
+
+        Args:
+            item: the dataset with a fitted model.
+            top: most weights to list. Defaults to 20.
+            **kwargs: not used.
+
+        Raises:
+            ValueError: if eli5 cannot explain the model.
+
+        Returns:
+            eli5's table of weights.
+
+        """
+        eli5 = utilities.import_tool('eli5')
+        model = _model(item)
+        if isinstance(model, models.LabelCoded):
+            model = model.estimator
+        names = [str(n) for n in getattr(
+            model, 'feature_names_in_', item.features)]
+        table: pd.DataFrame | None = eli5.explain_weights_df(
+            model, feature_names = names, top = top)
+        if table is None:
+            message = (
+                f'eli5 cannot explain the weights of {type(model).__name__}')
+            raise ValueError(message)
+        return table
+
+
+@dataclasses.dataclass
+class Fairness(Evaluator):
+    """How the model does for each group, and the gaps between groups.
+
+    It compares the groups in the column named by the "group" parameter
+    (the dataset's first `groups` column by default) with fairlearn's
+    `MetricFrame`: the number of rows, the share predicted to be positive
+    (the selection rate), accuracy, and the true and false positive rates.
+    The last two rows are the largest difference and the smallest ratio
+    between groups. The label must have two classes.
+
+    """
+
+    def evaluate(
+        self,
+        item: base.Dataset,
+        group: str | None = None,
+        **kwargs: Any) -> pd.DataFrame:
+        """Returns the metrics of each group and the gaps between them.
+
+        Args:
+            item: the dataset with a fitted classifier.
+            group: name of the column of groups. Defaults to `None`, which
+                uses the dataset's first group.
+            **kwargs: not used.
+
+        Returns:
+            One row for each group, then "difference" and "ratio" rows.
+
+        """
+        fairness = utilities.import_tool('fairlearn.metrics')
+        scores = importlib.import_module('sklearn.metrics')
+        column = metrics_._group(item, group, self.name)
+        y_true, y_pred = _observed(item)
+        y_true, y_pred = metrics_._positive(item, y_true, y_pred, self.name)
+        frame = fairness.MetricFrame(
+            metrics = {
+                'count': fairness.count,
+                'selection_rate': fairness.selection_rate,
+                'accuracy': scores.accuracy_score,
+                'true_positive_rate': fairness.true_positive_rate,
+                'false_positive_rate': fairness.false_positive_rate},
+            y_true = y_true,
+            y_pred = y_pred,
+            sensitive_features = item.data.loc[y_true.index, column])
+        table: pd.DataFrame = frame.by_group.copy()
+        table.index = table.index.astype(str)
+        table.loc['difference'] = frame.difference()
+        table.loc['ratio'] = frame.ratio()
+        table.index.name = column
+        return table
+
+
+@dataclasses.dataclass
 class FeatureImportance(Evaluator):
     """The importance that the model itself gives each feature.
 
-    This is the model's `feature_importances_` (for trees and boosting) or
-    the absolute value of its coefficients (for linear models, averaged over
-    the classes). Coefficients are only comparable if the features were
-    scaled. For other models, use `permutation_importance`.
+    This is the model's `feature_importances_` (for trees and boosting), the
+    importance of each term (for `explainable_boosting`), or the absolute
+    value of its coefficients (for linear models, averaged over the classes).
+    Coefficients are only comparable if the features were scaled. For other
+    models, use `permutation_importance`.
 
     """
 
@@ -160,6 +382,12 @@ class FeatureImportance(Evaluator):
         """
         model = _model(item)
         importances = getattr(model, 'feature_importances_', None)
+        if importances is None and hasattr(model, 'term_importances'):
+            # An Explainable Boosting Machine reports the importance of each
+            # term (a feature or a pair of features).
+            return _importance_table(
+                [str(n) for n in model.term_names_],
+                np.asarray(model.term_importances()))
         if importances is None:
             coefficients = getattr(model, 'coef_', None)
             if coefficients is None:
@@ -235,10 +463,12 @@ class Scorecard(Evaluator):
     `metrics`.
 
     A scorecard can be saved as a csv file (`to_csv`), a Markdown table
-    (`to_markdown`), a Word document (`to_word`, which needs python-docx), or
-    an image (`to_image`, which needs matplotlib), or in all of them at once
-    (`export`). Make one from a dataset or an applied project with `create`,
-    or use `Project.scorecard`.
+    (`to_markdown`), a LaTeX table (`to_latex`), an HTML table (`to_html`,
+    which needs great_tables), a Word document (`to_word`, which needs
+    python-docx), or an image (`to_image`, which needs matplotlib), or in
+    several at once (`export`). If the dataset has groups and a label of two
+    classes, fairness metrics are included. Make one from a dataset or an
+    applied project with `create`, or use `Project.scorecard`.
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -275,6 +505,11 @@ class Scorecard(Evaluator):
             'roc_auc',
             'log_loss'),
         'regress': ('r2', 'rmse', 'mae')}
+    # Fairness metrics in a scorecard of a dataset with groups and a label of
+    # two classes.
+    fairness: ClassVar[tuple[str, ...]] = (
+        'demographic_parity',
+        'equalized_odds')
     # Genres of the techniques that are listed as steps of a dataset that did
     # not come from an experiment.
     step_genres: ClassVar[tuple[str, ...]] = (
@@ -342,8 +577,9 @@ class Scorecard(Evaluator):
             item: the dataset with a fitted model.
             metrics: names of the metrics to use. Defaults to `None`, which
                 uses `defaults` for the task (with the experiment's criterion
-                first). Other metrics that the branches computed are added
-                after them.
+                first, and the `fairness` metrics after them if the dataset
+                has groups and two classes). Other metrics that the branches
+                computed are added after them.
             **kwargs: not used.
 
         Returns:
@@ -392,16 +628,18 @@ class Scorecard(Evaluator):
         folder: pathlib.Path | str,
         *,
         name: str | None = None,
-        formats: Sequence[str] = ('csv', 'md', 'docx', 'png')) -> dict[str, pathlib.Path]:
+        formats: Sequence[str] = ('csv', 'md', 'docx', 'png'),
+        ) -> dict[str, pathlib.Path]:
         """Saves the scorecard in several formats.
 
         Args:
             folder: folder to save the files in. It is created if needed.
             name: name of the files, without extensions. Defaults to `None`,
                 in which case the name of the technique is used.
-            formats: extensions of the files to save: "csv", "md", "docx",
-                and any image format that matplotlib saves (such as "png",
-                "svg", or "pdf"). Defaults to csv, md, docx, and png.
+            formats: extensions of the files to save: "csv", "md", "tex",
+                "html", "docx", and any image format that matplotlib saves
+                (such as "png", "svg", or "pdf"). Defaults to csv, md, docx,
+                and png.
 
         Returns:
             The path of each file, by its format.
@@ -416,6 +654,10 @@ class Scorecard(Evaluator):
                 self.to_csv(path)
             elif extension == 'md':
                 self.to_markdown(path)
+            elif extension == 'tex':
+                self.to_latex(path)
+            elif extension == 'html':
+                self.to_html(path)
             elif extension == 'docx':
                 self.to_word(path)
             else:
@@ -455,7 +697,8 @@ class Scorecard(Evaluator):
             The csv text. Scores are saved at full precision.
 
         """
-        text = self._require_table().to_csv(index = False, lineterminator = '\n')
+        text = self._require_table().to_csv(
+            index = False, lineterminator = '\n')
         if path is not None:
             pathlib.Path(path).write_text(text, encoding = 'utf-8')
         return text
@@ -500,6 +743,34 @@ class Scorecard(Evaluator):
             ha = 'center', va = 'top', fontsize = 11, weight = 'bold')
         return figure
 
+    def to_html(self, path: pathlib.Path | str | None = None) -> str:
+        """Returns the scorecard as an HTML table, and saves it if asked.
+
+        The table is made by great_tables, with the heading as its title,
+        numbers aligned to the right, and the best branch shaded.
+
+        Args:
+            path: file to save the table in. Defaults to `None`.
+
+        Returns:
+            The HTML.
+
+        """
+        great_tables = utilities.import_tool('great_tables')
+        text = self._text()
+        numeric = [c for c in text.columns if c in self._numeric_columns()]
+        table = great_tables.GT(text).tab_header(title = self.heading)
+        if numeric:
+            table = table.cols_align(align = 'right', columns = numeric)
+        if len(text) > 1:
+            table = table.tab_style(
+                style = great_tables.style.fill(color = '#e3f1e3'),
+                locations = great_tables.loc.body(rows = [0]))
+        html = str(table.as_raw_html())
+        if path is not None:
+            pathlib.Path(path).write_text(html, encoding = 'utf-8')
+        return html
+
     def to_image(
         self,
         path: pathlib.Path | str,
@@ -518,6 +789,39 @@ class Scorecard(Evaluator):
         path = pathlib.Path(path)
         self.to_figure().savefig(path, dpi = dpi, bbox_inches = 'tight')
         return path
+
+    def to_latex(self, path: pathlib.Path | str | None = None) -> str:
+        r"""Returns the scorecard as a LaTeX table, and saves it if asked.
+
+        The table uses the booktabs package, so add `\usepackage{booktabs}`
+        to the preamble of the document. Its caption is the heading.
+
+        Args:
+            path: file to save the table in. Defaults to `None`.
+
+        Returns:
+            The LaTeX table.
+
+        """
+        text = self._text()
+        numeric = self._numeric_columns()
+        alignment = ''.join('r' if c in numeric else 'l' for c in text.columns)
+        lines = [
+            r'\begin{table}[htbp]',
+            r'\centering',
+            rf'\caption{{{_latex(self.heading)}}}',
+            rf'\begin{{tabular}}{{{alignment}}}',
+            r'\toprule',
+            ' & '.join(_latex(str(c)) for c in text.columns) + r' \\',
+            r'\midrule']
+        lines.extend(
+            ' & '.join(_latex(value) for value in row) + r' \\'
+            for row in text.itertuples(index = False))
+        lines.extend([r'\bottomrule', r'\end{tabular}', r'\end{table}'])
+        latex = '\n'.join(lines) + '\n'
+        if path is not None:
+            pathlib.Path(path).write_text(latex, encoding = 'utf-8')
+        return latex
 
     def to_markdown(self, path: pathlib.Path | str | None = None) -> str:
         """Returns the scorecard as a Markdown table, and saves it if asked.
@@ -563,7 +867,8 @@ class Scorecard(Evaluator):
         numeric = self._numeric_columns()
         document = docx.Document()
         document.add_heading(self.heading, level = 2)
-        grid = document.add_table(rows = len(text) + 1, cols = len(text.columns))
+        grid = document.add_table(
+            rows = len(text) + 1, cols = len(text.columns))
         grid.style = 'Table Grid'
         for column, label in enumerate(text.columns):
             cell = grid.cell(0, column)
@@ -661,6 +966,11 @@ class Scorecard(Evaluator):
         if metrics:
             return list(metrics)
         names = list(self.defaults.get(item.task or 'classify', ()))
+        if (
+            item.groups
+            and item.task == 'classify'
+            and len(item.classes) == 2):  # noqa: PLR2004
+            names.extend(self.fairness)
         criterion = branches[0].criterion if branches else None
         kind = chrisjen.library.all.get(criterion) if criterion else None
         if (
@@ -838,6 +1148,21 @@ def _importance_table(
         {'importance': np.asarray(importances, dtype = float)},
         index = pd.Index(features, name = 'feature'))
     return table.sort_values('importance', ascending = False)
+
+
+def _latex(text: str) -> str:
+    """Returns `text` with the characters that LaTeX treats specially escaped.
+
+    Args:
+        text: text for a LaTeX table.
+
+    Returns:
+        The escaped text. A dash for a missing value becomes "---".
+
+    """
+    if text == '—':
+        return '---'
+    return text.translate(_LATEX_ESCAPES)
 
 
 def _markdown_row(values: Iterable[str]) -> str:

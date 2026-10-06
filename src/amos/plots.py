@@ -18,6 +18,7 @@ Contents:
     PrecisionRecallCurve: precision against recall (classification).
     ResidualPlot: the errors against the predictions (regression).
     RocCurve: the ROC curve (classification).
+    SurvivalCurves: the share of rows without an event over time.
 
 """
 
@@ -311,6 +312,43 @@ class RocCurve(Plot):
             metrics.RocCurveDisplay.from_predictions(
                 y_true, y_score, pos_label = positive, name = name, ax = axes)
         axes.plot([0, 1], [0, 1], linestyle = '--', color = 'gray')
+
+
+@dataclasses.dataclass
+class SurvivalCurves(Plot):
+    """The share of rows without an event over time (Kaplan-Meier curves).
+
+    The label is the time until the event. Set "event" to the column that is
+    1 if the event happened (by default, every event was observed) and
+    "group" to a column to draw a curve for each group. The shading is the
+    95% confidence interval.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        event: str | None = None,
+        group: str | None = None,
+        **kwargs: Any) -> None:
+        """Draws the survival curves.
+
+        Args:
+            item: the dataset to draw. Its label is the time.
+            figure: the figure to draw on.
+            event: name of the column that is 1 if the event happened.
+                Defaults to `None`, which means every event was observed.
+            group: name of a column of groups. Defaults to `None`, which draws
+                one curve.
+            **kwargs: not used.
+
+        """
+        axes = figure.subplots()
+        for fitter in describers.survival_curves(item, event, group).values():
+            fitter.plot_survival_function(ax = axes)
+        axes.set_xlabel(str(item.label))
+        axes.set_ylabel('share without the event')
 
 
 """ Private Functions """

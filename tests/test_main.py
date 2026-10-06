@@ -82,8 +82,9 @@ def test_every_genre_is_in_the_operation_layer() -> None:
     operations = chrisjen.library['vertex']['operation']
     for genre in (
         'cleaner', 'describer', 'splitter', 'transformer', 'sampler', 'model',
-        'metric', 'evaluator', 'plot'):
+        'metric', 'evaluator', 'plot', 'effect'):
         assert isinstance(operations[genre], dict), genre
+    assert isinstance(operations['metric']['group_metric'], dict)
     for genre in ('imputer', 'scaler', 'encoder', 'mixer', 'reducer'):
         assert isinstance(operations['transformer'][genre], dict), genre
 
@@ -97,7 +98,8 @@ def test_every_concrete_operation_is_in_the_library() -> None:
     stored = set(chrisjen.library.all.values())
     modules = (
         amos.cleaners, amos.describers, amos.splitters, amos.transformers,
-        amos.samplers, amos.models, amos.metrics, amos.evaluators, amos.plots)
+        amos.samplers, amos.models, amos.metrics, amos.evaluators, amos.plots,
+        amos.effects)
     for module in modules:
         for _, kind in inspect.getmembers(module, inspect.isclass):
             if (

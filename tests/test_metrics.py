@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import pytest
 import sklearn.metrics
-from conftest import SEED, make_mixed
+from conftest import SEED, make_mixed, techniques
 
 import amos
 from amos import metrics
 
-METRICS = sorted(amos.library.get_genre('metric').items())
+# Group metrics need groups, so they are tested in test_fairness.py.
+METRICS = [
+    (n, k) for n, k in techniques('metric')
+    if not issubclass(k, amos.GroupMetric)]
 
 
 @pytest.mark.parametrize(('name', 'kind'), [

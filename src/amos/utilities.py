@@ -6,22 +6,28 @@ Contents:
     environment: describes the software used to run a project.
     import_tool: imports a tool from its import path, with a helpful error.
     parameters_of: returns the parameters of a built tool.
+    preserved_logging: restores the root logger after code that changes it.
     search_space: divides parameters into fixed values and values to search.
 
 """
 
 from __future__ import annotations
 
+import contextlib
 import importlib.metadata
 import inspect
+import logging
 import platform
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 import chrisjen.utilities
 
 from . import options
+
+# The kinds of hyperparameter search that models support.
+_SEARCHES: frozenset[str] = frozenset({'grid', 'optuna', 'random'})
 
 
 def accepted_parameters(
@@ -153,6 +159,33 @@ def parameters_of(tool: Any) -> dict[str, Any]:
         return {}
 
 
+@contextlib.contextmanager
+def preserved_logging() -> Iterator[None]:
+    """Restores the root logger after code that changes it.
+
+    Some packages (such as pyfixest) configure the root logger when they run,
+    which would make every library print its informational messages. Code in
+    this context leaves the root logger's level and handlers as they were.
+
+    Yields:
+        None: control, to the code in the context.
+
+    """
+    root = logging.getLogger()
+    level, handlers = root.level, list(root.handlers)
+    try:
+        yield
+    finally:
+        root.setLevel(level)
+        for handler in list(root.handlers):
+            if handler not in handlers:
+                root.removeHandler(handler)
+        # A package may also have removed handlers (with `force = True`).
+        for handler in handlers:
+            if handler not in root.handlers:
+                root.addHandler(handler)
+
+
 def search_space(
     parameters: Mapping[str, Any],
     search: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -160,24 +193,24 @@ def search_space(
 
     A parameter whose value is a `list` (as "n_estimators = 50, 200" is in an
     ini file) is searched. For a grid search, the values are the candidates.
-    For a random search, a list of exactly two numbers is a range: integers
-    are drawn uniformly from the range (inclusive) and other numbers are drawn
-    from a uniform distribution between them. Any other list is a set of
-    candidates.
+    For a random or Optuna search, a list of exactly two numbers is a range:
+    whole numbers are drawn from the range (inclusive) and other numbers from
+    between them (on a log scale, in an Optuna search, if the range covers
+    two or more orders of magnitude). Any other list is a set of candidates.
 
     Args:
         parameters: parameters for a tool.
-        search: "grid" or "random".
+        search: "grid", "random", or "optuna".
 
     Raises:
-        ValueError: if `search` is not "grid" or "random".
+        ValueError: if `search` is not one of those.
 
     Returns:
         The fixed parameters and the parameters to search.
 
     """
-    if search not in {'grid', 'random'}:
-        message = f'search must be "grid" or "random", not {search!r}'
+    if search not in _SEARCHES:
+        message = f'search must be one of {sorted(_SEARCHES)}, not {search!r}'
         raise ValueError(message)
     fixed: dict[str, Any] = {}
     space: dict[str, Any] = {}
@@ -186,6 +219,8 @@ def search_space(
             fixed[name] = value
         elif search == 'random' and _is_range(value):
             space[name] = _distribution(value[0], value[1])
+        elif search == 'optuna':
+            space[name] = _optuna_distribution(value)
         else:
             space[name] = value
     return fixed, space
@@ -211,6 +246,29 @@ def _distribution(low: float, high: float) -> Any:
     if isinstance(low, int) and isinstance(high, int):
         return stats.randint(low, high + 1)
     return stats.uniform(low, high - low)
+
+
+def _optuna_distribution(value: list[Any]) -> Any:
+    """Returns an Optuna distribution for the values of a parameter.
+
+    Args:
+        value: a list of two numbers (a range) or of candidates.
+
+    Returns:
+        An integer or float distribution for a range, and otherwise a
+            categorical distribution of the candidates.
+
+    """
+    distributions = import_tool('optuna.distributions')
+    if not _is_range(value):
+        return distributions.CategoricalDistribution(value)
+    low, high = min(value), max(value)
+    if isinstance(low, int) and isinstance(high, int):
+        return distributions.IntDistribution(low, high)
+    # A range that spans two or more orders of magnitude (such as a learning
+    # rate from 0.001 to 0.1) is searched on a log scale.
+    log = low > 0 and high / low >= 100  # noqa: PLR2004
+    return distributions.FloatDistribution(low, high, log = log)
 
 
 def _is_range(value: list[Any]) -> bool:
