@@ -17,11 +17,12 @@
 <img src="https://media.giphy.com/media/rSi5EIResK2kW2B1NB/giphy.gif" height="300"/>
 </p>
 
-**A**utomated **M**odeling for **O**pen **S**cholarship. Like the Rocinante's
+**A**utomated **M**odeling for **O**pen **S**cholarship.
+Like the Rocinante's
 mechanic in *The Expanse*, `amos` handles the dirty jobs of a data science
 project: cleaning, describing, splitting, preprocessing, modeling, evaluating,
 and drawing. It is designed for academic research, where a result has to be
-explained, defended, and reproduced by someone else.
+explained and reproduced.
 
 You describe a study in a plain settings file (or a Python `dict`). `amos`
 builds the workflow with [chrisjen](https://github.com/WithPrecedent/chrisjen),
@@ -54,7 +55,7 @@ print(project.result)
 
 That project split the data, tried four combinations of scaling and models,
 kept the one with the best ROC AUC on the test rows, and scored it. The
-comparison of all four is a table, ready for a paper:
+comparison of all four is stored in a table:
 
 ```python
 table = project.result.tables["analyst_comparison"]
@@ -72,7 +73,7 @@ print(table["roc_auc"].iloc[-1])
 
 ### Intuitive
 
-`amos` avoids programming jargon and uses one vocabulary for every stage of a
+`amos` is accessible to researchers at all levels. It uses one vocabulary for every stage of a
 project. A project is made of **workers** (its stages), which use
 **techniques** (the actual methods), sometimes organized in **steps**. The
 settings file only names things, so it doubles as a readable description of
@@ -103,17 +104,17 @@ Open scholarship means that others can check your work. `amos` helps by:
 * Isolating training and testing data. Every scaler, encoder, imputer, and sampler is fitted to the training rows and then applied to the test rows, so nothing leaks from the test set.
 * All settings and parameters can be implemented through a single settings file that will produce the same results on any computer.
 
-### Comprehensive
+### Universal
 
-`amos` wraps the major Python data science packages behind one interface, so you can compare their methods side by side without learning each package'snquirks:
+`amos` wraps the major Python data science packages behind one interface, so you can compare their methods side by side without learning each package's quirks:
 
 | Package | What `amos` uses it for |
 | --- | --- |
 | [scikit-learn](https://scikit-learn.org) | Splitting, imputing, scaling, feature selection, models, metrics, and permutation importance. |
-| [category_encoders](https://contrib.scikit-learn.org/category_encoders/) and [skrub](https://skrub-data.org) | Target, weight of evidence, and a dozen other encoders, and encoders for messy text and for dates. |
+| [category_encoders](https://contrib.scikit-learn.org/category_encoders/) and [skrub](https://skrub-data.org) | Target, weight of evidence, and a dozen other data encoders. |
 | [imbalanced-learn](https://imbalanced-learn.org) | SMOTE and other ways to balance the classes of the training rows. |
-| [xgboost](https://xgboost.readthedocs.io), [lightgbm](https://lightgbm.readthedocs.io), and [catboost](https://catboost.ai) | Gradient boosting (catboost uses categories directly). |
-| [InterpretML](https://interpret.ml) | Explainable Boosting Machines: accurate models whose every effect can be shown. |
+| [xgboost](https://xgboost.readthedocs.io), [lightgbm](https://lightgbm.readthedocs.io), and [catboost](https://catboost.ai) | Gradient boosting. |
+| [InterpretML](https://interpret.ml) | Explainable boosting machines: accurate models whose every effect can be shown. |
 | [TabPFN](https://github.com/PriorLabs/TabPFN) | A pretrained model that is often the most accurate on small data. |
 | [Optuna](https://optuna.org) | Hyperparameter searches that learn from each try. |
 | [statsmodels](https://www.statsmodels.org) and [pyfixest](https://py-econometrics.github.io/pyfixest/) | Regressions with standard errors, p-values, and confidence intervals, including fixed effects and clustered standard errors. |
@@ -122,17 +123,12 @@ Open scholarship means that others can check your work. `amos` helps by:
 | [fairlearn](https://fairlearn.org) | Fairness metrics that compare a model across groups. |
 | [MAPIE](https://mapie.readthedocs.io) | Conformal prediction: intervals and sets with a known rate of coverage. |
 | [shap](https://shap.readthedocs.io) and [eli5](https://eli5.readthedocs.io) | Explaining models with SHAP values and weights. |
-| [matplotlib](https://matplotlib.org) and [seaborn](https://seaborn.pydata.org) | Figures, and scorecards as images. |
+| [matplotlib](https://matplotlib.org) and [seaborn](https://seaborn.pydata.org) | Figures and other visualizations. |
 | [great_tables](https://posit-dev.github.io/great-tables/) and [python-docx](https://python-docx.readthedocs.io) | Scorecards as HTML tables and Word documents. |
-| [Polars](https://pola.rs) | Reading data from Polars data frames. |
 
-Unlike scikit-learn, every technique keeps your data in a `pandas.DataFrame`
-with named columns, can be limited to some `columns`, and is given the label
-when it is fitted (which target encoders need). Most models work for both
-classification and regression: `random_forest` is a classifier or a regressor
-depending on your label.
 
-### Transparent
+
+### Robust and Transparent
 
 A result that depends on one arbitrary choice of preprocessing or model is
 fragile. The `experiment` design tries **every combination** of the techniques
@@ -141,8 +137,7 @@ your conclusions are robust (or not). The critic's `scorecard` puts every
 combination side by side, on every metric, in a table ready for a paper (as
 csv, Markdown, LaTeX, HTML, Word, or an image).
 
-Name the columns that identify groups of people or places (such as race,
-court, or judge) as `groups`, and `amos` keeps them out of the model's
+Name the columns that identify groups of people or places as `groups`, and `amos` keeps them out of the model's
 features while it uses them to check fairness across groups, to add fixed
 effects and cluster standard errors, and to keep each group in one set when
 it splits the data. Any step can include `none`, which tests
@@ -284,14 +279,9 @@ feature is shuffled, which works for any model:
 <img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/importance_plot.png" alt="The ten features whose shuffling lowers the model's score the most" height="320"/>
 </p>
 
-The result is a `Dataset`: the data, the fitted `model`, its `predictions`,
-`metrics`, `tables`, `figures`, and the `history` of every technique. The
-`report` summarizes the run:
+The result includes a `Dataset`, the fitted `model`, its `predictions`,
+`metrics`, `tables`, `figures`, and the `history` of every technique.
 
-```python
-print(project.report.contents.splitlines()[:5])
-# ['project: cancer', 'id: first_run', 'workflow: wrangler > explorer > analyst > critic > artist', 'data: 569 rows and 31 columns', 'label: target (classify)']
-```
 
 #### Compare every branch
 
@@ -330,7 +320,7 @@ print(sorted(path.name for path in folder.iterdir()))
 ```
 
 There is much more to `amos`, including hyperparameter searches, statistical
-inference with statsmodels, every technique and its parameters, and how to
+inference with `statsmodels`, every technique and its parameters, and how to
 write your own. See the [documentation](https://WithPrecedent.github.io/amos),
 especially the [tutorial](https://WithPrecedent.github.io/amos/tutorial/), the
 [advanced user guide](https://WithPrecedent.github.io/amos/advanced/), and the
@@ -364,10 +354,6 @@ Conduct](https://www.github.com/WithPrecedent/amos/blob/main/CODE_OF_CONDUCT.md)
   with more structure for large, long-running projects.
 * [MLflow](https://mlflow.org) and [DVC](https://dvc.org): track experiments,
   data, and models over time. They work well alongside `amos`.
-
-## Acknowledgments
-
-`amos` grew out of `simplify`, an earlier project with the same goals.
 
 ## License
 
