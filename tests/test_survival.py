@@ -102,3 +102,21 @@ def test_cox_needs_an_event_column_that_exists() -> None:
     dataset = _survival(split = True)
     with pytest.raises(KeyError, match = 'event column'):
         amos.models.Cox().apply(dataset, event = 'missing')
+
+
+def test_survival_curves_count_the_rows_at_risk() -> None:
+    requires('matplotlib')
+    dataset = _survival()
+    amos.plots.SurvivalCurves().apply(
+        dataset, event = 'arrested', group = 'program', at_risk = True)
+    curves, table = dataset.figures['survival_curves'].axes
+    names = [t.get_text() for t in table.get_yticklabels()]
+    assert sorted(names) == ['no', 'yes']
+    # At a time of 0, every row is at risk.
+    first = [t for t in table.texts if t.get_position()[0] == 0]
+    assert sum(int(t.get_text()) for t in first) == len(dataset.data)
+    days = dataset.data['days']
+    for text in table.texts:
+        tick, row = text.get_position()
+        group = dataset.data['program'] == names[int(row)]
+        assert int(text.get_text()) == int((days[group] >= tick).sum())

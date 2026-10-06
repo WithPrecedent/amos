@@ -1,8 +1,9 @@
 # Recipes
 
 Short, complete studies for common jobs. They are run by the `amos` unit
-tests. See the [tutorial](tutorial.md) for the basics and the [advanced user
-guide](advanced.md) for every setting and technique.
+tests. See the [tutorial](tutorial.md) for the basics, the [advanced user
+guide](advanced.md) for every setting, and the [technique
+catalog](catalog.md) for every technique.
 
 ## Classify more than two classes
 
@@ -210,14 +211,16 @@ there instead of in an "analyst" section.
 ## Explain a model
 
 SHAP values show how much each feature moves each prediction. `shap_importance`
-stores the mean absolute value for each feature, and `importance_plot` draws
-the most important:
+stores the mean absolute value for each feature, and the artist draws the
+values with shap's own plots: `shap_beeswarm` shows each row's SHAP values for
+the most important features, and `shap_waterfall` shows how the features move
+one row's prediction:
 
 ```python
 settings = {
     "general": {"seed": 43},
     "cancer_project": {
-        "techniques": "stratified, gradient_boosting, shap_importance, importance_plot",
+        "techniques": "stratified, gradient_boosting, shap_importance, shap_beeswarm, shap_waterfall",
     },
     "shap_importance_parameters": {"rows": 50},
 }
@@ -225,12 +228,21 @@ project = amos.Project.create(settings, item = cancer)
 importance = project.result.tables["shap_importance"]
 print(importance.index.name, len(importance))
 # feature 30
-print("importance_plot" in project.result.figures)
-# True
+print(sorted(project.result.figures))
+# ['shap_beeswarm', 'shap_waterfall']
 ```
 
-`permutation_importance` works with any model, and `feature_importance` reports
-a model's own importances (or the size of its coefficients).
+The other SHAP plots draw the same values in other ways: `shap_bar`,
+`shap_violin`, and `shap_heatmap` for every feature; `shap_decision` and
+`shap_embedding` for every row; `shap_force` for one row (like the waterfall);
+`shap_scatter` and `shap_partial_dependence` for one feature; and
+`shap_group_difference` for the difference between two groups. They draw the
+SHAP values that `shap_importance` found, or find them if it was not applied.
+Set "row" (an index label) in `shap_waterfall_parameters` to explain a
+particular row, and "category" to explain a class other than the last. `importance_plot` draws any
+table of importances as plain bars. `permutation_importance` works with any
+model, and `feature_importance` reports a model's own importances (or the size
+of its coefficients).
 
 ## Check fairness across groups
 
@@ -261,6 +273,9 @@ print(list(project.scorecard.table.columns[-2:]))
 print(list(project.result.tables["fairness"].index))
 # ['north', 'south', 'difference', 'ratio']
 ```
+
+An artist with `fairness_plot` draws the table, and `shap_group_difference`
+shows which features explain the difference between the groups.
 
 ## Fixed effects and clustered standard errors
 

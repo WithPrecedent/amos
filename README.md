@@ -85,7 +85,7 @@ your methods:
 | explorer | Describes the data in tables. | `summarize`, `frequencies`, `correlations`, `missing_values`, `kaplan_meier`, ... |
 | analyst | Splits, preprocesses, and models the data, or estimates causal effects. | `stratified`, `median_impute`, `standard`, `one_hot`, `date_parts`, `smote`, `logit`, `catboost`, `fixest`, `cox`, `partially_linear`, ... |
 | critic | Evaluates the model. | `scorecard`, `roc_auc`, `fairness`, `conformal`, `permutation_importance`, `shap_importance`, ... |
-| artist | Draws figures. | `roc_curve`, `confusion_heatmap`, `importance_plot`, `survival_curves`, ... |
+| artist | Draws figures. | `roc_curve`, `calibration_curve`, `pair_plot`, `coefficient_plot`, `partial_dependence`, `shap_beeswarm`, `shap_waterfall`, `survival_curves`, ... |
 
 The stages are only a convention: any technique can be used in any worker, and
 you can name your workers whatever you like.
@@ -122,7 +122,7 @@ Open scholarship means that others can check your work. `amos` helps by:
 | [lifelines](https://lifelines.readthedocs.io) | Survival analysis: Kaplan-Meier curves and Cox regression of the time until an event. |
 | [fairlearn](https://fairlearn.org) | Fairness metrics that compare a model across groups. |
 | [MAPIE](https://mapie.readthedocs.io) | Conformal prediction: intervals and sets with a known rate of coverage. |
-| [shap](https://shap.readthedocs.io) and [eli5](https://eli5.readthedocs.io) | Explaining models with SHAP values and weights. |
+| [shap](https://shap.readthedocs.io) and [eli5](https://eli5.readthedocs.io) | Explaining models with SHAP values (and shap's plots of them) and weights. |
 | [matplotlib](https://matplotlib.org) and [seaborn](https://seaborn.pydata.org) | Figures and other visualizations. |
 | [great_tables](https://posit-dev.github.io/great-tables/) and [python-docx](https://python-docx.readthedocs.io) | Scorecards as HTML tables and Word documents. |
 
@@ -182,7 +182,7 @@ amos[all]`, or choose:
 | `boosting` | xgboost, lightgbm, catboost | Gradient boosting models. |
 | `causal` | DoubleML | Causal effects (`partially_linear` and `interactive_regression`). |
 | `encoders` | category_encoders, skrub | Target encoders, and encoders for text and dates. |
-| `explain` | shap, eli5, InterpretML | `shap_importance`, `explain_weights`, and `explainable_boosting`. |
+| `explain` | shap, eli5, InterpretML | `shap_importance`, the SHAP plots (such as `shap_beeswarm`), `explain_weights`, and `explainable_boosting`. |
 | `fairness` | fairlearn | Fairness metrics and the `fairness` table. |
 | `plots` | matplotlib, seaborn | The artist's figures, and scorecards as images. |
 | `polars` | Polars, pyarrow | Reading Polars data frames. |
@@ -323,7 +323,8 @@ There is much more to `amos`, including hyperparameter searches, statistical
 inference with `statsmodels`, every technique and its parameters, and how to
 write your own. See the [documentation](https://WithPrecedent.github.io/amos),
 especially the [tutorial](https://WithPrecedent.github.io/amos/tutorial/), the
-[advanced user guide](https://WithPrecedent.github.io/amos/advanced/), and the
+[advanced user guide](https://WithPrecedent.github.io/amos/advanced/), the
+[technique catalog](https://WithPrecedent.github.io/amos/catalog/), and the
 [recipes](https://WithPrecedent.github.io/amos/recipes/).
 
 ## Contributing

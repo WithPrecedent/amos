@@ -13,6 +13,7 @@ the test fails if the block prints something else.
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import io
 import os
 import pathlib
@@ -110,13 +111,27 @@ def test_examples_run(
     assert os.getcwd() == str(tmp_path)  # noqa: PTH109
 
 
-def test_every_technique_is_in_the_advanced_guide() -> None:
+def test_every_technique_is_in_the_catalog() -> None:
     """Checks that the technique catalog in the docs lists every technique."""
-    text = (ROOT / 'docs' / 'advanced.md').read_text(encoding = 'utf-8')
+    text = (ROOT / 'docs' / 'catalog.md').read_text(encoding = 'utf-8')
     operations = amos.library.get_genre('operation')
     names = [
         name for name, kind in amos.library.all.items()
         if isinstance(kind, type) and issubclass(kind, amos.Operation)]
     assert operations
     missing = [name for name in names if f'`{name}`' not in text]
-    assert missing == [], f'missing from docs/advanced.md: {missing}'
+    assert missing == [], f'missing from docs/catalog.md: {missing}'
+
+
+def test_the_catalog_is_up_to_date() -> None:
+    """Checks that the catalog's tables match the techniques' docstrings."""
+    path = ROOT / 'docs' / 'scripts' / 'technique_catalog.py'
+    spec = importlib.util.spec_from_file_location('technique_catalog', path)
+    assert spec is not None
+    assert spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    text = script.CATALOG.read_text(encoding = 'utf-8')
+    assert text[text.index(script.FIRST):] == script.tables(), (
+        'docs/catalog.md is out of date: run '
+        '"uv run python docs/scripts/technique_catalog.py"')

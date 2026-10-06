@@ -26,6 +26,7 @@ nav:
 - User Guide:
   - Tutorial: tutorial.md
   - Advanced User Guide: advanced.md
+  - Technique Catalog: catalog.md
   - Recipes: recipes.md
 - API: reference/
 - Development:

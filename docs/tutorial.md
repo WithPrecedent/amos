@@ -295,7 +295,8 @@ these results exactly.
 
 ## Next steps
 
-* The [advanced user guide](advanced.md) lists every technique, describes the
-  settings, and shows how to write your own techniques.
+* The [advanced user guide](advanced.md) describes the settings and shows how
+  to write your own techniques, and the [technique catalog](catalog.md) lists
+  every technique.
 * The [recipes](recipes.md) show complete studies: regression with statistical
   inference, imbalanced classes, categorical data, and more.

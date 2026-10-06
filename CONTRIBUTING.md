@@ -49,8 +49,10 @@ Most contributions to `amos` are new techniques. To add one:
    packages stay optional. If the tool comes from a new package, add the
    package to an extra in `pyproject.toml` and to `options._EXTRAS`.
 3. Give the class a docstring whose first line describes the technique. The
-   technique catalog in `docs/advanced.md` uses it, and a unit test checks that
-   every technique is in the catalog.
+   tables of the technique catalog in `docs/catalog.md` are made from these
+   lines: write them again with `uv run python
+   docs/scripts/technique_catalog.py`. A unit test checks that the catalog
+   is up to date.
 4. Make sure the technique learns only from the training rows, records what
    it did in the dataset's `history`, and uses the dataset's `seed` for
    anything random.

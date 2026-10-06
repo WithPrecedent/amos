@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* Added eleven plots from shap to the artist: `shap_bar`, `shap_beeswarm`,
+  `shap_violin`, `shap_heatmap`, `shap_decision`, `shap_embedding`,
+  `shap_waterfall`, `shap_force`, `shap_scatter` (a dependence plot),
+  `shap_partial_dependence`, and `shap_group_difference`. They draw the SHAP
+  values that `shap_importance` found (or find them), for the class chosen
+  with "category" (by default, the last class). shap draws with
+  `matplotlib.pyplot`, so these plots lend it their figure while it draws,
+  without opening a window, and leave pyplot as it was. The random numbers
+  that shap uses to jitter dots and to bootstrap are seeded with the
+  dataset's seed, so the figures are reproducible.
+* Added plots from the other packages:
+  * scikit-learn: `calibration_curve`, `det_curve`, `partial_dependence`,
+    `learning_curve`, `validation_curve`, and `tree_plot`.
+  * seaborn: `box_plots`, `count_plots`, `pair_plot`, `label_plot`, and
+    `missing_heatmap`, split or colored by the label's classes (or by a
+    group, or by "by").
+  * statsmodels: `qq_plot` and `influence_plot`.
+  * InterpretML: `shape_functions`, the shape functions of an
+    `explainable_boosting` model.
+  * Plots of the tables made with other packages: `coefficient_plot` (of
+    the coefficients of `ols`, `glm`, `fixest`, or `cox`, or of an effect from
+    DoubleML), `fairness_plot` (fairlearn), `prediction_intervals` (MAPIE),
+    and `search_plot` (of any search, including Optuna's).
+* `survival_curves` can add a table of the number of rows at risk
+  (`at_risk`).
+* A plot can have its own usual size (`Plot.size`), which "width" and
+  "height" still change, and a plot whose tool makes its own figure (as
+  shap's force plot does) can return that figure from `draw`.
+* Moved the technique catalog out of the advanced user guide into its own
+  page of the user guide, "Technique Catalog". Its tables are written from
+  the techniques' docstrings by `docs/scripts/technique_catalog.py`, and a
+  test checks that they are up to date.
+
 ## 0.2.1
 
 * Replaced the `scorecard` technique of the critic stage with `Scorecard`,
