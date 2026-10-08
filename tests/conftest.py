@@ -61,7 +61,7 @@ def package_of(kind: type) -> str:
     tools = [getattr(kind, 'contents', None), *getattr(kind, 'tools', {}).values()]
     adapters = {
         'FixedEffects': 'pyfixest',
-        'ProportionalHazards': 'lifelines',
+        'ProportionalHazards': 'statsmodels',
         'Statsmodel': 'statsmodels'}
     for tool in tools:
         if isinstance(tool, str):

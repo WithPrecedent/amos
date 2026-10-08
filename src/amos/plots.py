@@ -1824,18 +1824,26 @@ class SurvivalCurves(Plot):
             **kwargs: not used.
 
         """
-        fitters = describers.survival_curves(item, event, group)
+        curves = describers.survival_curves(item, event, group)
         if not at_risk:
             axes = figure.subplots()
         else:
             axes, table = figure.subplots(
                 2, 1, sharex = True,
-                height_ratios = [4, 0.6 + 0.3 * len(fitters)])
-        for fitter in fitters.values():
-            fitter.plot_survival_function(ax = axes)
+                height_ratios = [4, 0.6 + 0.3 * len(curves)])
+        for name, curve in curves.items():
+            steps = describers.survival_steps(curve)
+            [line] = axes.step(
+                steps['time'], steps['survival'], where = 'post',
+                label = name)
+            axes.fill_between(
+                steps['time'], steps['ci_lower'], steps['ci_upper'],
+                step = 'post', alpha = 0.25, color = line.get_color(),
+                linewidth = 0)
+        axes.legend()
         axes.set_ylabel('share without the event')
         if at_risk:
-            _at_risk(table, axes, fitters)
+            _at_risk(table, axes, curves)
             axes = table
         axes.set_xlabel(str(item.label))
 
@@ -1966,25 +1974,25 @@ class ValidationCurve(Plot):
 """ Private Functions """
 
 
-def _at_risk(table: Any, axes: Any, fitters: dict[str, Any]) -> None:
+def _at_risk(table: Any, axes: Any, curves: dict[str, Any]) -> None:
     """Writes the number of rows at risk at each tick of `axes` in `table`.
 
     Args:
         table: the axes to write the numbers in.
         axes: the axes of the survival curves.
-        fitters: the fitted Kaplan-Meier estimators, by name.
+        curves: the fitted Kaplan-Meier estimators, by name.
 
     """
     low, high = axes.get_xlim()
     ticks = [t for t in axes.get_xticks() if low <= t <= high]
-    for row, fitter in enumerate(fitters.values()):
-        durations = np.asarray(fitter.durations)
+    for row, curve in enumerate(curves.values()):
+        durations = np.asarray(curve.time)
         for tick in ticks:
             table.text(
                 tick, row, str(int((durations >= tick).sum())),
                 ha = 'center', va = 'center', fontsize = 'small')
-    table.set_yticks(range(len(fitters)), [str(n) for n in fitters])
-    table.set_ylim(len(fitters) - 0.5, -0.5)
+    table.set_yticks(range(len(curves)), [str(n) for n in curves])
+    table.set_ylim(len(curves) - 0.5, -0.5)
     table.set_title('number at risk', fontsize = 'small', loc = 'left')
     table.tick_params(left = False)
     for spine in table.spines.values():
@@ -2401,7 +2409,7 @@ def _require_sklearn(model: Any, use: str) -> None:
 
     Raises:
         TypeError: if `model` is not a scikit-learn estimator (as the models
-            of statsmodels, pyfixest, and lifelines are not).
+            of statsmodels and pyfixest are not).
 
     """
     sklearn = importlib.import_module('sklearn.base')

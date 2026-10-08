@@ -37,7 +37,7 @@ dependencies = [
     "chrisjen>=0.2.0",
     "nagata>=0.2.0",
     "numpy>=1.26",
-    "pandas>=2.2",
+    "pandas>=3.0",
     "scikit-learn>=1.5",
     "scipy>=1.10"]
 
@@ -54,7 +54,7 @@ plots = ["matplotlib>=3.8", "seaborn>=0.13"]
 polars = ["polars>=1.0", "pyarrow>=15"]
 sampling = ["imbalanced-learn>=0.12"]
 statistics = ["pyfixest>=0.30", "statsmodels>=0.14"]
-survival = ["lifelines>=0.29"]
+survival = ["statsmodels>=0.14"]
 tables = ["great-tables>=0.15"]
 tuning = ["optuna>=4.0", "optuna-integration[sklearn]>=4.0"]
 uncertainty = ["mapie>=1.0"]
@@ -98,7 +98,6 @@ tests = [
     "great-tables>=0.15",
     "imbalanced-learn>=0.12",
     "interpret-core>=0.6",
-    "lifelines>=0.29",
     "lightgbm>=4.0",
     "mapie>=1.0",
     "matplotlib>=3.8",

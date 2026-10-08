@@ -173,7 +173,7 @@ imported when a technique that needs them is used (see the extras in the
 | `balanced_accuracy` | `sklearn.metrics.balanced_accuracy_score` | classify | higher | The average share of each class classified correctly. |
 | `brier` | `sklearn.metrics.brier_score_loss` | classify | lower | The mean squared error of the predicted probabilities (lower is better). |
 | `cohen_kappa` | `sklearn.metrics.cohen_kappa_score` | classify | higher | Agreement between the predictions and labels beyond chance. |
-| `concordance` | `lifelines.utils.concordance_index` | regress | higher | How often the model orders pairs of times correctly (Harrell's C). |
+| `concordance` | `amos.metrics.concordance_index` | regress | higher | How often the model orders pairs of times correctly (Harrell's C). |
 | `demographic_parity` | `fairlearn.metrics.demographic_parity_difference` | classify | lower | The largest gap between groups in the share predicted to be positive. |
 | `demographic_parity_ratio` | `fairlearn.metrics.demographic_parity_ratio` | classify | higher | The smallest group's share predicted positive over the largest's. |
 | `equal_opportunity` | `fairlearn.metrics.equal_opportunity_difference` | classify | lower | The largest gap between groups in the true positive rate. |

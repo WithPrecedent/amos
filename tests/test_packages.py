@@ -48,7 +48,7 @@ def _readme_packages() -> list[str]:
 def test_every_package_in_the_readme_has_a_test() -> None:
     packages = _readme_packages()
     assert 'scikit-learn' in packages
-    assert len(packages) == 22
+    assert len(packages) == 21
     for package in packages:
         name = IMPORT_NAMES.get(package, package.replace('-', '_'))
         assert callable(globals().get(f'test_{name}')), package
@@ -362,16 +362,18 @@ def test_doubleml(regressed: amos.Dataset) -> None:
         estimator.summary.loc['x0', 'std err'])
 
 
-def test_lifelines(regressed: amos.Dataset) -> None:
-    requires('lifelines')
-    lifelines = importlib.import_module('lifelines')
+def test_statsmodels_cox(regressed: amos.Dataset) -> None:
+    requires('statsmodels')
+    regression = importlib.import_module(
+        'statsmodels.duration.hazard_regression')
     amos.models.Cox().apply(regressed)
     train = regressed.data.loc[regressed.train]
-    expected = lifelines.CoxPHFitter().fit(train, duration_col = 'target')
+    expected = regression.PHReg(
+        train['target'], train.drop(columns = 'target'),
+        ties = 'efron').fit()
     table = regressed.tables['cox_coefficients']
-    np.testing.assert_allclose(table['coefficient'], expected.params_)
-    np.testing.assert_allclose(
-        table['standard_error'], expected.standard_errors_)
+    np.testing.assert_allclose(table['coefficient'], expected.params)
+    np.testing.assert_allclose(table['standard_error'], expected.bse)
 
 
 def test_tabpfn(classified: amos.Dataset) -> None:

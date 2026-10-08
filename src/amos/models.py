@@ -2,9 +2,9 @@
 
 These are the techniques of the last step of the "analyst" stage. Each one
 wraps a model from scikit-learn, xgboost, lightgbm, catboost, InterpretML,
-TabPFN, statsmodels, pyfixest, or lifelines. Most work for both tasks:
-`random_forest`, for example, is a random forest classifier when the label is
-classified and a random forest regressor when it is regressed. A model is
+TabPFN, statsmodels, or pyfixest. Most work for both tasks: `random_forest`,
+for example, is a random forest classifier when the label is classified and a
+random forest regressor when it is regressed. A model is
 fitted to the training rows and predicts the test rows (or every row, if the
 data has not been split). The fitted model, its predictions, and (for
 classifiers) its predicted probabilities are stored in the dataset.
@@ -21,7 +21,7 @@ Contents:
         any classes.
     Statsmodel: adapts statsmodels regressions to the scikit-learn interface.
     FixedEffects: adapts pyfixest regressions to the scikit-learn interface.
-    ProportionalHazards: adapts lifelines' Cox model to the scikit-learn
+    ProportionalHazards: adapts statsmodels' Cox model to the scikit-learn
         interface.
     Adaboost, Baseline, Catboost, Cox, DecisionTree, ElasticNet,
         ExplainableBoosting, ExtraTrees, Fixest, GLM, GradientBoosting, KNN,
@@ -962,22 +962,26 @@ class FixedEffects:
 
 @dataclasses.dataclass
 class ProportionalHazards:
-    """Adapts lifelines' Cox regression to the scikit-learn interface.
+    """Adapts statsmodels' Cox regression to the scikit-learn interface.
 
     The label is the time until an event (such as rearrest) or until the row
-    stopped being observed (censoring). The model predicts the expected time
-    until the event. The `coefficients` method returns the coefficients,
-    hazard ratios, and their statistics as a table.
+    stopped being observed (censoring). Rows with the same time are handled
+    with Efron's method. The model predicts the expected time until the
+    event. The `coefficients` method returns the coefficients, hazard ratios,
+    and their statistics as a table.
 
     Args:
         event: name of the column that is 1 (or `True`) if the event
             happened and 0 if the row was censored. Defaults to `None`, which
             means that every event was observed.
-        penalizer: strength of a ridge penalty on the coefficients. Defaults
-            to 0.0.
+        penalizer: strength of a ridge penalty on the coefficients, as in
+            statsmodels' `fit_regularized` (the penalty is the number of rows
+            times `penalizer` times half the sum of the squared
+            coefficients). The penalty depends on the scales of the
+            features, so scale them first. Defaults to 0.0.
 
     Attributes:
-        results: the fitted `lifelines.CoxPHFitter`.
+        results: the fitted statsmodels `PHRegResults`.
         feature_names_in_: the features (not the event column).
 
     """
@@ -993,7 +997,7 @@ class ProportionalHazards:
     @property
     def coef_(self) -> np.ndarray:
         """Returns the coefficients of the features."""
-        return np.asarray(self.results.params_)
+        return np.asarray(self.results.params)
 
     """ Public Methods """
 
@@ -1006,15 +1010,18 @@ class ProportionalHazards:
                 "ci_upper" (of the coefficient).
 
         """
-        summary = self.results.summary
-        return pd.DataFrame({
-            'coefficient': summary['coef'],
-            'hazard_ratio': summary['exp(coef)'],
-            'standard_error': summary['se(coef)'],
-            'statistic': summary['z'],
-            'p_value': summary['p'],
-            'ci_lower': summary['coef lower 95%'],
-            'ci_upper': summary['coef upper 95%']})
+        results = self.results
+        bounds = np.asarray(results.conf_int())
+        return pd.DataFrame(
+            {
+                'coefficient': results.params,
+                'hazard_ratio': np.exp(results.params),
+                'standard_error': results.bse,
+                'statistic': results.tvalues,
+                'p_value': results.pvalues,
+                'ci_lower': bounds[:, 0],
+                'ci_upper': bounds[:, 1]},
+            index = list(self.feature_names_in_))
 
     def fit(self, x: pd.DataFrame, y: pd.Series) -> ProportionalHazards:
         """Fits the model.
@@ -1027,16 +1034,27 @@ class ProportionalHazards:
             This adapter.
 
         """
-        lifelines = utilities.import_tool('lifelines')
+        regression = utilities.import_tool(
+            'statsmodels.duration.hazard_regression')
         data = self._features(x).astype(float)
         self.feature_names_in_ = np.asarray(data.columns)
-        data['amos_duration'] = np.asarray(y, dtype = float)
-        event = None
+        status = None
         if self.event is not None:
-            data['amos_event'] = x[self.event].astype(int).to_numpy()
-            event = 'amos_event'
-        self.results = lifelines.CoxPHFitter(penalizer = self.penalizer).fit(
-            data, duration_col = 'amos_duration', event_col = event)
+            status = x[self.event].astype(int).to_numpy()
+        model = regression.PHReg(
+            np.asarray(y, dtype = float), data.to_numpy(), status = status,
+            ties = 'efron')
+        if not self.penalizer:
+            self.results = model.fit()
+            return self
+        params = model.fit_regularized(
+            alpha = self.penalizer, L1_wt = 0.0).params
+        # statsmodels gives no standard errors for a penalized fit. They come
+        # from the curvature of the penalized log likelihood.
+        information = -model.hessian(params) + (
+            len(data) * self.penalizer * np.eye(len(params)))
+        self.results = regression.PHRegResults(
+            model, params, np.linalg.inv(information))
         return self
 
     def get_params(
@@ -1056,6 +1074,9 @@ class ProportionalHazards:
     def predict(self, x: pd.DataFrame) -> np.ndarray:
         """Returns the expected time until the event.
 
+        The expected time is the area under a row's survival curve, up to the
+        longest time in the training rows.
+
         Args:
             x: features (and, optionally, the event column).
 
@@ -1063,8 +1084,15 @@ class ProportionalHazards:
             The expected times.
 
         """
-        features = self._features(x).astype(float)
-        return np.asarray(self.results.predict_expectation(features)).ravel()
+        features = self._features(x).astype(float).to_numpy()
+        times, hazards, _ = self.results.baseline_cumulative_hazard[0]
+        end = np.max(self.results.model.endog)
+        # The survival curves are steps that start at 1 and drop at each time
+        # with an event in the training rows.
+        widths = np.diff(np.concatenate([[0.0], times, [end]]))
+        risks = np.exp(features @ np.asarray(self.results.params))
+        survival = np.exp(-np.outer(risks, np.concatenate([[0.0], hazards])))
+        return survival @ widths
 
     def set_params(self, **parameters: Any) -> ProportionalHazards:
         """Sets parameters, as scikit-learn expects.

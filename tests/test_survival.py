@@ -11,9 +11,9 @@ import amos
 
 
 @pytest.fixture(autouse = True)
-def _lifelines() -> None:
-    """Skips the tests if lifelines cannot be imported."""
-    requires('lifelines')
+def _statsmodels() -> None:
+    """Skips the tests if statsmodels cannot be imported."""
+    requires('statsmodels')
 
 
 def _survival(split: bool = False) -> amos.Dataset:
@@ -36,19 +36,35 @@ def _survival(split: bool = False) -> amos.Dataset:
     return dataset
 
 
-def test_kaplan_meier_matches_lifelines() -> None:
-    lifelines = pytest.importorskip('lifelines')
+def test_kaplan_meier_is_the_product_limit() -> None:
     dataset = _survival()
     amos.describers.KaplanMeier().apply(dataset, event = 'arrested')
     table = dataset.tables['kaplan_meier']
     assert list(table.columns) == ['group', 'time', 'survival', 'at_risk']
     assert set(table['group']) == {'all'}
-    fitter = lifelines.KaplanMeierFitter().fit(
-        dataset.y, dataset.data['arrested'])
-    np.testing.assert_allclose(
-        table['survival'], fitter.survival_function_.iloc[:, 0])
+    days = dataset.y.to_numpy()
+    arrested = dataset.data['arrested'].to_numpy() == 1
+    expected = [
+        np.prod([
+            1 - (arrested & (days == t)).sum() / (days >= t).sum()
+            for t in np.unique(days[arrested]) if t <= time])
+        for time in table['time']]
+    np.testing.assert_allclose(table['survival'], expected)
+    assert list(table['at_risk']) == [(days >= t).sum() for t in table['time']]
+    assert table['time'].iloc[0] == 0
+    assert table['survival'].iloc[0] == 1
+    assert table['time'].iloc[-1] == days.max()
     assert table['survival'].is_monotonic_decreasing
-    assert table['at_risk'].iloc[0] == len(dataset.data)
+
+
+def test_survival_steps_have_confidence_intervals() -> None:
+    dataset = _survival()
+    curve = amos.describers.survival_curves(dataset, 'arrested')['all']
+    steps = amos.describers.survival_steps(curve)
+    assert (steps['ci_lower'] <= steps['survival']).all()
+    assert (steps['survival'] <= steps['ci_upper']).all()
+    assert steps['ci_lower'].between(0, 1).all()
+    assert steps['ci_upper'].between(0, 1).all()
 
 
 def test_kaplan_meier_by_group() -> None:
@@ -84,18 +100,54 @@ def test_cox_reports_hazard_ratios() -> None:
     assert dataset.predictions.notna().all()
 
 
+def test_cox_penalizer_shrinks_the_coefficients() -> None:
+    dataset = _survival(split = True)
+    amos.models.Cox().apply(dataset, event = 'arrested')
+    amos.models.Cox(name = 'ridge').apply(
+        dataset, event = 'arrested', penalizer = 0.5)
+    plain = dataset.tables['cox_coefficients']
+    ridge = dataset.tables['ridge_coefficients']
+    assert abs(ridge.loc['prior', 'coefficient']) < abs(
+        plain.loc['prior', 'coefficient'])
+    assert ridge['standard_error'].notna().all()
+    assert ridge['p_value'].between(0, 1).all()
+
+
 def test_concordance_uses_the_cox_event() -> None:
-    lifelines = pytest.importorskip('lifelines.utils')
     dataset = _survival(split = True)
     amos.models.Cox().apply(dataset, event = 'arrested')
     amos.metrics.Concordance().apply(dataset)
     rows = dataset.predictions.index
-    expected = lifelines.concordance_index(
+    expected = amos.metrics.concordance_index(
         dataset.y.loc[rows],
         dataset.predictions,
         dataset.data.loc[rows, 'arrested'])
     assert dataset.metrics['concordance'] == pytest.approx(expected)
     assert dataset.metrics['concordance'] > 0.5
+
+
+@pytest.mark.parametrize(('times', 'scores', 'observed', 'expected'), [
+    # Every pair is ordered correctly.
+    ([1, 2, 3, 4], [1, 3, 2, 4], [1, 0, 1, 1], 1.0),
+    # The first row is predicted to outlast the third, which it does not.
+    ([1, 2, 3, 4], [2, 3, 1, 4], [1, 0, 1, 1], 0.75),
+    # A row censored when another has its event is compared with it, and a
+    # tie in the predictions counts as half.
+    ([1, 1, 2, 3], [1, 1, 3, 2], [1, 0, 1, 0], 0.625),
+])
+def test_concordance_index_counts_pairs(
+    times: list[float],
+    scores: list[float],
+    observed: list[int],
+    expected: float) -> None:
+    assert amos.metrics.concordance_index(
+        times, scores, observed) == pytest.approx(expected)
+
+
+def test_concordance_index_needs_pairs_to_compare() -> None:
+    # Two events at the same time are not compared.
+    with pytest.raises(ValueError, match = 'no two rows'):
+        amos.metrics.concordance_index([1, 1], [1, 2], [1, 1])
 
 
 def test_cox_needs_an_event_column_that_exists() -> None:

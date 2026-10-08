@@ -371,7 +371,7 @@ row stopped being observed first (0, censored). `kaplan_meier` and
 time, overall or by group (with a table of the number of rows at risk, if
 "at_risk" is set). `cox` is a Cox proportional hazards regression,
 with hazard ratios in its coefficients table, and `concordance` scores its
-predictions. They wrap lifelines:
+predictions. They wrap statsmodels:
 
 ```python
 rng = np.random.default_rng(2)

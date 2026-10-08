@@ -117,9 +117,8 @@ Open scholarship means that others can check your work. `amos` helps by:
 | [InterpretML](https://interpret.ml) | Explainable boosting machines: accurate models whose every effect can be shown. |
 | [TabPFN](https://github.com/PriorLabs/TabPFN) | A pretrained model that is often the most accurate on small data. |
 | [Optuna](https://optuna.org) | Hyperparameter searches that learn from each try. |
-| [statsmodels](https://www.statsmodels.org) and [pyfixest](https://py-econometrics.github.io/pyfixest/) | Regressions with standard errors, p-values, and confidence intervals, including fixed effects and clustered standard errors. |
+| [statsmodels](https://www.statsmodels.org) and [pyfixest](https://py-econometrics.github.io/pyfixest/) | Regressions with standard errors, p-values, and confidence intervals, including fixed effects and clustered standard errors. Survival analysis: Kaplan-Meier curves and Cox regression of the time until an event. |
 | [DoubleML](https://docs.doubleml.org) | Causal effects of a treatment, estimated with double machine learning. |
-| [lifelines](https://lifelines.readthedocs.io) | Survival analysis: Kaplan-Meier curves and Cox regression of the time until an event. |
 | [fairlearn](https://fairlearn.org) | Fairness metrics that compare a model across groups. |
 | [MAPIE](https://mapie.readthedocs.io) | Conformal prediction: intervals and sets with a known rate of coverage. |
 | [shap](https://shap.readthedocs.io) and [eli5](https://eli5.readthedocs.io) | Explaining models with SHAP values (and shap's plots of them) and weights. |
@@ -188,7 +187,7 @@ amos[all]`, or choose:
 | `polars` | Polars, pyarrow | Reading Polars data frames. |
 | `sampling` | imbalanced-learn | Samplers such as `smote`. |
 | `statistics` | statsmodels, pyfixest | `ols`, `glm`, and `fixest` models with inference. |
-| `survival` | lifelines | `cox`, `kaplan_meier`, `survival_curves`, and `concordance`. |
+| `survival` | statsmodels | `cox`, `kaplan_meier`, `survival_curves`, and `concordance`. |
 | `tables` | great_tables | Scorecards as HTML tables. |
 | `tuning` | Optuna | `search = "optuna"` for any model. |
 | `uncertainty` | MAPIE | `conformal` intervals and sets. |

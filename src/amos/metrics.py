@@ -1,7 +1,7 @@
 """Metrics that score a model's predictions.
 
 These are techniques of the "critic" stage. Each one wraps a scoring function
-(from `sklearn.metrics`, fairlearn, or lifelines), compares the model's
+(from `sklearn.metrics` or fairlearn), compares the model's
 predictions (or predicted probabilities) with the true labels of the same
 rows, and stores the score in the dataset's `metrics` under the technique's
 name.
@@ -29,6 +29,7 @@ Contents:
         metrics.
     Concordance, ExplainedVariance, MAE, MAPE, MSE, R2, RMSE: regression
         metrics.
+    concordance_index: Harrell's concordance index of predicted times.
 
 """
 
@@ -411,7 +412,7 @@ class Concordance(Metric):
 
     """
 
-    contents: str = 'lifelines.utils.concordance_index'
+    contents: str = 'amos.metrics.concordance_index'
     tasks: ClassVar[tuple[str, ...]] = ('regress',)
 
     def _prepare(
@@ -487,6 +488,57 @@ class RMSE(Metric):
     contents: str = 'sklearn.metrics.root_mean_squared_error'
     greater_is_better: ClassVar[bool] = False
     tasks: ClassVar[tuple[str, ...]] = ('regress',)
+
+
+""" Public Functions """
+
+
+def concordance_index(
+    event_times: Any,
+    predicted_scores: Any,
+    event_observed: Any = None) -> float:
+    """Returns Harrell's concordance index of predicted times.
+
+    Two rows can be compared if the one with the shorter time had the event,
+    or if they have the same time and only one of them had the event (the
+    censored row is known to have lasted at least as long). Two rows with
+    events at the same time are not compared. A pair is ordered correctly if
+    the row that lasted longer has the higher prediction, and a tie in the
+    predictions counts as half.
+
+    Args:
+        event_times: the time until the event or censoring of each row.
+        predicted_scores: the predictions, which are higher for rows that are
+            predicted to last longer (such as predicted times).
+        event_observed: whether the event of each row happened (1) or the row
+            was censored (0). Defaults to `None`, which means every event
+            happened.
+
+    Raises:
+        ValueError: if no two rows can be compared.
+
+    Returns:
+        The share of the pairs that can be compared that are ordered
+            correctly: 0.5 is chance, and 1 is perfect.
+
+    """
+    times = np.asarray(event_times, dtype = float)
+    scores = np.asarray(predicted_scores, dtype = float)
+    if event_observed is None:
+        happened = np.ones(len(times), dtype = bool)
+    else:
+        happened = np.asarray(event_observed).astype(bool)
+    pairs = 0
+    correct = 0.0
+    for row in np.flatnonzero(happened):
+        later = (times > times[row]) | ((times == times[row]) & ~happened)
+        pairs += int(later.sum())
+        correct += (scores[later] > scores[row]).sum()
+        correct += (scores[later] == scores[row]).sum() / 2
+    if not pairs:
+        message = 'no two rows can be compared (did any event happen?)'
+        raise ValueError(message)
+    return float(correct / pairs)
 
 
 """ Private Functions """
