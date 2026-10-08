@@ -1,8 +1,10 @@
 """Techniques that evaluate a fitted model with tables.
 
 These are techniques of the "critic" stage, beside the metrics. Each one adds
-a table to the dataset's `tables` (under the technique's name). They evaluate
+a table to the dataset's `tables` (under the technique's name). Most evaluate
 the model on the test rows (or on every row, if the data has not been split).
+`factor_analysis` and `pca` instead describe the features
+that the model learned from, so they work in any stage.
 
 Contents:
     Evaluator: base class for techniques that evaluate a model with a table.
@@ -10,8 +12,12 @@ Contents:
     Confusion: how many rows of each class were predicted to be each class.
     Conformal: prediction intervals (or sets) with a known rate of coverage.
     ExplainWeights: eli5's explanation of the weights of the features.
+    FactorAnalysis: the hidden factors that explain the correlations of the
+        features.
     Fairness: how the model does for each group, and the gaps between them.
     FeatureImportance: the importance that the model gives each feature.
+    PCA: how much of the variance of the features each principal component
+        has.
     PermutationImportance: how much the score drops when each feature is
         shuffled.
     Scorecard: every standard metric for every branch of an analysis, ready
@@ -301,6 +307,63 @@ class ExplainWeights(Evaluator):
 
 
 @dataclasses.dataclass
+class FactorAnalysis(Evaluator):
+    """The hidden factors that explain the correlations of the features.
+
+    statsmodels' factor analysis of the features that the model learned from
+    (the real training rows). The table has a row for each feature, with its
+    loading on each factor, its communality (the share of its variance that
+    the factors explain), and its uniqueness (the rest). By default, there is
+    a factor for each eigenvalue of the features' correlations above 1
+    (Kaiser's rule), and the loadings are rotated by varimax.
+
+    """
+
+    def evaluate(
+        self,
+        item: base.Dataset,
+        *,
+        factors: int | None = None,
+        method: str = 'pa',
+        rotation: str | None = 'varimax',
+        columns: Sequence[str] | None = None,
+        **kwargs: Any) -> pd.DataFrame:
+        """Returns the loading of each feature on each factor.
+
+        Args:
+            item: the dataset.
+            factors: number of factors. Defaults to `None`, which uses
+                Kaiser's rule.
+            method: "pa" (principal axes) or "ml" (maximum likelihood).
+                Defaults to "pa".
+            rotation: how statsmodels rotates the loadings, such as
+                "varimax", "quartimax", "promax", or "oblimin", or `None`
+                (or "none") to leave them unrotated. Defaults to "varimax".
+            columns: the columns to analyze. Defaults to `None`, which uses
+                the numeric and boolean features.
+            **kwargs: not used.
+
+        Returns:
+            One row for each feature, with a "factor_{n}" column for each
+                factor, "communality", and "uniqueness".
+
+        """
+        factor = utilities.import_tool('statsmodels.multivariate.factor')
+        data = _numbers(item, columns, self.name)
+        count = factors or _kaiser(data)
+        results = factor.Factor(
+            data, n_factor = count, method = method, missing = 'drop').fit()
+        if rotation not in {None, 'none'} and count > 1:
+            results.rotate(rotation)
+        names = [f'factor_{n}' for n in range(1, count + 1)]
+        table = pd.DataFrame(
+            np.asarray(results.loadings), index = data.columns, columns = names)
+        table['communality'] = np.asarray(results.communality)
+        table['uniqueness'] = np.asarray(results.uniqueness)
+        return table
+
+
+@dataclasses.dataclass
 class Fairness(Evaluator):
     """How the model does for each group, and the gaps between groups.
 
@@ -399,6 +462,71 @@ class FeatureImportance(Evaluator):
             importances = np.abs(np.atleast_2d(coefficients)).mean(axis = 0)
         features = list(getattr(model, 'feature_names_in_', item.features))
         return _importance_table(features, np.asarray(importances))
+
+
+@dataclasses.dataclass
+class PCA(Evaluator):
+    """How much of the variance of the features each principal component has.
+
+    statsmodels' principal component analysis of the features that the model
+    learned from (the real training rows). Unlike the `pca_reduce` reducer, it
+    does not change the data: it describes how many dimensions the features
+    really have. The table has a row for each component, with its eigenvalue and the
+    share of the variance it explains, and the loading of each feature on
+    each component is stored in `tables` as "{name}_loadings".
+
+    """
+
+    def evaluate(
+        self,
+        item: base.Dataset,
+        *,
+        components: int | None = None,
+        standardize: bool = True,
+        columns: Sequence[str] | None = None,
+        **kwargs: Any) -> pd.DataFrame:
+        """Returns the eigenvalue and share of the variance of each component.
+
+        Args:
+            item: the dataset.
+            components: number of components. Defaults to `None`, which uses
+                one for each column.
+            standardize: whether to give each column a standard deviation of
+                1 first, so that the columns with the largest values do not
+                dominate. Defaults to `True`.
+            columns: the columns to analyze. Defaults to `None`, which uses
+                the numeric and boolean features.
+            **kwargs: not used.
+
+        Returns:
+            One row for each component, with its "eigenvalue" (of the
+                correlations of the columns, or of their covariances if
+                `standardize` is `False`), the "share" of the variance that
+                it explains, and the "cumulative" share of it and the
+                components before it.
+
+        """
+        pca = utilities.import_tool('statsmodels.multivariate.pca.PCA')
+        data = _numbers(item, columns, self.name)
+        results = pca(
+            data,
+            ncomp = components,
+            standardize = standardize,
+            missing = 'drop-row')
+        count = len(results.eigenvals)
+        names = [f'component_{n}' for n in range(1, count + 1)]
+        # statsmodels' eigenvalues are multiplied by the number of rows, and
+        # the R² of the first n components is the share of the variance that
+        # they explain together.
+        rows = len(results.factors)
+        cumulative = np.asarray(results.rsquare)[1:count + 1]
+        item.tables[f'{self.name}_loadings'] = pd.DataFrame(
+            np.asarray(results.loadings), index = data.columns, columns = names)
+        return pd.DataFrame({
+            'eigenvalue': np.asarray(results.eigenvals) / rows,
+            'share': np.diff(cumulative, prepend = 0.0),
+            'cumulative': cumulative},
+            index = names)
 
 
 @dataclasses.dataclass
@@ -520,7 +648,8 @@ class Scorecard(Evaluator):
         'mixer',
         'reducer',
         'sampler',
-        'model')
+        'model',
+        'validator')
 
     """ Class Methods """
 
@@ -1148,6 +1277,52 @@ def _importance_table(
         {'importance': np.asarray(importances, dtype = float)},
         index = pd.Index(features, name = 'feature'))
     return table.sort_values('importance', ascending = False)
+
+
+def _kaiser(data: pd.DataFrame) -> int:
+    """Returns the number of eigenvalues of the correlations above 1.
+
+    Args:
+        data: numeric columns.
+
+    Returns:
+        The number of factors that Kaiser's rule keeps (at least 1).
+
+    """
+    eigenvalues = np.linalg.eigvalsh(data.dropna().corr().to_numpy())
+    return max(1, int((eigenvalues > 1).sum()))
+
+
+def _numbers(
+    item: base.Dataset,
+    columns: Sequence[str] | None,
+    use: str) -> pd.DataFrame:
+    """Returns the numeric columns of the real training rows, as floats.
+
+    Args:
+        item: the dataset.
+        columns: the columns to use, or `None` for the numeric and boolean
+            features.
+        use: what uses the columns (for the message of an error).
+
+    Raises:
+        ValueError: if fewer than two of the columns vary.
+
+    Returns:
+        The columns that vary, in the training rows that are not `synthetic`.
+
+    """
+    training = item._train_rows()
+    rows = training[~training.isin(item.synthetic)]
+    if columns is None:
+        kinds = {*item.numerics, *item.booleans}
+        columns = [c for c in item.features if c in kinds]
+    data = item.data.loc[rows, list(columns)].astype(float)
+    data = data.loc[:, data.std() > 0]
+    if data.shape[1] < 2:  # noqa: PLR2004
+        message = f'{use} needs at least two numeric columns that vary'
+        raise ValueError(message)
+    return data
 
 
 def _latex(text: str) -> str:

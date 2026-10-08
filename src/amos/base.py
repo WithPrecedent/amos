@@ -87,6 +87,10 @@ class Dataset:
             `None`, which means that every row is used for training.
         test: index labels of the rows in the test set. Defaults to `None`,
             which means that the data has not been split.
+        synthetic: index labels of the training rows that a sampler made up
+            (synthetic rows and extra copies of a row), which are not real
+            observations. Validators do not score a model on them. Defaults
+            to an empty `Index`.
         model: the fitted model. Defaults to `None`.
         predictions: the model's predictions for the test rows (or for every
             row, if the data has not been split). Defaults to `None`.
@@ -116,6 +120,8 @@ class Dataset:
     groups: list[str] = dataclasses.field(default_factory = list)
     train: pd.Index | None = None
     test: pd.Index | None = None
+    synthetic: pd.Index = dataclasses.field(
+        default_factory = lambda: pd.Index([]))
     model: Any = None
     predictions: pd.Series | None = None
     probabilities: pd.DataFrame | None = None
@@ -369,6 +375,7 @@ class Dataset:
             self.train = self.train[self.train.isin(data.index)]
         if self.test is not None:
             self.test = self.test[self.test.isin(data.index)]
+        self.synthetic = self.synthetic[self.synthetic.isin(data.index)]
 
     def resample(
         self,
@@ -381,6 +388,8 @@ class Dataset:
         labels) are not changed. The new training rows are given new index
         labels: integers after the largest current label if the index is made
         of integers, and otherwise "resampled_0", "resampled_1", and so on.
+        The first copy of each real row is real. Synthetic rows and any other
+        copies are added to `synthetic`.
 
         Args:
             x: features of the new training rows.
@@ -388,10 +397,11 @@ class Dataset:
             origins: for each new row, the position (in the training rows) of
                 the row it copies, which gives it that row's groups, or -1 for
                 a synthetic row, which has no groups. Defaults to `None`, in
-                which case no new row has groups.
+                which case no new row has groups and every new row is real.
 
         """
         label = self._require_label()
+        made_up = self._train_rows().isin(self.synthetic)
         rows = x.copy()
         rows[label] = np.asarray(y)
         if self.groups:
@@ -409,6 +419,7 @@ class Dataset:
         test = self.data.loc[self._test_rows()] if self.is_split else None
         self.data = pd.concat([rows, test]) if test is not None else rows
         self.train = rows.index
+        self.synthetic = rows.index[_made_up(origins, made_up, len(rows))]
 
     def split(self, train: Iterable[Any], test: Iterable[Any]) -> None:
         """Sets the training and test rows.
@@ -607,9 +618,9 @@ class Operation(chrisjen.Technique, abc.ABC):
     technique's parameters, and returns it. The dataset is changed in place.
     Every operation adds an entry to the dataset's `history`.
 
-    `Operation` is a genre: its abstract subclasses (`Cleaner`, `Describer`,
-    `Splitter`, `Transformer`, `Sampler`, `Model`, `Metric`, `Evaluator`, and
-    `Plot`) are genres within it. To add a technique, subclass the genre that
+    `Operation` is a genre: its abstract subclasses (`Loader`, `Cleaner`,
+    `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`,
+    `Effect`, `Metric`, `Evaluator`, and `Plot`) are genres within it. To add a technique, subclass the genre that
     fits and write the method it requires, or set `contents` to the tool to
     wrap. To add a new kind of technique, subclass `Operation` and write
     `implement`.
@@ -770,6 +781,36 @@ def _listify(item: Sequence[str] | str | None) -> list[str]:
     if isinstance(item, str):
         return [item]
     return list(item)
+
+
+def _made_up(
+    origins: Sequence[int] | np.ndarray | None,
+    made_up: np.ndarray,
+    count: int) -> np.ndarray:
+    """Returns which resampled rows are not real observations.
+
+    Args:
+        origins: for each resampled row, the position of the training row it
+            copies, or -1 for a synthetic row. `None` means that every row is
+            real.
+        made_up: for each training row before resampling, whether it was
+            made up by an earlier sampler.
+        count: number of resampled rows.
+
+    Returns:
+        A boolean array that is `True` for each synthetic row, each copy of a
+            made-up row, and each copy of a row after its first.
+
+    """
+    if origins is None:
+        return np.zeros(count, dtype = bool)
+    flags = np.ones(count, dtype = bool)
+    seen: set[int] = set()
+    for position, origin in enumerate(np.asarray(origins)):
+        if origin >= 0 and not made_up[origin] and origin not in seen:
+            seen.add(int(origin))
+            flags[position] = False
+    return flags
 
 
 def _validate_groups(

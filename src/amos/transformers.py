@@ -38,7 +38,7 @@ Contents:
         OneHot, Ordinal, PolynomialCoding, SumCoding, Target, Tfidf,
         WeightOfEvidence: encoders.
     Interactions, Polynomial, Splines: mixers.
-    KBest, PCA, SelectPercentile, VarianceThreshold: reducers.
+    KBest, PCAReduce, SelectPercentile, VarianceThreshold: reducers.
 
 """
 
@@ -802,7 +802,7 @@ class KBest(Reducer):
 
 
 @dataclasses.dataclass
-class PCA(Reducer):
+class PCAReduce(Reducer):
     """Replaces the features with their principal components.
 
     By default, it keeps enough components to explain 95% of the variance.

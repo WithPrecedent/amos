@@ -23,10 +23,13 @@ Contents:
     FixedEffects: adapts pyfixest regressions to the scikit-learn interface.
     ProportionalHazards: adapts statsmodels' Cox model to the scikit-learn
         interface.
-    Adaboost, Baseline, Catboost, Cox, DecisionTree, ElasticNet,
-        ExplainableBoosting, ExtraTrees, Fixest, GLM, GradientBoosting, KNN,
-        Lasso, Lightgbm, Linear, Logit, NaiveBayes, NeuralNetwork, OLS,
-        RandomForest, Ridge, SVM, Tabpfn, Xgboost: models.
+    Adaboost, Baseline, BinomialBayesMixedglm, Catboost, Cox, DecisionTree,
+        ElasticNet, ExplainableBoosting, ExtraTrees, Fixest, GEE,
+        GeneralizedPoisson, GLM, GradientBoosting, KNN, Lasso, Lightgbm,
+        Linear, Logit, Mixedlm, Mnlogit, NaiveBayes, NegativeBinomial,
+        NeuralNetwork, OLS, OrdinalRegression, Poisson, Probit,
+        QuantileRegression, RandomForest, Ridge, RobustRegression, SkLogit,
+        SVM, Tabpfn, WLS, Xgboost, ZeroInflatedPoisson: models.
 
 """
 
@@ -35,13 +38,34 @@ from __future__ import annotations
 import abc
 import dataclasses
 import importlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
 
 from . import base, utilities
+
+# What each kind of `Statsmodel` predicts: "values" (numbers), "counts" (whole
+# numbers of 0 or more), "binary" (one of two classes), or "classes" (one of
+# any number of classes). A binomial "glm" or "gee" is "binary".
+_STATSMODELS: dict[str, str] = {
+    'binomial_bayes_mixedglm': 'binary',
+    'gee': 'values',
+    'generalized_poisson': 'counts',
+    'glm': 'values',
+    'logit': 'binary',
+    'mixedlm': 'values',
+    'mnlogit': 'classes',
+    'negative_binomial': 'counts',
+    'ols': 'values',
+    'ordinal_regression': 'classes',
+    'poisson': 'counts',
+    'probit': 'binary',
+    'quantile_regression': 'values',
+    'robust_regression': 'values',
+    'wls': 'values',
+    'zero_inflated_poisson': 'counts'}
 
 
 @dataclasses.dataclass
@@ -78,6 +102,8 @@ class Model(base.Operation, abc.ABC):
     # Parameters that name columns (such as fixed effects or an event) that
     # the model is given along with the features.
     column_parameters: ClassVar[tuple[str, ...]] = ()
+    # Whether the label must be counts: whole numbers of 0 or more.
+    counts: ClassVar[bool] = False
 
     """ Public Methods """
 
@@ -214,6 +240,12 @@ class Model(base.Operation, abc.ABC):
             message = (
                 f'{self.name!r} can {tasks}, but the label is set to {task}'
             )
+            if self.counts:
+                # Whole numbers with few values are classified by default.
+                message += (
+                    ': set "task" to "regress" in the "general" section for '
+                    'a label of counts'
+                )
             raise ValueError(message)
         return task
 
@@ -552,42 +584,139 @@ class Statsmodel:
 
     statsmodels reports the standard errors, test statistics, p-values, and
     confidence intervals that academic research usually needs. The
-    `coefficients` method returns them as a table.
+    `coefficients` method returns them as a table. `kind` chooses the model:
+
+    | Kind | statsmodels model | Predicts |
+    | --- | --- | --- |
+    | "ols" | `OLS` | Values. |
+    | "wls" | `WLS` | Values, from rows with `weights`. |
+    | "glm" | `GLM` | Values, or a class (for the "binomial" `family`). |
+    | "gee" | `GEE` | The same as "glm", for rows correlated within `groups`. |
+    | "mixedlm" | `MixedLM` | Values, with a random intercept for each of `groups`. |
+    | "quantile_regression" | `QuantReg` | A `quantile` of the label. |
+    | "robust_regression" | `RLM` | Values, with less weight on outliers. |
+    | "poisson" | `Poisson` | Counts. |
+    | "negative_binomial" | `NegativeBinomial` | Counts that vary more than a Poisson's. |
+    | "generalized_poisson" | `GeneralizedPoisson` | Counts that vary more or less than a Poisson's. |
+    | "zero_inflated_poisson" | `ZeroInflatedPoisson` | Counts with more zeros than a Poisson's. |
+    | "logit" | `Logit` | One of two classes. |
+    | "probit" | `Probit` | One of two classes. |
+    | "binomial_bayes_mixedglm" | `BinomialBayesMixedGLM` | One of two classes, with a random intercept for each of `groups`. |
+    | "mnlogit" | `MNLogit` | One of any number of classes. |
+    | "ordinal_regression" | `OrderedModel` | One of ordered classes. |
 
     Args:
-        kind: "ols" (ordinary least squares) or "glm" (a generalized linear
-            model). Defaults to "ols".
-        family: family of a "glm", by the name of a class in
+        kind: the kind of model, from the table. Defaults to "ols".
+        family: family of a "glm" or "gee", by the name of a class in
             `statsmodels.api.families` in snake case ("binomial", "gaussian",
             "poisson", "negative_binomial", "gamma", and so on). A "binomial"
             model is a classifier of two classes. Defaults to "gaussian".
-        constant: whether to add a constant (intercept). Defaults to `True`.
+        constant: whether to add a constant (intercept). An
+            "ordinal_regression" has thresholds between its classes instead,
+            so it never has one. Defaults to `True`.
+        groups: name of the column that identifies each row's group, for a
+            "gee", "mixedlm", or "binomial_bayes_mixedglm" model. Defaults to
+            `None`.
+        weights: name of the column with the weight of each row, for "wls".
+            Defaults to `None`.
+        quantile: the quantile that a "quantile_regression" predicts.
+            Defaults to 0.5 (the median).
+        norm: the norm of a "robust_regression", by the name of a class in
+            `statsmodels.robust.norms` in snake case ("huber_t",
+            "tukey_biweight", "hampel", and so on). Defaults to "huber_t".
+        distribution: "logit" or "probit", for an "ordinal_regression".
+            Defaults to "logit".
+        covariance: how the rows of a group are correlated in a "gee", by
+            the name of a class in `statsmodels.genmod.cov_struct` in snake
+            case ("independence" or "exchangeable"). Defaults to
+            "independence".
 
     Attributes:
         results: the fitted statsmodels results.
-        classes_: the two classes of a "binomial" model.
+        classes_: the classes of a classifier, sorted.
+        levels_: the classes of an "ordinal_regression", in order: the order
+            of the categories of a label that is an ordered categorical, and
+            otherwise sorted.
+        feature_names_in_: the features (not the groups or weights).
 
     """
 
     kind: str = 'ols'
     family: str = 'gaussian'
     constant: bool = True
+    groups: str | None = None
+    weights: str | None = None
+    quantile: float = 0.5
+    norm: str = 'huber_t'
+    distribution: str = 'logit'
+    covariance: str = 'independence'
     results: Any = dataclasses.field(default = None, init = False, repr = False)
     classes_: Any = dataclasses.field(
+        default = None, init = False, repr = False)
+    levels_: Any = dataclasses.field(default = None, init = False, repr = False)
+    feature_names_in_: Any = dataclasses.field(
         default = None, init = False, repr = False)
 
     """ Properties """
 
     @property
     def coef_(self) -> np.ndarray:
-        """Returns the coefficients of the features (not of the constant)."""
-        params = self.results.params
-        return np.asarray(params.drop('const', errors = 'ignore'))
+        """Returns the coefficients of the features.
+
+        An "mnlogit" has a row of coefficients for each class after the
+        first.
+
+        """
+        params = self._params()
+        names = [str(n) for n in self.feature_names_in_]
+        if isinstance(params, pd.DataFrame):
+            return np.asarray(params.loc[names]).T
+        return np.asarray(params.loc[names])
 
     @property
-    def is_binomial(self) -> bool:
-        """Returns whether the model is a binomial (two-class) classifier."""
-        return self.kind == 'glm' and self.family == 'binomial'
+    def output(self) -> str:
+        """Returns what the model predicts.
+
+        Raises:
+            ValueError: if `kind` is not a kind of model.
+
+        Returns:
+            "values" (numbers), "counts" (whole numbers of 0 or more),
+                "binary" (one of two classes), or "classes" (one of any
+                number of classes).
+
+        """
+        if self.kind in {'gee', 'glm'} and self.family == 'binomial':
+            return 'binary'
+        if self.kind not in _STATSMODELS:
+            message = (
+                f'{self.kind!r} is not a kind of statsmodels model: use one '
+                f'of {sorted(_STATSMODELS)}'
+            )
+            raise ValueError(message)
+        return _STATSMODELS[self.kind]
+
+    @property
+    def predict_proba(self) -> Callable[[pd.DataFrame], np.ndarray]:
+        """Returns the function that predicts probabilities, for a classifier.
+
+        Raises:
+            AttributeError: if the model is not a classifier, so that a model
+                that is not does not seem to predict probabilities.
+
+        Returns:
+            A function that takes features and returns the predicted
+                probability of each class, in the order of `classes_`.
+
+        """
+        if self.output not in {'binary', 'classes'}:
+            message = (
+                'only a classifier predicts probabilities: a binomial glm or '
+                'gee, logit, probit, binomial_bayes_mixedglm, mnlogit, or '
+                'ordinal_regression'
+            )
+            raise AttributeError(message)
+        return self._probabilities
 
     """ Public Methods """
 
@@ -597,16 +726,38 @@ class Statsmodel:
         Returns:
             One row for each coefficient, with its "coefficient",
                 "standard_error", "statistic", "p_value", "ci_lower", and
-                "ci_upper".
+                "ci_upper". The coefficients of an "mnlogit" are named
+                "{feature} ({class})". A "binomial_bayes_mixedglm" reports the
+                mean and standard deviation of each coefficient's posterior
+                and its 95% credible interval, and no p-values.
 
         """
         results = self.results
+        if self.kind == 'binomial_bayes_mixedglm':
+            means = self._params()
+            deviations = pd.Series(np.asarray(results.fe_sd), index = means.index)
+            # Variational Bayes gives each coefficient a normal posterior.
+            return pd.DataFrame({
+                'coefficient': means,
+                'standard_error': deviations,
+                'statistic': means / deviations,
+                'p_value': np.nan,
+                'ci_lower': means - 1.96 * deviations,
+                'ci_upper': means + 1.96 * deviations})
+        columns = [results.params, results.bse, results.tvalues, results.pvalues]
         intervals = results.conf_int()
+        if isinstance(results.params, pd.DataFrame):
+            labels = [str(c) for c in self.classes_[1:]]
+            columns = [_by_class(frame, labels) for frame in columns]
+            # The intervals are already in the same order, class by class.
+            intervals = pd.DataFrame(
+                intervals.to_numpy(), index = columns[0].index)
+        params, errors, statistics, p_values = columns
         return pd.DataFrame({
-            'coefficient': results.params,
-            'standard_error': results.bse,
-            'statistic': results.tvalues,
-            'p_value': results.pvalues,
+            'coefficient': params,
+            'standard_error': errors,
+            'statistic': statistics,
+            'p_value': p_values,
             'ci_lower': intervals.iloc[:, 0],
             'ci_upper': intervals.iloc[:, 1]})
 
@@ -614,32 +765,20 @@ class Statsmodel:
         """Fits the model.
 
         Args:
-            x: features.
+            x: features, and any `groups` and `weights` columns.
             y: labels.
 
         Raises:
-            ValueError: if a binomial model's label does not have two classes.
+            ValueError: if the label does not suit the model.
 
         Returns:
             This adapter.
 
         """
-        api = importlib.import_module('statsmodels.api')
-        target = np.asarray(y)
-        if self.is_binomial:
-            self.classes_ = np.unique(target)
-            if len(self.classes_) != 2:  # noqa: PLR2004
-                message = 'a binomial model needs a label with two classes'
-                raise ValueError(message)
-            target = (target == self.classes_[1]).astype(float)
-        exog = self._exog(x)
-        if self.kind == 'ols':
-            self.results = api.OLS(target.astype(float), exog).fit()
-        else:
-            name = ''.join(p.capitalize() for p in self.family.split('_'))
-            family = getattr(api.families, name)()
-            self.results = api.GLM(
-                target.astype(float), exog, family = family).fit()
+        extras = {self.groups, self.weights} - {None}
+        self.feature_names_in_ = np.asarray(
+            [c for c in x.columns if c not in extras])
+        self.results = self._estimate(self._endog(y), self._exog(x), x)
         return self
 
     def get_params(
@@ -655,12 +794,11 @@ class Statsmodel:
 
         """
         return {
-            'kind': self.kind,
-            'family': self.family,
-            'constant': self.constant}
+            field.name: getattr(self, field.name)
+            for field in dataclasses.fields(self) if field.init}
 
     def predict(self, x: pd.DataFrame) -> np.ndarray:
-        """Returns predictions (the predicted class of a binomial model).
+        """Returns predictions (the predicted class of a classifier).
 
         Args:
             x: features.
@@ -669,36 +807,20 @@ class Statsmodel:
             The predictions.
 
         """
-        values = np.asarray(self.results.predict(self._exog(x)))
-        if self.is_binomial:
-            positive = (values >= 0.5).astype(int)  # noqa: PLR2004
+        output = self.output
+        if output == 'binary':
+            positive = (self._mean(x) >= 0.5).astype(int)  # noqa: PLR2004
             return np.asarray(self.classes_[positive])
-        return values
-
-    def predict_proba(self, x: pd.DataFrame) -> np.ndarray:
-        """Returns the predicted probability of each class (binomial only).
-
-        Args:
-            x: features.
-
-        Raises:
-            AttributeError: if the model is not binomial.
-
-        Returns:
-            One column for each class, in the order of `classes_`.
-
-        """
-        if not self.is_binomial:
-            message = 'only a binomial model predicts probabilities'
-            raise AttributeError(message)
-        values = np.asarray(self.results.predict(self._exog(x)))
-        return np.column_stack([1 - values, values])
+        if output == 'classes':
+            chosen = np.argmax(self._probabilities(x), axis = 1)
+            return np.asarray(self.classes_[chosen])
+        return self._mean(x)
 
     def set_params(self, **parameters: Any) -> Statsmodel:
         """Sets parameters, as scikit-learn expects.
 
         Args:
-            **parameters: "kind", "family", or "constant".
+            **parameters: any of the parameters of the adapter.
 
         Returns:
             This adapter.
@@ -710,21 +832,223 @@ class Statsmodel:
 
     """ Private Methods """
 
+    def _column(self, x: pd.DataFrame, parameter: str) -> pd.Series:
+        """Returns the column named by `parameter` (`groups` or `weights`).
+
+        Args:
+            x: features and other columns.
+            parameter: "groups" or "weights".
+
+        Raises:
+            ValueError: if the parameter does not name a column.
+
+        Returns:
+            The column.
+
+        """
+        name = getattr(self, parameter)
+        if name is None:
+            message = (
+                f'a {self.kind} model needs the name of a "{parameter}" column')
+            raise ValueError(message)
+        column: pd.Series = x[name]
+        return column
+
+    def _endog(self, y: pd.Series) -> np.ndarray:
+        """Returns the label as statsmodels needs it.
+
+        Args:
+            y: labels.
+
+        Raises:
+            ValueError: if a model of two classes is given another number of
+                classes, or a model of counts is given other values.
+
+        Returns:
+            The label as floats, or as 0 and 1 for a model of two classes, or
+                as the position of each class in `levels_` for a model of any
+                number of classes.
+
+        """
+        output = self.output
+        target = np.asarray(y)
+        if output in {'binary', 'classes'}:
+            self.classes_ = np.unique(target)
+        if output == 'binary':
+            if len(self.classes_) != 2:  # noqa: PLR2004
+                message = f'a {self._title} model needs a label with two classes'
+                raise ValueError(message)
+            return np.asarray(target == self.classes_[1], dtype = float)
+        if output == 'classes':
+            levels = list(self.classes_)
+            dtype = getattr(y, 'dtype', None)
+            if (
+                self.kind == 'ordinal_regression'
+                and isinstance(dtype, pd.CategoricalDtype)
+                and dtype.ordered):
+                levels = [c for c in dtype.categories if c in set(levels)]
+            self.levels_ = np.asarray(levels, dtype = object)
+            positions = {c: i for i, c in enumerate(levels)}
+            return np.asarray([positions[v] for v in target])
+        values = target.astype(float)
+        if output == 'counts' and not (
+            np.isfinite(values).all()
+            and (values >= 0).all()
+            and (values == np.round(values)).all()):
+            message = (
+                f'a {self.kind} model needs counts: a label of whole numbers '
+                f'of 0 or more'
+            )
+            raise ValueError(message)
+        return values
+
+    def _estimate(
+        self,
+        endog: np.ndarray,
+        exog: pd.DataFrame,
+        x: pd.DataFrame) -> Any:
+        """Fits the statsmodels model of `kind`.
+
+        Args:
+            endog: the label, from `_endog`.
+            exog: the features, from `_exog`.
+            x: features and other columns (such as `groups`).
+
+        Returns:
+            The fitted statsmodels results.
+
+        """
+        api = importlib.import_module('statsmodels.api')
+        match self.kind:
+            case 'ols':
+                return api.OLS(endog, exog).fit()
+            case 'wls':
+                weights = self._column(x, 'weights').astype(float)
+                return api.WLS(endog, exog, weights = weights).fit()
+            case 'glm':
+                family = _statsmodels_class(api.families, self.family)()
+                return api.GLM(endog, exog, family = family).fit()
+            case 'gee':
+                family = _statsmodels_class(api.families, self.family)()
+                covariance = _statsmodels_class(
+                    api.cov_struct, self.covariance)()
+                return api.GEE(
+                    endog,
+                    exog,
+                    groups = self._column(x, 'groups'),
+                    family = family,
+                    cov_struct = covariance).fit()
+            case 'mixedlm':
+                return api.MixedLM(
+                    endog, exog, groups = self._column(x, 'groups')).fit()
+            case 'binomial_bayes_mixedglm':
+                # Each group has a random intercept: one variance component,
+                # with a column of 0s and 1s for each group.
+                groups = pd.get_dummies(self._column(x, 'groups'), dtype = float)
+                return api.BinomialBayesMixedGLM(
+                    endog,
+                    exog,
+                    exog_vc = groups.to_numpy(),
+                    ident = np.zeros(groups.shape[1], dtype = int)).fit_vb()
+            case 'quantile_regression':
+                return api.QuantReg(endog, exog).fit(q = self.quantile)
+            case 'robust_regression':
+                norm = _statsmodels_class(api.robust.norms, self.norm)()
+                return api.RLM(endog, exog, M = norm).fit()
+            case 'ordinal_regression':
+                ordinal = importlib.import_module(
+                    'statsmodels.miscmodels.ordinal_model')
+                return ordinal.OrderedModel(
+                    endog, exog, distr = self.distribution).fit(
+                        method = 'bfgs', disp = 0)
+        # The discrete models of statsmodels are fitted by maximum
+        # likelihood, which prints its progress unless `disp` is 0.
+        model = {
+            'generalized_poisson': api.GeneralizedPoisson,
+            'logit': api.Logit,
+            'mnlogit': api.MNLogit,
+            'negative_binomial': api.NegativeBinomial,
+            'poisson': api.Poisson,
+            'probit': api.Probit,
+            'zero_inflated_poisson': api.ZeroInflatedPoisson}[self.kind](
+                endog, exog)
+        try:
+            return model.fit(disp = 0)
+        except np.linalg.LinAlgError:
+            # Newton's method fails if a feature is a combination of others.
+            # BFGS still finds coefficients, though statsmodels then warns
+            # that it cannot find their standard errors.
+            return model.fit(method = 'bfgs', maxiter = 1000, disp = 0)
+
     def _exog(self, x: pd.DataFrame) -> pd.DataFrame:
         """Returns the features as floats, with a constant if one is added.
 
         Args:
-            x: features.
+            x: features, and any other columns, which are left out.
 
         Returns:
             The exogenous variables for statsmodels.
 
         """
-        exog = x.astype(float)
-        if self.constant:
-            exog = exog.copy()
+        exog = x[list(self.feature_names_in_)].astype(float)
+        exog.columns = [str(c) for c in exog.columns]
+        if self.constant and self.kind != 'ordinal_regression':
             exog.insert(0, 'const', 1.0)
         return exog
+
+    def _mean(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the model's prediction of the mean of the label.
+
+        Args:
+            x: features.
+
+        Returns:
+            The predictions: the probability of the second class, for a model
+                of two classes, or of each class in `levels_`, for a model of
+                any number of classes.
+
+        """
+        return np.asarray(self.results.predict(self._exog(x)))
+
+    def _params(self) -> pd.Series | pd.DataFrame:
+        """Returns the estimated coefficients, named as strings.
+
+        Returns:
+            The coefficients, or the means of their posteriors for a
+                "binomial_bayes_mixedglm" (whose `params` are not named and
+                include its variance).
+
+        """
+        results = self.results
+        if self.kind == 'binomial_bayes_mixedglm':
+            names = [str(n) for n in results.model.exog_names]
+            return pd.Series(np.asarray(results.fe_mean), index = names)
+        params: pd.Series | pd.DataFrame = results.params.copy()
+        params.index = params.index.map(str)
+        return params
+
+    def _probabilities(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the predicted probability of each class.
+
+        Args:
+            x: features.
+
+        Returns:
+            One column for each class, in the order of `classes_`.
+
+        """
+        values = self._mean(x)
+        if self.output == 'binary':
+            return np.column_stack([1 - values, values])
+        levels = list(self.levels_)
+        return values[:, [levels.index(c) for c in self.classes_]]
+
+    @property
+    def _title(self) -> str:
+        """Returns the name of the model for messages."""
+        if self.kind in {'gee', 'glm'}:
+            return f'{self.family} {self.kind}'
+        return self.kind
 
 
 @dataclasses.dataclass
@@ -1118,6 +1442,34 @@ class ProportionalHazards:
 """ Models """
 
 
+class _Statsmodels:
+    """Makes a model one kind of `Statsmodel` (see its table of kinds).
+
+    It is a plain class rather than a `Model`, so that the library does not
+    store it as a technique.
+
+    """
+
+    # The kind of `Statsmodel`.
+    kind: ClassVar[str] = 'ols'
+
+    def _prepare(
+        self,
+        item: base.Dataset,  # noqa: ARG002
+        parameters: dict[str, Any]) -> dict[str, Any]:
+        """Makes the statsmodels adapter the model's kind.
+
+        Args:
+            item: the dataset to model.
+            parameters: parameters for the model.
+
+        Returns:
+            The parameters, with "kind".
+
+        """
+        return {**parameters, 'kind': self.kind}
+
+
 @dataclasses.dataclass
 class Adaboost(Model):
     """AdaBoost: a sequence of small trees, each fixing the last one's errors."""
@@ -1139,6 +1491,55 @@ class Baseline(Model):
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.dummy.DummyClassifier',
         'regress': 'sklearn.dummy.DummyRegressor'}
+
+
+@dataclasses.dataclass
+class BinomialBayesMixedglm(_Statsmodels, Model):
+    """A Bayesian logistic regression with a random intercept for each group.
+
+    statsmodels' `BinomialBayesMixedGLM`, fitted by variational Bayes, for a
+    label of two classes and rows that are correlated within groups (such as
+    the decisions of each judge). Set "groups" to the column of groups (by
+    default, the dataset's first group). Its table of coefficients has the
+    mean and standard deviation of each coefficient's posterior, and its 95%
+    credible interval. Predictions use the fixed effects only, so they suit
+    groups the model has not seen.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
+    column_parameters: ClassVar[tuple[str, ...]] = ('groups',)
+    kind: ClassVar[str] = 'binomial_bayes_mixedglm'
+
+    def implement(
+        self,
+        item: base.Dataset,
+        search: str | None = None,
+        cv: int = 5,
+        n_iter: int = 10,
+        scoring: str | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Fits the model, with the dataset's first group as "groups".
+
+        Args:
+            item: the dataset to model.
+            search: as for `Model.implement`.
+            cv: as for `Model.implement`.
+            n_iter: as for `Model.implement`.
+            scoring: as for `Model.implement`.
+            **kwargs: parameters for the model.
+
+        Returns:
+            The dataset, with the fitted model and its predictions.
+
+        """
+        return super().implement(
+            item,
+            search = search,
+            cv = cv,
+            n_iter = n_iter,
+            scoring = scoring,
+            **_with_groups(item, kwargs))
 
 
 @dataclasses.dataclass
@@ -1278,6 +1679,86 @@ class Fixest(Model):
 
 
 @dataclasses.dataclass
+class GEE(Model):
+    """Generalized estimating equations from statsmodels, with inference.
+
+    A `glm` for rows that are correlated within groups (such as several
+    cases of one court): the coefficients are averages over the groups, and
+    their standard errors allow for the correlation. Set "groups" to the
+    column of groups (by default, the dataset's first group), "family" as
+    for a `glm`, and "covariance" to "exchangeable" to model the correlation
+    (by default, "independence").
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {
+        'classify': Statsmodel,
+        'regress': Statsmodel}
+    column_parameters: ClassVar[tuple[str, ...]] = ('groups',)
+
+    def implement(
+        self,
+        item: base.Dataset,
+        search: str | None = None,
+        cv: int = 5,
+        n_iter: int = 10,
+        scoring: str | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Fits the model, with the dataset's first group as "groups".
+
+        Args:
+            item: the dataset to model.
+            search: as for `Model.implement`.
+            cv: as for `Model.implement`.
+            n_iter: as for `Model.implement`.
+            scoring: as for `Model.implement`.
+            **kwargs: parameters for the model.
+
+        Returns:
+            The dataset, with the fitted model and its predictions.
+
+        """
+        return super().implement(
+            item,
+            search = search,
+            cv = cv,
+            n_iter = n_iter,
+            scoring = scoring,
+            **_with_groups(item, kwargs))
+
+    def _prepare(
+        self,
+        item: base.Dataset,
+        parameters: dict[str, Any]) -> dict[str, Any]:
+        """Chooses the family for the task.
+
+        Args:
+            item: the dataset to model.
+            parameters: parameters for the model.
+
+        Returns:
+            The parameters, with "kind" and "family".
+
+        """
+        family = _family(self.name, item, parameters)
+        return {**parameters, 'family': family, 'kind': 'gee'}
+
+
+@dataclasses.dataclass
+class GeneralizedPoisson(_Statsmodels, Model):
+    """Generalized Poisson regression of counts, with inference.
+
+    Like `poisson`, for counts that vary more (or less) than a Poisson
+    distribution's.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
+    kind: ClassVar[str] = 'generalized_poisson'
+    counts: ClassVar[bool] = True
+
+
+@dataclasses.dataclass
 class GLM(Model):
     """A generalized linear model from statsmodels, with inference.
 
@@ -1307,8 +1788,8 @@ class GLM(Model):
             The parameters, with "kind" and "family".
 
         """
-        family = 'binomial' if item.task == 'classify' else 'gaussian'
-        return {'family': family, **parameters, 'kind': 'glm'}
+        family = _family(self.name, item, parameters)
+        return {**parameters, 'family': family, 'kind': 'glm'}
 
 
 @dataclasses.dataclass
@@ -1361,18 +1842,76 @@ class Linear(Model):
 
 
 @dataclasses.dataclass
-class Logit(Model):
-    """Logistic regression from scikit-learn.
+class Logit(_Statsmodels, Model):
+    """Logistic regression from statsmodels, with inference.
 
-    scikit-learn adds a ridge (L2) penalty by default. Use `glm` for logistic
-    regression without a penalty and with p-values.
+    Unlike `sk_logit`, it has no penalty, so its coefficients have standard
+    errors, p-values, and confidence intervals (as does `glm` for a label of
+    two classes).
 
     """
 
-    tools: ClassVar[Mapping[str, Any]] = {
-        'classify': 'sklearn.linear_model.LogisticRegression'}
-    parameters: base.GenericDict = dataclasses.field(
-        default_factory = lambda: {'max_iter': 1000})
+    tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
+    kind: ClassVar[str] = 'logit'
+
+
+@dataclasses.dataclass
+class Mixedlm(_Statsmodels, Model):
+    """A linear mixed model from statsmodels, with inference.
+
+    A linear regression with a random intercept for each group (such as each
+    judge), for rows that are correlated within groups. Set "groups" to the
+    column of groups (by default, the dataset's first group). Predictions use
+    the fixed effects only, so they suit groups the model has not seen.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
+    column_parameters: ClassVar[tuple[str, ...]] = ('groups',)
+    kind: ClassVar[str] = 'mixedlm'
+
+    def implement(
+        self,
+        item: base.Dataset,
+        search: str | None = None,
+        cv: int = 5,
+        n_iter: int = 10,
+        scoring: str | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Fits the model, with the dataset's first group as "groups".
+
+        Args:
+            item: the dataset to model.
+            search: as for `Model.implement`.
+            cv: as for `Model.implement`.
+            n_iter: as for `Model.implement`.
+            scoring: as for `Model.implement`.
+            **kwargs: parameters for the model.
+
+        Returns:
+            The dataset, with the fitted model and its predictions.
+
+        """
+        return super().implement(
+            item,
+            search = search,
+            cv = cv,
+            n_iter = n_iter,
+            scoring = scoring,
+            **_with_groups(item, kwargs))
+
+
+@dataclasses.dataclass
+class Mnlogit(_Statsmodels, Model):
+    """Multinomial logistic regression from statsmodels, with inference.
+
+    For a label of any number of classes. Each class after the first has its
+    own coefficients, compared with the first class.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
+    kind: ClassVar[str] = 'mnlogit'
 
 
 @dataclasses.dataclass
@@ -1381,6 +1920,20 @@ class NaiveBayes(Model):
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.naive_bayes.GaussianNB'}
+
+
+@dataclasses.dataclass
+class NegativeBinomial(_Statsmodels, Model):
+    """Negative binomial regression of counts, with inference.
+
+    Like `poisson`, for counts that vary more than a Poisson distribution's
+    (which is common). The extra variance ("alpha") is estimated.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
+    kind: ClassVar[str] = 'negative_binomial'
+    counts: ClassVar[bool] = True
 
 
 @dataclasses.dataclass
@@ -1395,7 +1948,7 @@ class NeuralNetwork(Model):
 
 
 @dataclasses.dataclass
-class OLS(Model):
+class OLS(_Statsmodels, Model):
     """Ordinary least squares regression from statsmodels, with inference.
 
     The coefficients, standard errors, p-values, and confidence intervals are
@@ -1404,22 +1957,57 @@ class OLS(Model):
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
+    kind: ClassVar[str] = 'ols'
 
-    def _prepare(
-        self,
-        item: base.Dataset,  # noqa: ARG002
-        parameters: dict[str, Any]) -> dict[str, Any]:
-        """Makes the statsmodels adapter an ordinary least squares model.
 
-        Args:
-            item: the dataset to model.
-            parameters: parameters for the model.
+@dataclasses.dataclass
+class OrdinalRegression(_Statsmodels, Model):
+    """Ordinal regression (ordered logit or probit) from statsmodels.
 
-        Returns:
-            The parameters, with "kind".
+    For a label of ordered classes (such as a sentence that is lenient,
+    typical, or harsh). The classes are ordered as the categories of a label
+    that is an ordered categorical, and otherwise sorted. Set "distribution"
+    to "probit" for an ordered probit.
 
-        """
-        return {**parameters, 'kind': 'ols'}
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
+    kind: ClassVar[str] = 'ordinal_regression'
+
+
+@dataclasses.dataclass
+class Poisson(_Statsmodels, Model):
+    """Poisson regression of counts (such as the number of arrests).
+
+    The label must be whole numbers of 0 or more. amos classifies whole
+    numbers with few values, so set "task" to "regress" for such counts.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
+    kind: ClassVar[str] = 'poisson'
+    counts: ClassVar[bool] = True
+
+
+@dataclasses.dataclass
+class Probit(_Statsmodels, Model):
+    """Probit regression of two classes from statsmodels, with inference."""
+
+    tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
+    kind: ClassVar[str] = 'probit'
+
+
+@dataclasses.dataclass
+class QuantileRegression(_Statsmodels, Model):
+    """Quantile regression from statsmodels, with inference.
+
+    Predicts a quantile of the label ("quantile", by default the median)
+    rather than its mean, which outliers sway less.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
+    kind: ClassVar[str] = 'quantile_regression'
 
 
 @dataclasses.dataclass
@@ -1437,6 +2025,34 @@ class Ridge(Model):
 
     tools: ClassVar[Mapping[str, Any]] = {
         'regress': 'sklearn.linear_model.Ridge'}
+
+
+@dataclasses.dataclass
+class RobustRegression(_Statsmodels, Model):
+    """Robust linear regression from statsmodels, with inference.
+
+    Gives less weight to rows with large errors (outliers), by "norm"
+    (Huber's, by default).
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
+    kind: ClassVar[str] = 'robust_regression'
+
+
+@dataclasses.dataclass
+class SkLogit(Model):
+    """Logistic regression from scikit-learn.
+
+    scikit-learn adds a ridge (L2) penalty by default. Use `logit` for
+    statsmodels' logistic regression, without a penalty and with p-values.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {
+        'classify': 'sklearn.linear_model.LogisticRegression'}
+    parameters: base.GenericDict = dataclasses.field(
+        default_factory = lambda: {'max_iter': 1000})
 
 
 @dataclasses.dataclass
@@ -1469,6 +2085,20 @@ class Tabpfn(Model):
 
 
 @dataclasses.dataclass
+class WLS(_Statsmodels, Model):
+    """Weighted least squares regression from statsmodels, with inference.
+
+    Set "weights" to the column with the weight of each row (such as the
+    inverse of its variance). The weights are not a feature.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
+    column_parameters: ClassVar[tuple[str, ...]] = ('weights',)
+    kind: ClassVar[str] = 'wls'
+
+
+@dataclasses.dataclass
 class Xgboost(Model):
     """XGBoost gradient boosting."""
 
@@ -1476,6 +2106,20 @@ class Xgboost(Model):
         'classify': 'xgboost.XGBClassifier',
         'regress': 'xgboost.XGBRegressor'}
     numbered_classes: ClassVar[bool] = True
+
+
+@dataclasses.dataclass
+class ZeroInflatedPoisson(_Statsmodels, Model):
+    """Zero-inflated Poisson regression of counts, with inference.
+
+    Like `poisson`, for counts with more zeros than a Poisson distribution
+    has (such as rows that could not have had any events).
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
+    kind: ClassVar[str] = 'zero_inflated_poisson'
+    counts: ClassVar[bool] = True
 
 
 """ Private Functions """
@@ -1496,3 +2140,96 @@ def _is_numbered(classes: list[Any]) -> bool:
             float(c) == int(c) for c in classes)
     except (TypeError, ValueError):
         return False
+
+
+def _by_class(frame: pd.DataFrame, labels: Sequence[str]) -> pd.Series:
+    """Returns a table with a column for each class as one column.
+
+    Args:
+        frame: one row for each feature and one column for each class after
+            the first, as statsmodels reports an `mnlogit`.
+        labels: the names of those classes.
+
+    Returns:
+        The values, class by class, named "{feature} ({class})".
+
+    """
+    values: list[Any] = []
+    names: list[str] = []
+    for position, label in enumerate(labels):
+        values.extend(frame.iloc[:, position])
+        names.extend(f'{name} ({label})' for name in frame.index)
+    return pd.Series(values, index = names)
+
+
+def _family(name: str, item: base.Dataset, parameters: Mapping[str, Any]) -> str:
+    """Returns the family of a `glm` or `gee`, checking that it suits the task.
+
+    Args:
+        name: name of the model, for the message of an error.
+        item: the dataset to model.
+        parameters: parameters for the model, which may name a "family".
+
+    Raises:
+        ValueError: if the label is classified and the family is not
+            "binomial".
+
+    Returns:
+        The "family" in `parameters`, or else "binomial" for classification
+            and "gaussian" for regression.
+
+    """
+    classify = item.task == 'classify'
+    family = str(parameters.get(
+        'family', 'binomial' if classify else 'gaussian'))
+    if classify and family != 'binomial':
+        message = (
+            f'{name!r} with the {family!r} family regresses, but the label is '
+            f'set to classify: use the "binomial" family, or set "task" to '
+            f'"regress" in the "general" section'
+        )
+        raise ValueError(message)
+    return family
+
+
+def _statsmodels_class(module: Any, name: str) -> type:
+    """Returns the class in a statsmodels module named `name` in snake case.
+
+    Args:
+        module: a statsmodels module (such as `statsmodels.api.families`).
+        name: name of the class in snake case (such as "negative_binomial"
+            for `NegativeBinomial`).
+
+    Raises:
+        ValueError: if there is no such class.
+
+    Returns:
+        The class.
+
+    """
+    title = ''.join(part.capitalize() for part in name.split('_'))
+    try:
+        kind: type = getattr(module, title)
+    except AttributeError as error:
+        message = f'{name!r} is not in {module.__name__}'
+        raise ValueError(message) from error
+    return kind
+
+
+def _with_groups(
+    item: base.Dataset,
+    parameters: dict[str, Any]) -> dict[str, Any]:
+    """Returns `parameters` with the dataset's first group as "groups".
+
+    Args:
+        item: the dataset to model.
+        parameters: parameters for the model.
+
+    Returns:
+        The parameters, with "groups" if they did not name it and the dataset
+            has groups.
+
+    """
+    if parameters.get('groups') is None and item.groups:
+        return {**parameters, 'groups': item.groups[0]}
+    return parameters

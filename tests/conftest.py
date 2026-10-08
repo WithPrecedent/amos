@@ -161,7 +161,7 @@ def regressed() -> amos.Dataset:
 @pytest.fixture
 def fitted(classified: amos.Dataset) -> amos.Dataset:
     """The `classified` dataset with a fitted logistic regression."""
-    return amos.models.Logit().apply(classified)
+    return amos.models.SkLogit().apply(classified)
 
 
 @pytest.fixture

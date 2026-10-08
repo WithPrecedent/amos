@@ -55,7 +55,7 @@ def test_curves_for_each_of_three_classes(
     name: str,
     multiclass: amos.Dataset,
     tmp_path: pathlib.Path) -> None:
-    amos.models.Logit().apply(multiclass)
+    amos.models.SkLogit().apply(multiclass)
     amos.library.borrow(name)().apply(multiclass)
     _check(multiclass, name, tmp_path)
     assert len(multiclass.figures[name].axes[0].get_lines()) >= 3
@@ -154,7 +154,7 @@ def test_shap_bar_draws_the_shap_importance(fitted: amos.Dataset) -> None:
 
 def test_shap_plots_explain_a_chosen_class(multiclass: amos.Dataset) -> None:
     requires('shap')
-    amos.models.Logit().apply(multiclass)
+    amos.models.SkLogit().apply(multiclass)
     amos.evaluators.ShapImportance().apply(multiclass, rows = 30)
     values = np.abs(multiclass.fitted['shap_importance'].values)
     for position, category in enumerate(multiclass.classes):

@@ -12,6 +12,14 @@ imported when a technique that needs them is used (see the extras in the
 (CatBoost-style target encoding, from category_encoders) is not the
 `catboost` model.
 
+## Loaders (wrangler)
+
+| Name | Tool | Description |
+| --- | --- | --- |
+| `download` |  | Downloads a file from a URL and loads it. |
+| `load_file` |  | Loads a data file in any format that the clerk knows. |
+| `openml` | `sklearn.datasets.fetch_openml` | Downloads a dataset from OpenML (by its name or id) and loads it. |
+
 ## Cleaners (wrangler)
 
 | Name | Description |
@@ -110,7 +118,7 @@ imported when a technique that needs them is used (see the extras in the
 | Name | Tool | Description |
 | --- | --- | --- |
 | `k_best` | `sklearn.feature_selection.SelectKBest` | Keeps the k features (10 by default) most related to the label. |
-| `pca` | `sklearn.decomposition.PCA` | Replaces the features with their principal components. |
+| `pca_reduce` | `sklearn.decomposition.PCA` | Replaces the features with their principal components. |
 | `select_percentile` | `sklearn.feature_selection.SelectPercentile` | Keeps the features (50% by default) most related to the label. |
 | `variance_threshold` | `sklearn.feature_selection.VarianceThreshold` | Removes features whose variance is at or below a threshold (0). |
 
@@ -134,6 +142,7 @@ imported when a technique that needs them is used (see the extras in the
 | --- | --- | --- | --- |
 | `adaboost` | `sklearn.ensemble.AdaBoostClassifier` | `sklearn.ensemble.AdaBoostRegressor` | AdaBoost: a sequence of small trees, each fixing the last one's errors. |
 | `baseline` | `sklearn.dummy.DummyClassifier` | `sklearn.dummy.DummyRegressor` | Predicts the most common class (or the mean) for every row. |
+| `binomial_bayes_mixedglm` | `amos.models.Statsmodel` |  | A Bayesian logistic regression with a random intercept for each group. |
 | `catboost` | `catboost.CatBoostClassifier` | `catboost.CatBoostRegressor` | CatBoost gradient boosting, which uses categorical features directly. |
 | `cox` |  | `amos.models.ProportionalHazards` | Cox proportional hazards regression of the time until an event. |
 | `decision_tree` | `sklearn.tree.DecisionTreeClassifier` | `sklearn.tree.DecisionTreeRegressor` | A single decision tree. |
@@ -141,21 +150,51 @@ imported when a technique that needs them is used (see the extras in the
 | `explainable_boosting` | `interpret.glassbox.ExplainableBoostingClassifier` | `interpret.glassbox.ExplainableBoostingRegressor` | An Explainable Boosting Machine from InterpretML. |
 | `extra_trees` | `sklearn.ensemble.ExtraTreesClassifier` | `sklearn.ensemble.ExtraTreesRegressor` | An ensemble of extremely randomized trees. |
 | `fixest` | `amos.models.FixedEffects` | `amos.models.FixedEffects` | Regression with fixed effects and clustered standard errors (pyfixest). |
+| `gee` | `amos.models.Statsmodel` | `amos.models.Statsmodel` | Generalized estimating equations from statsmodels, with inference. |
+| `generalized_poisson` |  | `amos.models.Statsmodel` | Generalized Poisson regression of counts, with inference. |
 | `glm` | `amos.models.Statsmodel` | `amos.models.Statsmodel` | A generalized linear model from statsmodels, with inference. |
 | `gradient_boosting` | `sklearn.ensemble.HistGradientBoostingClassifier` | `sklearn.ensemble.HistGradientBoostingRegressor` | Histogram-based gradient boosting from scikit-learn. |
 | `knn` | `sklearn.neighbors.KNeighborsClassifier` | `sklearn.neighbors.KNeighborsRegressor` | Predicts from the k nearest training rows (5 by default). |
 | `lasso` |  | `sklearn.linear_model.Lasso` | Linear regression with a lasso (L1) penalty. |
 | `lightgbm` | `lightgbm.LGBMClassifier` | `lightgbm.LGBMRegressor` | LightGBM gradient boosting. |
 | `linear` |  | `sklearn.linear_model.LinearRegression` | Ordinary least squares regression from scikit-learn. |
-| `logit` | `sklearn.linear_model.LogisticRegression` |  | Logistic regression from scikit-learn. |
+| `logit` | `amos.models.Statsmodel` |  | Logistic regression from statsmodels, with inference. |
+| `mixedlm` |  | `amos.models.Statsmodel` | A linear mixed model from statsmodels, with inference. |
+| `mnlogit` | `amos.models.Statsmodel` |  | Multinomial logistic regression from statsmodels, with inference. |
 | `naive_bayes` | `sklearn.naive_bayes.GaussianNB` |  | Gaussian naive Bayes. |
+| `negative_binomial` |  | `amos.models.Statsmodel` | Negative binomial regression of counts, with inference. |
 | `neural_network` | `sklearn.neural_network.MLPClassifier` | `sklearn.neural_network.MLPRegressor` | A multi-layer perceptron (a simple neural network). |
 | `ols` |  | `amos.models.Statsmodel` | Ordinary least squares regression from statsmodels, with inference. |
+| `ordinal_regression` | `amos.models.Statsmodel` |  | Ordinal regression (ordered logit or probit) from statsmodels. |
+| `poisson` |  | `amos.models.Statsmodel` | Poisson regression of counts (such as the number of arrests). |
+| `probit` | `amos.models.Statsmodel` |  | Probit regression of two classes from statsmodels, with inference. |
+| `quantile_regression` |  | `amos.models.Statsmodel` | Quantile regression from statsmodels, with inference. |
 | `random_forest` | `sklearn.ensemble.RandomForestClassifier` | `sklearn.ensemble.RandomForestRegressor` | A random forest. |
 | `ridge` |  | `sklearn.linear_model.Ridge` | Linear regression with a ridge (L2) penalty. |
+| `robust_regression` |  | `amos.models.Statsmodel` | Robust linear regression from statsmodels, with inference. |
+| `sk_logit` | `sklearn.linear_model.LogisticRegression` |  | Logistic regression from scikit-learn. |
 | `svm` | `sklearn.svm.SVC` | `sklearn.svm.SVR` | A support vector machine (with probabilities for classification). |
 | `tabpfn` | `tabpfn.TabPFNClassifier` | `tabpfn.TabPFNRegressor` | TabPFN, a pretrained model that is often the most accurate on small data. |
+| `wls` |  | `amos.models.Statsmodel` | Weighted least squares regression from statsmodels, with inference. |
 | `xgboost` | `xgboost.XGBClassifier` | `xgboost.XGBRegressor` | XGBoost gradient boosting. |
+| `zero_inflated_poisson` |  | `amos.models.Statsmodel` | Zero-inflated Poisson regression of counts, with inference. |
+
+## Validators (analyst)
+
+| Name | Tool | Description |
+| --- | --- | --- |
+| `group_k_fold` | `sklearn.model_selection.GroupKFold` | Folds that keep all of the rows of each group in the same fold. |
+| `group_shuffle_split` | `sklearn.model_selection.GroupShuffleSplit` | Repeated random splits of the groups (not the rows) into two sets. |
+| `k_fold` | `sklearn.model_selection.KFold` | Divides the rows into folds ("n_splits", 5 by default) at random. |
+| `leave_one_group_out` | `sklearn.model_selection.LeaveOneGroupOut` | Scores each group with a copy of the model fitted to the other groups. |
+| `leave_one_row_out` | `sklearn.model_selection.LeaveOneOut` | Predicts each row with a copy of the model fitted to every other row. |
+| `repeated_k_fold` | `sklearn.model_selection.RepeatedKFold` | `k_fold` repeated with different random folds ("n_repeats" times). |
+| `repeated_stratified_k_fold` | `sklearn.model_selection.RepeatedStratifiedKFold` | `stratified_k_fold` repeated with different random folds. |
+| `shuffle_split` | `sklearn.model_selection.ShuffleSplit` | Repeated random splits of the rows into two sets (Monte Carlo). |
+| `stratified_group_k_fold` | `sklearn.model_selection.StratifiedGroupKFold` | Folds that keep each group together and the classes in proportion. |
+| `stratified_k_fold` | `sklearn.model_selection.StratifiedKFold` | Folds that keep the share of each class the same in every fold. |
+| `stratified_shuffle_split` | `sklearn.model_selection.StratifiedShuffleSplit` | Repeated random splits into two sets, with the classes in proportion. |
+| `time_series_split` | `sklearn.model_selection.TimeSeriesSplit` | Scores later rows with copies of the model fitted to earlier rows. |
 
 ## Effects (analyst)
 
@@ -201,8 +240,10 @@ imported when a technique that needs them is used (see the extras in the
 | `conformal` | Prediction intervals (or sets) with a known rate of coverage. |
 | `confusion` | How many rows of each class were predicted to be each class. |
 | `explain_weights` | eli5's explanation of the weights of the model's features. |
+| `factor_analysis` | The hidden factors that explain the correlations of the features. |
 | `fairness` | How the model does for each group, and the gaps between groups. |
 | `feature_importance` | The importance that the model itself gives each feature. |
+| `pca` | How much of the variance of the features each principal component has. |
 | `permutation_importance` | How much the model's score drops when each feature is shuffled. |
 | `scorecard` | The results of every branch of an analysis, ready to publish. |
 | `shap_importance` | The mean absolute SHAP value of each feature. |

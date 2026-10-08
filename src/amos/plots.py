@@ -77,6 +77,8 @@ _IMPORTANCE_LABELS: dict[str, str] = {
 # Names that statsmodels, pyfixest, and others give the intercept.
 _INTERCEPTS: frozenset[str] = frozenset({
     'const', 'Intercept', '(Intercept)', 'intercept'})
+# The kinds of `models.Statsmodel` that an `influence_plot` draws.
+_INFLUENCE: frozenset[str] = frozenset({'glm', 'ols'})
 # Columns of a table of coefficients that a `coefficient_plot` draws.
 _INTERVAL_COLUMNS: tuple[str, ...] = ('coefficient', 'ci_lower', 'ci_upper')
 
@@ -300,8 +302,9 @@ class CoefficientPlot(Plot):
         """
         table = _coefficients(item, source)
         if not intercept:
-            table = table.loc[
-                [str(i) not in _INTERCEPTS for i in table.index]]
+            # A multinomial logit names its intercepts "const ({class})".
+            table = table.loc[[
+                str(i).split(' (')[0] not in _INTERCEPTS for i in table.index]]
         table = table.head(limit).iloc[::-1]
         coefficients = table['coefficient'].to_numpy(dtype = float)
         errors = [
@@ -599,17 +602,23 @@ class InfluencePlot(Plot):
             **kwargs: not used.
 
         Raises:
-            ValueError: if the model is not a statsmodels regression.
+            ValueError: if the model is not one of those.
 
         """
-        results = getattr(_unwrapped(item), 'results', None)
-        if not type(results).__module__.startswith('statsmodels'):
+        model = _unwrapped(item)
+        kind = getattr(model, 'kind', None)
+        if not isinstance(model, models.Statsmodel) or kind not in _INFLUENCE:
             message = 'influence_plot needs an "ols" or "glm" model'
             raise ValueError(message)
         regression = utilities.import_tool(
             'statsmodels.graphics.regressionplots')
+        # statsmodels finds the externally studentized residuals of an ols
+        # model, but only the internally studentized residuals of a glm.
         regression.influence_plot(
-            results, criterion = criterion, ax = figure.subplots())
+            model.results,
+            external = kind != 'glm',
+            criterion = criterion,
+            ax = figure.subplots())
 
 
 @dataclasses.dataclass

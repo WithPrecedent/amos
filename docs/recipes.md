@@ -27,7 +27,7 @@ settings = {
         "steps": "split, scale, model",
         "split_techniques": "stratified",
         "scale_techniques": "standard",
-        "model_techniques": "logit, knn, naive_bayes",
+        "model_techniques": "sk_logit, knn, naive_bayes",
     },
     "critic": {"techniques": "classification_report, confusion"},
 }
@@ -104,7 +104,7 @@ settings = {
         "steps": "split, sample, model",
         "split_techniques": "stratified",
         "sample_techniques": "none, smote, random_under",
-        "model_techniques": "logit",
+        "model_techniques": "sk_logit",
     },
     "critic": {"techniques": "scorecard"},
 }
@@ -154,7 +154,7 @@ settings = {
         "split_techniques": "stratified",
         "encode_techniques": "one_hot, target, count",
         "scale_techniques": "standard",
-        "model_techniques": "logit",
+        "model_techniques": "sk_logit",
     },
 }
 project = amos.Project.create(settings, item = cases)
@@ -191,8 +191,8 @@ settings = {
         "steps": "split, scale, reduce, model",
         "split_techniques": "stratified",
         "scale_techniques": "standard",
-        "reduce_techniques": "none, k_best, pca",
-        "model_techniques": "logit, random_forest",
+        "reduce_techniques": "none, k_best, pca_reduce",
+        "model_techniques": "sk_logit, random_forest",
     },
     "k_best_parameters": {"k": 5},
     "random_forest_parameters": {"n_estimators": 50},
@@ -263,7 +263,7 @@ settings = {
         "steps": "split, scale, model",
         "split_techniques": "stratified",
         "scale_techniques": "standard",
-        "model_techniques": "logit, random_forest",
+        "model_techniques": "sk_logit, random_forest",
     },
     "critic": {"techniques": "scorecard, fairness"},
 }

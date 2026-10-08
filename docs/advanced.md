@@ -24,7 +24,7 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Project` | A `chrisjen.Project` that makes your data into a `Dataset`, applies the workflow to a copy of it, and can `export` the results. |
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
-| `Cleaner`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Metric`, `Evaluator`, `Plot`, `Effect` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, and `Metric` has the genre `GroupMetric` (fairness metrics). |
+| `Loader`, `Cleaner`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Plot`, `Effect` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, and `Metric` has the genre `GroupMetric` (fairness metrics). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
 | `Findings` | The default report. |
 
@@ -44,7 +44,7 @@ import sklearn.datasets
 import amos
 
 print(sorted(amos.library["vertex"]["operation"]))
-# ['cleaner', 'describer', 'effect', 'evaluator', 'metric', 'model', 'plot', 'sampler', 'splitter', 'transformer']
+# ['cleaner', 'describer', 'effect', 'evaluator', 'loader', 'metric', 'model', 'plot', 'sampler', 'splitter', 'transformer', 'validator']
 print(amos.library.classify("smote"), amos.library.classify("one_hot"))
 # sampler encoder
 print(amos.library.all["random_forest"])
@@ -67,7 +67,7 @@ sections. Every other section is read by `chrisjen`.
 | | `seed` | Seed for every random process (passed as `random_state`). |
 | | `groups` | Columns that identify groups of rows (see "Groups and fairness" below). |
 | `files` | `root_folder` | Folder for the project's files. Defaults to the current folder. |
-| | `input_folder` | Folder (in the root folder) where data files named by a relative path are looked for. |
+| | `input_folder` | Folder (in the root folder) where data files named by a relative path are looked for, and where loaders save downloads. |
 | | `output_folder` | Folder (in the root folder) in which `export` makes a folder for each run. |
 | | `export_results` | Whether to export the results after every run. Defaults to `False`. |
 
@@ -106,6 +106,7 @@ A `Dataset` has these attributes:
 | `seed` | Seed for every random process. |
 | `groups` | Columns that identify groups of rows. They stay in the data but are not features. |
 | `train`, `test` | Index labels of the training and test rows. `test` is `None` until the data is split. |
+| `synthetic` | Index labels of the training rows that a sampler made up (synthetic rows and extra copies of a row). |
 | `model` | The fitted model. |
 | `predictions` | Predictions for the test rows (or every row, if the data is not split). |
 | `probabilities` | Predicted probabilities of each class, for the same rows. |
@@ -143,6 +144,82 @@ model step.
 (csv, tsv, Excel, parquet, feather, json, Stata, SPSS, or pickle), or a
 scikit-learn dataset loaded with `as_frame = True`. A `Project` does this for
 you.
+
+## Loading data
+
+A loader makes the dataset from a source named in the settings, so a project
+with a loader needs no `item`. Loaders are usually the first step of the
+wrangler. They work through the project's `clerk` (a `nagata.FileManager`): a
+file named by a relative path is looked for in the current folder and then in
+the clerk's input folder (the `input_folder` of the "files" section), and
+downloads are saved in the input folder.
+
+| Loader | Source | Other parameters |
+| --- | --- | --- |
+| `load_file` | The path of a data file. | |
+| `download` | The URL of a file (http or https). It is saved in the input folder and only downloaded again if it is missing. | `file_name` (what to save it as), `refresh` (to download it again), and `timeout` (in seconds) |
+| `openml` | The name (such as "credit-g") or id (such as 31) of an [OpenML](https://www.openml.org) dataset, which scikit-learn saves in the input folder. Its default target is the label unless "label" is set. | `version`, `target_column`, and the other parameters of `sklearn.datasets.fetch_openml` |
+
+Every loader takes a `source`, and the `label`, `task`, and `groups` of the
+data, which default to those in the "general" section. The dataset's history
+records the source. This project loads a file from its input folder:
+
+<!-- file: data/cases.csv -->
+```csv
+court,appeals,reversed
+state,2,yes
+federal,1,no
+state,2,yes
+state,0,no
+federal,3,yes
+state,1,no
+```
+
+```python
+settings = {
+    "general": {"label": "reversed", "seed": 43},
+    "files": {"input_folder": "data"},
+    "cases_project": {"cases_workers": "wrangler, explorer"},
+    "wrangler": {
+        "steps": "load, clean",
+        "load_techniques": "load_file",
+        "clean_techniques": "drop_duplicates",
+    },
+    "load_file_parameters": {"source": "cases.csv"},
+    "explorer": {"techniques": "label_balance"},
+}
+project = amos.Project.create(settings, id = "loaded")
+print(project.result)
+# Dataset(rows=5, columns=3, label='reversed', task='classify')
+print(project.result.history[0])
+# {'technique': 'load_file', 'source': 'cases.csv', 'rows': 6, 'columns': 3}
+```
+
+`load_file` and `download` load a file in any format that the clerk knows
+(such as csv, tsv, Excel, parquet, feather, json, Stata, SAS, and SPSS), which
+they find from the file's extension. `pandas` opens a compressed file (such
+as "cases.csv.gz") itself. Set `file_format` (such as "csv") for a file whose
+name does not say what it is, and `member` to load one file from a zip
+archive, which is extracted to a folder named for the archive. Other
+parameters, such as `sep`, go to the `pandas` reader if it accepts them.
+Unlike the clerk's own defaults (which suit quick tests), loaders read every
+row and read text as UTF-8, as `pandas` does.
+
+A file online is named the same way, and is downloaded the first time the
+project runs:
+
+```ini
+[wrangler]
+steps = load, clean
+load_techniques = download
+clean_techniques = drop_duplicates
+
+[download_parameters]
+source = https://example.com/data/cases.csv.gz
+```
+
+To write a loader for another source, see "Writing your own techniques"
+below.
 
 ## How techniques work
 
@@ -252,7 +329,54 @@ print(table.loc["bmi", "p_value"] < 0.001)
 
 `glm` is a logistic regression (without a penalty) for classification and a
 linear regression for regression. Set its "family" parameter for other
-generalized linear models, such as "poisson" for counts.
+generalized linear models, such as "poisson" for counts. Every model that wraps
+statsmodels stores the same table:
+
+| Model | statsmodels | Use it for |
+| --- | --- | --- |
+| `ols` | `OLS` | Least squares regression. |
+| `wls` | `WLS` | Least squares with a weight for each row (the "weights" column). |
+| `glm` | `GLM` | Generalized linear models of any "family". |
+| `quantile_regression` | `QuantReg` | A "quantile" of the label (the median by default), which outliers sway less. |
+| `robust_regression` | `RLM` | Regression that gives outliers less weight, by "norm" (Huber's by default). |
+| `mixedlm` | `MixedLM` | Regression with a random intercept for each of "groups" (such as each judge). |
+| `gee` | `GEE` | A `glm` for rows correlated within "groups", with "covariance" "independence" or "exchangeable". |
+| `poisson`, `negative_binomial`, `generalized_poisson`, `zero_inflated_poisson` | `Poisson`, `NegativeBinomial`, `GeneralizedPoisson`, `ZeroInflatedPoisson` | Counts: whole numbers of 0 or more, which may vary more than a Poisson's or have extra zeros. |
+| `logit`, `probit` | `Logit`, `Probit` | Two classes. Unlike `sk_logit` (scikit-learn's logistic regression), `logit` has no penalty. |
+| `binomial_bayes_mixedglm` | `BinomialBayesMixedGLM` | Two classes, with a random intercept for each of "groups", fitted by variational Bayes. Its table has the mean and standard deviation of each coefficient's posterior and its 95% credible interval, and no p-values. |
+| `mnlogit` | `MNLogit` | Any number of classes. Each class after the first has its own coefficients, named "{feature} ({class})". |
+| `ordinal_regression` | `OrderedModel` | Ordered classes, as an ordered logit (or probit, with "distribution"). Its classes are ordered as the categories of an ordered categorical label, and otherwise sorted. |
+
+`mixedlm`, `gee`, and `binomial_bayes_mixedglm` use the dataset's first group
+unless "groups" names a column, and the groups and weights are not features.
+The predictions of `mixedlm` and `binomial_bayes_mixedglm` use the fixed
+effects only, so they suit groups that the model has not seen. amos classifies whole
+numbers with few values, so set "task" to "regress" in the "general" section
+for a label of counts. The rest of statsmodels' models either do not predict a
+label from features (such as `MANOVA`; `PCA` and `Factor` are below), or
+condition the effects of groups away so that they cannot predict new rows
+(such as `ConditionalLogit`; use `fixest` for fixed effects).
+
+Two of the critic's evaluators describe the features that the model learned
+from (the real training rows), rather than the model, with statsmodels'
+`PCA` and `Factor`. `pca` reports the eigenvalue of each principal
+component and the share of the variance it explains (and stores the loadings
+as "pca_loadings"), which shows how many dimensions the features really have.
+Unlike the `pca_reduce` reducer, it does not change the data. `factor_analysis` reports the loading of each feature on a
+few hidden factors (by default, one for each eigenvalue of the correlations
+above 1, rotated by varimax), with each feature's communality and
+uniqueness:
+
+```python
+features = amos.Dataset.create(cancer, seed = 43)
+amos.splitters.Stratified().apply(features)
+amos.evaluators.PCA().apply(features)
+print(round(features.tables["pca"].loc["component_6", "cumulative"], 2))
+# 0.89
+amos.evaluators.FactorAnalysis().apply(features)
+print(list(features.tables["factor_analysis"].columns[-3:]))
+# ['factor_6', 'communality', 'uniqueness']
+```
 
 `fixest` wraps pyfixest for regressions with fixed effects (an intercept for
 each level of a column, such as each judge or year) and standard errors
@@ -298,7 +422,7 @@ print("clinic" in dataset.features)
 # False
 amos.splitters.Stratified().apply(dataset)
 amos.transformers.Standard().apply(dataset)
-amos.models.Logit().apply(dataset)
+amos.models.SkLogit().apply(dataset)
 amos.evaluators.Fairness().apply(dataset)
 print(list(dataset.tables["fairness"].index))
 # ['north', 'south', 'difference', 'ratio']
@@ -353,7 +477,7 @@ treated = pd.DataFrame({"age": age, "program": program, "outcome": outcome})
 dataset = amos.Dataset(treated, label = "outcome", seed = 43)
 amos.effects.PartiallyLinear().apply(
     dataset, treatment = "program", outcome_model = "linear",
-    treatment_model = "logit")
+    treatment_model = "sk_logit")
 effect = dataset.tables["partially_linear"].loc["program"]
 print(effect["ci_lower"] < 2 < effect["ci_upper"])
 # True
@@ -440,12 +564,13 @@ be named in settings right away.
 
 | Genre | Write | Returns |
 | --- | --- | --- |
+| `Loader` | `load(self, source, **kwargs)` | The data: a `DataFrame` or anything that `Dataset.create` accepts. `self.read(path, **kwargs)` loads a file with the clerk. |
 | `Cleaner` | `clean(self, data, **kwargs)` | The cleaned `DataFrame`. |
 | `Describer` | `describe(self, item, **kwargs)` | A table, stored in `tables`. |
 | `Splitter` | `divide(self, item, test_size, **kwargs)` | The training and test index labels. |
 | `Evaluator` | `evaluate(self, item, **kwargs)` | A table, stored in `tables`. |
 | `Plot` | `draw(self, item, figure, **kwargs)` | Nothing: it draws on `figure`. |
-| `Transformer`, `Sampler`, `Model`, `Metric` | Set `contents` to a tool. | |
+| `Transformer`, `Sampler`, `Model`, `Validator`, `Metric` | Set `contents` to a tool. | |
 | `Operation` | `implement(self, item, **kwargs)` | The changed `Dataset`. |
 
 Keyword parameters of these methods are filled from the settings. For
@@ -525,7 +650,7 @@ amos.splitters.Stratified().apply(dataset)
 experiment = amos.Experiment(name = "models", criteria = amos.metrics.F1())
 experiment.populate([
     [amos.transformers.Standard(), amos.transformers.Robust()],
-    [amos.models.Baseline(), amos.models.Logit()],
+    [amos.models.Baseline(), amos.models.SkLogit()],
 ])
 result = experiment.apply(dataset)
 print(experiment.winner.endswith("logit"))
@@ -540,6 +665,66 @@ a metric for which lower is better (such as `log_loss`). It is negated to rank
 the combinations, but the table shows its real value. The winning dataset also
 keeps a `Branch` for every combination in its `branches`: the technique used at
 each step, its score, and its predictions, which is what a scorecard compares.
+
+## Cross-validation
+
+A validator measures how well the model does on rows that it did not learn
+from, without using the test rows. It is the last step of the analyst, after
+the model. It divides the training rows into folds with one of
+scikit-learn's cross-validation splitters (`k_fold`, `stratified_k_fold`,
+`group_k_fold`, `time_series_split`, and the others in the [technique
+catalog](catalog.md#validators-analyst)), fits a new copy of the model to the
+rest of the training rows for each fold, and scores the copy on the fold. The
+scores of each fold are a table, stored under the validator's name, and their
+means are stored in `metrics` as "cv_{metric}". A scorecard and an
+experiment's comparison table show them beside the scores on the test rows:
+
+```ini
+[analyst]
+design = experiment
+criterion = roc_auc
+steps = split, scale, sample, model, validate
+split_techniques = stratified
+scale_techniques = standard
+sample_techniques = none, smote
+model_techniques = sk_logit, random_forest
+validate_techniques = stratified_k_fold
+```
+
+A validator takes the parameters of its splitter (such as `n_splits`, the
+number of folds, and `n_repeats` for `repeated_k_fold`), and:
+
+| Parameter | Meaning |
+| --- | --- |
+| `metrics` | The metrics to score each fold with. Defaults to the metrics of a scorecard for the task. |
+| `groups` | For `group_k_fold` and the other validators of groups, the column that identifies each row's group. Defaults to the dataset's first group. |
+| `order` | A column (such as a date) to order the rows by before they are divided, for `time_series_split`. |
+| `shuffle` | Whether to shuffle the rows (with the dataset's seed) before dividing them, for a splitter that can. Defaults to `True`. |
+
+```python
+dataset = amos.Dataset.create(cancer, seed = 43)
+amos.splitters.Stratified().apply(dataset)
+amos.transformers.Standard().apply(dataset)
+amos.samplers.Smote().apply(dataset)
+amos.models.SkLogit().apply(dataset)
+amos.validators.StratifiedKFold().apply(dataset, metrics = ["roc_auc", "f1"])
+print(dataset.tables["stratified_k_fold"].columns.tolist())
+# ['train', 'validation', 'roc_auc', 'f1']
+print(sorted(name for name in dataset.metrics if name.startswith("cv_")))
+# ['cv_f1', 'cv_roc_auc']
+```
+
+Rows that a sampler made up (the dataset's `synthetic` rows) are never
+scored, since they are not real observations. Instead, each sampler is
+applied again to the rows that each copy of the model learns from, as it was
+to all of the training rows. Transformers are not fitted again, so a validator
+scores the model given the features that the transformers made from all of
+the training rows, and a model whose parameters were searched for keeps the
+values found with all of the training rows.
+
+`leave_one_row_out` predicts each row with a copy of the model fitted to every
+other row. A fold of one row cannot be scored alone, so its predictions are
+scored together, and its table has the prediction of each row.
 
 ## Scorecards
 
@@ -616,6 +801,8 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 
 | Error | Cause |
 | --- | --- |
+| `ValueError: there is no data` | The project has no `item` and no loader. Pass the data as `item`, or add a loader (such as `load_file`) to the wrangler. |
+| `ValueError: '...' has nothing to load` | A loader has no "source". Set it in the `{loader}_parameters` section. |
 | `ValueError: the dataset has no label` | A technique needs a label. Set "label" in the "general" section or pass it to `Dataset`. |
 | `ValueError: the data has not been split` | A technique asked for the test rows before a splitter was applied. |
 | `ValueError: '...' cannot use the dates or text in [...]` | A model was given text or dates. Encode them (with an encoder such as `one_hot`) or remove them (with `drop_columns`) first. |
@@ -627,4 +814,6 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | `KeyError: the fixed_effects column ... is not in the data` | A column named by a model's parameter (such as "fixed_effects", "cluster", or "event") is missing. |
 | `ValueError: '...' needs the name of a "treatment" column` | An effect was used without a "treatment" parameter. |
 | `KeyError: no class named ... is in the library` | A name in the settings is not a technique. Check the spelling against the [technique catalog](catalog.md). |
+| `ValueError: '...' needs the name of a "groups" column` | A splitter or validator of groups (such as `group_k_fold`) was used without groups. Set "groups" in the "general" section or pass "groups". |
+| `ValueError: a copy of the model could not predict ...` | A validator's copy of the model could not predict the rows of a fold. A model with fixed effects cannot predict a group it did not learn from, so use a validator that does not keep groups apart (such as `k_fold`). |
 | `ValueError: ... needs criteria to compare results` | An `experiment` or `contest` has no "criterion" setting. |

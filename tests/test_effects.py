@@ -38,7 +38,7 @@ def test_effects_find_the_true_effect(kind: type[amos.Effect]) -> None:
     dataset = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
     kind().apply(
         dataset, treatment = 'treated', outcome_model = 'linear',
-        treatment_model = 'logit', n_folds = 3)
+        treatment_model = 'sk_logit', n_folds = 3)
     table = dataset.tables[kind().name]
     assert list(table.columns) == [
         'coefficient', 'standard_error', 'statistic', 'p_value', 'ci_lower',
@@ -68,7 +68,7 @@ def test_a_classified_label_and_text_treatment() -> None:
     data['treated'] = data['treated'].map({0: 'control', 1: 'program'})
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
     effects.InteractiveRegression().apply(
-        dataset, treatment = 'treated', outcome_model = 'logit', n_folds = 3)
+        dataset, treatment = 'treated', outcome_model = 'sk_logit', n_folds = 3)
     effect = dataset.tables['interactive_regression'].loc['treated', 'coefficient']
     # The program raises the chance of a high outcome.
     assert 0 < effect < 1
@@ -78,10 +78,10 @@ def test_learners_are_amos_models() -> None:
     forest = effects._learner('random_forest', 'classify', SEED)
     assert type(forest).__name__ == 'RandomForestClassifier'
     assert forest.random_state == SEED
-    logit = effects._learner('logit', 'classify', None)
+    logit = effects._learner('sk_logit', 'classify', None)
     assert logit.max_iter == 1000
     with pytest.raises(ValueError, match = 'cannot regress'):
-        effects._learner('logit', 'regress', SEED)
+        effects._learner('sk_logit', 'regress', SEED)
     with pytest.raises(KeyError, match = 'standard'):
         effects._learner('standard', 'regress', SEED)
 

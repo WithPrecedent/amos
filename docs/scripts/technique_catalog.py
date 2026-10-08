@@ -21,9 +21,10 @@ import amos
 ROOT = pathlib.Path(__file__).parent.parent.parent
 CATALOG = ROOT / 'docs' / 'catalog.md'
 # The heading of the first section of the catalog, after its introduction.
-FIRST = '## Cleaners (wrangler)'
+FIRST = '## Loaders (wrangler)'
 # The genres with a table of their own (in order), with their stages.
 GENRES: tuple[tuple[str, str], ...] = (
+    ('loader', 'Loaders (wrangler)'),
     ('cleaner', 'Cleaners (wrangler)'),
     ('describer', 'Describers (explorer)'),
     ('splitter', 'Splitters (analyst)'),
@@ -34,6 +35,7 @@ GENRES: tuple[tuple[str, str], ...] = (
     ('reducer', 'Reducers (analyst)'),
     ('sampler', 'Samplers (analyst)'),
     ('model', 'Models (analyst)'),
+    ('validator', 'Validators (analyst)'),
     ('effect', 'Effects (analyst)'),
     ('metric', 'Metrics (critic)'),
     ('evaluator', 'Evaluators (critic)'),

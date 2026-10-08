@@ -28,7 +28,7 @@ def _settings(**extra: Any) -> dict[str, Any]:
             'steps': 'split, scale, model',
             'split_techniques': 'stratified',
             'scale_techniques': 'standard, none',
-            'model_techniques': 'logit, baseline'},
+            'model_techniques': 'sk_logit, baseline'},
         'critic': {'techniques': 'scorecard, confusion'},
         **extra}
 
@@ -104,7 +104,7 @@ def test_a_settings_file_and_a_data_file(tmp_path: pathlib.Path) -> None:
         '[general]\nlabel = target\nseed = 43\n\n'
         '[files]\nroot_folder = .\ninput_folder = data\n'
         'output_folder = results\n\n'
-        '[study_project]\nstudy_techniques = stratified, logit\n',
+        '[study_project]\nstudy_techniques = stratified, sk_logit\n',
         encoding = 'utf-8')
     project = amos.Project.create('study.ini', item = 'cases.csv')
     assert project.result.model is not None

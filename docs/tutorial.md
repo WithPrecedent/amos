@@ -60,7 +60,7 @@ from amos import describers, metrics, models, splitters, transformers
 describers.Summarize().apply(dataset)
 splitters.Stratified().apply(dataset)
 transformers.Standard().apply(dataset)
-models.Logit().apply(dataset)
+models.SkLogit().apply(dataset)
 metrics.RocAuc().apply(dataset)
 print(len(dataset.train), len(dataset.test))
 # 426 143
@@ -70,7 +70,7 @@ print(dataset.metrics["roc_auc"] > 0.95)
 
 `summarize` added a table of summary statistics, `stratified` split the rows
 into training and test sets with the same share of each class, `standard`
-rescaled the numeric features, `logit` fitted a logistic regression to the
+rescaled the numeric features, `sk_logit` fitted a logistic regression to the
 training rows and predicted the test rows, and `roc_auc` scored the
 predictions. The scaler learned the means and standard deviations from the
 training rows only, so nothing about the test rows leaked into the model.
@@ -79,7 +79,7 @@ Each technique recorded what it did:
 
 ```python
 print([entry["technique"] for entry in dataset.history])
-# ['summarize', 'stratified', 'standard', 'logit', 'roc_auc']
+# ['summarize', 'stratified', 'standard', 'sk_logit', 'roc_auc']
 print(dataset.history[2]["tool"])
 # sklearn.preprocessing.StandardScaler
 print(dataset.history[1]["seed"], dataset.history[1]["test"])
@@ -99,7 +99,7 @@ settings = {
     "general": {"label": "target", "seed": 43},
     "cancer_project": {"cancer_workers": "explorer, analyst, critic"},
     "explorer": {"techniques": "summarize, label_balance"},
-    "analyst": {"techniques": "stratified, standard, logit"},
+    "analyst": {"techniques": "stratified, standard, sk_logit"},
     "critic": {"techniques": "roc_auc, f1, confusion"},
 }
 project = amos.Project.create(settings, item = data)
@@ -126,7 +126,7 @@ settings["analyst"] = {
     "steps": "split, scale, model",
     "split_techniques": "stratified",
     "scale_techniques": "standard, robust, none",
-    "model_techniques": "logit, random_forest",
+    "model_techniques": "sk_logit, random_forest",
 }
 project = amos.Project.create(settings, item = data)
 analyst = {node.name: node for node in project.workflow}["analyst"]
@@ -180,7 +180,7 @@ criterion = roc_auc
 steps = split, scale, model
 split_techniques = stratified
 scale_techniques = standard, robust, none
-model_techniques = logit, random_forest
+model_techniques = sk_logit, random_forest
 
 [critic]
 techniques = scorecard, confusion

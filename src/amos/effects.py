@@ -326,7 +326,11 @@ def _learner(name: str, task: str, seed: int | None) -> Any:
         message = f'the model {name!r} cannot {task}'
         raise ValueError(message)
     built = utilities.import_tool(tool)
-    parameters = {**technique._keywords(), 'random_state': seed}
+    # A model's defaults (such as the kind of a statsmodels model) can depend
+    # on the task, so they are chosen for an empty dataset of the task.
+    parameters = technique._prepare(
+        base.Dataset(task = task),
+        {**technique._keywords(), 'random_state': seed})
     return built(**utilities.accepted_parameters(built, parameters))
 
 

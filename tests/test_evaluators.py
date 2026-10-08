@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from conftest import requires
 
@@ -59,7 +60,7 @@ def test_permutation_importance_for_regression(
     assert 'permutation_importance' in fitted_regression.tables
 
 
-@pytest.mark.parametrize('model', ['logit', 'random_forest', 'knn'])
+@pytest.mark.parametrize('model', ['sk_logit', 'random_forest', 'knn'])
 def test_shap_importance(model: str, classified: amos.Dataset) -> None:
     requires('shap')
     amos.library.borrow(model)().apply(classified)
@@ -121,3 +122,61 @@ def test_feature_importance_of_explainable_boosting(
     evaluators.FeatureImportance().apply(classified)
     table = classified.tables['feature_importance']
     assert set(table.index) == set(classified.features)
+
+
+def test_pca_describes_the_features(
+    classified: amos.Dataset) -> None:
+    requires('statsmodels')
+    evaluators.PCA().apply(classified)
+    table = classified.tables['pca']
+    features = len(classified.features)
+    assert list(table.columns) == ['eigenvalue', 'share', 'cumulative']
+    assert len(table) == features
+    # The eigenvalues of the correlations of n columns add up to n.
+    assert table['eigenvalue'].sum() == pytest.approx(features)
+    assert table['share'].sum() == pytest.approx(1)
+    # Two of the features are combinations of the others, so the last
+    # components explain none of the variance (give or take rounding).
+    assert (np.diff(table['cumulative']) > -1e-9).all()
+    eigenvalues = np.linalg.eigvalsh(classified.x_train.corr().to_numpy())
+    np.testing.assert_allclose(
+        table['eigenvalue'], sorted(eigenvalues, reverse = True), atol = 1e-8)
+    loadings = classified.tables['pca_loadings']
+    assert loadings.shape == (features, features)
+    evaluators.PCA().apply(
+        classified, components = 2, standardize = False)
+    assert len(classified.tables['pca']) == 2
+
+
+def test_factor_analysis_describes_the_features(
+    classified: amos.Dataset) -> None:
+    requires('statsmodels')
+    evaluators.FactorAnalysis().apply(classified)
+    table = classified.tables['factor_analysis']
+    factors = [c for c in table.columns if c.startswith('factor_')]
+    # Kaiser's rule keeps a factor for each eigenvalue above 1.
+    eigenvalues = np.linalg.eigvalsh(classified.x_train.corr().to_numpy())
+    assert len(factors) == (eigenvalues > 1).sum()
+    assert list(table.index) == classified.features
+    np.testing.assert_allclose(table['communality'] + table['uniqueness'], 1)
+    evaluators.FactorAnalysis().apply(
+        classified, factors = 2, method = 'ml', rotation = 'none')
+    table = classified.tables['factor_analysis']
+    assert list(table.columns) == [
+        'factor_1', 'factor_2', 'communality', 'uniqueness']
+
+
+def test_analyses_of_the_features_use_the_real_training_rows(
+    classified: amos.Dataset) -> None:
+    requires('statsmodels')
+    classified.data['constant'] = 1.0
+    classified.synthetic = classified.train[:10]
+    classified.data.loc[classified.synthetic, 'x0'] = 1e6
+    evaluators.PCA().apply(classified)
+    loadings = classified.tables['pca_loadings']
+    # A column that does not vary is left out, and so are made-up rows,
+    # whose extreme values would otherwise make "x0" a component alone.
+    assert 'constant' not in loadings.index
+    assert classified.tables['pca']['share'].iloc[0] < 0.9
+    with pytest.raises(ValueError, match = 'two numeric columns'):
+        evaluators.FactorAnalysis().apply(classified, columns = ['x0'])

@@ -15,6 +15,26 @@ from amos import models
 MODELS = techniques('model')
 
 
+def _needs(kind: type[amos.Model], item: amos.Dataset) -> dict[str, str]:
+    """Gives `item` what a model needs, and returns the parameters it needs.
+
+    Models of counts get a label of counts, models of groups get a column of
+    groups (the dataset's first group), and `wls` gets a column of weights.
+    """
+    rng = np.random.default_rng(SEED)
+    rows = len(item.data)
+    if kind.counts:
+        item.data['target'] = rng.poisson(
+            np.exp(0.3 * item.data['x0'].clip(-2, 2)))
+    if 'groups' in kind.column_parameters:
+        item.data['court'] = np.resize(list('abcdef'), rows)
+        item.groups = ['court']
+    if 'weights' in kind.column_parameters:
+        item.data['weight'] = rng.uniform(0.5, 2, rows)
+        return {'weights': 'weight'}
+    return {}
+
+
 def _check(item: amos.Dataset, task: str) -> None:
     """Checks the predictions that a model stored in `item`."""
     assert item.model is not None
@@ -34,7 +54,7 @@ def test_classifiers(
     kind: type[amos.Model],
     classified: amos.Dataset) -> None:
     requires(package_of(kind))
-    kind().apply(classified)
+    kind().apply(classified, **_needs(kind, classified))
     _check(classified, 'classify')
     if classified.probabilities is not None:
         assert list(classified.probabilities.columns) == [0, 1]
@@ -49,19 +69,19 @@ def test_regressors(
     kind: type[amos.Model],
     regressed: amos.Dataset) -> None:
     requires(package_of(kind))
-    kind().apply(regressed)
+    kind().apply(regressed, **_needs(kind, regressed))
     _check(regressed, 'regress')
     assert regressed.probabilities is None
 
 
 def test_a_model_for_another_task_raises(regressed: amos.Dataset) -> None:
     with pytest.raises(ValueError, match = 'can classify'):
-        models.Logit().apply(regressed)
+        models.SkLogit().apply(regressed)
 
 
 def test_a_model_needs_a_label() -> None:
     with pytest.raises(ValueError, match = 'needs a dataset with a label'):
-        models.Logit().apply(pd.DataFrame({'a': [1, 2]}))
+        models.SkLogit().apply(pd.DataFrame({'a': [1, 2]}))
 
 
 def _encoded(split: bool = True) -> amos.Dataset:
@@ -76,14 +96,14 @@ def _encoded(split: bool = True) -> amos.Dataset:
 
 def test_models_without_a_split_predict_every_row() -> None:
     dataset = _encoded(split = False)
-    models.Logit().apply(dataset)
+    models.SkLogit().apply(dataset)
     assert len(dataset.predictions) == 200
 
 
 def test_models_explain_that_they_need_numbers() -> None:
     dataset = amos.Dataset(make_mixed(), label = 'outcome')
     with pytest.raises(ValueError, match = r"\['region', 'joined'\]"):
-        models.Logit().apply(dataset)
+        models.SkLogit().apply(dataset)
 
 
 def test_models_accept_categories() -> None:

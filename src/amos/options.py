@@ -12,7 +12,10 @@ Contents:
     _DEFAULT_REPORT: name of the report that a `Project` generates.
     _DEFAULT_ROOT: root folder for a project's files.
     _DEFAULT_TEST_SIZE: share of the rows that a splitter puts in the test set.
+    _DOWNLOAD_TIMEOUT: seconds that `download` waits for a server to answer.
     _EXTRAS: optional `amos` extras that install each optional package.
+    _FILE_SETTINGS: values that loaders use in place of some of the shared
+        settings of a `nagata` clerk.
     _RECORDED_PACKAGES: packages whose versions are recorded by
         `Project.export`.
 
@@ -21,6 +24,7 @@ Contents:
 from __future__ import annotations
 
 import pathlib
+from typing import Any
 
 # An integer label with this many unique values (or fewer) is treated as a set
 # of classes, so `Dataset.task` is "classify". Above it, "regress".
@@ -36,6 +40,8 @@ _DEFAULT_REPORT: str = 'findings'
 _DEFAULT_ROOT: pathlib.Path = pathlib.Path()
 # Share of the rows that a splitter puts in the test set.
 _DEFAULT_TEST_SIZE: float = 0.25
+# Seconds that `download` waits for a server to answer before giving up.
+_DOWNLOAD_TIMEOUT: float = 60
 # The optional `amos` extra that installs each optional package. Used to give
 # a helpful message when a technique's package is missing.
 _EXTRAS: dict[str, str] = {
@@ -61,6 +67,14 @@ _EXTRAS: dict[str, str] = {
     'statsmodels': 'statistics',
     'tabpfn': 'tabpfn',
     'xgboost': 'boosting'}
+# Values that loaders pass in place of the shared settings of a `nagata`
+# clerk (`FileFramework.settings`), by the name of the setting. The clerk's own
+# values suit quick tests (it reads only the first 1000 rows of a csv file,
+# for example), so loaders use the defaults of `pandas` instead.
+_FILE_SETTINGS: dict[str, Any] = {
+    'file_encoding': 'utf-8',
+    'index_column': None,
+    'test_size': None}
 # Packages whose versions are written to "environment.json" by
 # `Project.export`, if they are installed.
 _RECORDED_PACKAGES: tuple[str, ...] = (

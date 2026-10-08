@@ -48,7 +48,7 @@ def test_classification_metrics_with_three_classes(
     multiclass: amos.Dataset) -> None:
     if name == 'average_precision':
         pytest.skip('average precision is for binary labels')
-    amos.models.Logit().apply(multiclass)
+    amos.models.SkLogit().apply(multiclass)
     kind().apply(multiclass)
     assert isinstance(multiclass.metrics[name], float)
 
@@ -72,7 +72,7 @@ def test_text_classes_use_the_last_class_as_positive() -> None:
     amos.splitters.Stratified().apply(dataset)
     amos.transformers.MedianImpute().apply(dataset)
     amos.transformers.OneHot().apply(dataset)
-    amos.models.Logit().apply(dataset)
+    amos.models.SkLogit().apply(dataset)
     expected = sklearn.metrics.precision_score(
         dataset.y_test, dataset.predictions, pos_label = 'yes')
     assert metrics.Precision().measure(dataset) == pytest.approx(expected)
@@ -80,7 +80,7 @@ def test_text_classes_use_the_last_class_as_positive() -> None:
 
 
 def test_parameters_change_the_measure(multiclass: amos.Dataset) -> None:
-    amos.models.Logit().apply(multiclass)
+    amos.models.SkLogit().apply(multiclass)
     macro = metrics.F1().measure(multiclass)
     weighted = metrics.F1().measure(multiclass, average = 'weighted')
     expected = sklearn.metrics.f1_score(

@@ -54,7 +54,7 @@ def test_transformers_leave_groups_alone() -> None:
     amos.splitters.Stratified().apply(dataset)
     amos.transformers.OneHot().apply(dataset)
     assert 'court' in dataset.data.columns
-    amos.models.Logit().apply(dataset)
+    amos.models.SkLogit().apply(dataset)
     assert 'court' not in dataset.model.feature_names_in_
 
 
@@ -118,7 +118,7 @@ def test_the_general_section_sets_the_groups(tmp_path: pathlib.Path) -> None:
     data['court'] = [f'c{i % 4}' for i in range(len(data))]
     settings = {
         'general': {'label': 'target', 'seed': SEED, 'groups': 'court'},
-        'study_project': {'techniques': 'stratified, logit'}}
+        'study_project': {'techniques': 'stratified, sk_logit'}}
     project = amos.Project.create(settings, item = data)
     assert project.result.groups == ['court']
 
@@ -128,7 +128,7 @@ def test_experiments_keep_the_groups_of_each_branch() -> None:
     amos.splitters.Stratified().apply(dataset)
     experiment = amos.Experiment(
         name = 'models', criteria = amos.metrics.Accuracy())
-    experiment.populate([[amos.models.Baseline(), amos.models.Logit()]])
+    experiment.populate([[amos.models.Baseline(), amos.models.SkLogit()]])
     result = experiment.apply(dataset)
     for branch in result.branches:
         assert branch.result.groups == ['court']

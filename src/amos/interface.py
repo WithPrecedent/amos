@@ -19,7 +19,7 @@ import chrisjen
 import nagata
 import pandas as pd
 
-from . import base, evaluators, options, utilities
+from . import base, evaluators, loaders, options, utilities
 
 # Arguments of a `nagata.FileManager` that can be set in the "files" section
 # of the settings.
@@ -41,9 +41,11 @@ class Project(chrisjen.Project):
       a data file, or anything else that `Dataset.create` accepts. The
       "general" section of the settings can set the dataset's "label",
       "task", "seed", and "groups".
+    * A workflow with a loader (see the `loaders` module) loads its own data
+      with the project's `clerk`, so it needs no item.
     * Each call to `apply` works on a copy of the item, so applying a project
       twice gives the same result, and the item is never changed. A project
-      created without an item is drafted but not applied.
+      created without an item or a loader is drafted but not applied.
     * The default report is `Findings`.
     * Files are kept in the current folder unless the "files" section of the
       settings sets a "root_folder" (or other folders).
@@ -62,7 +64,8 @@ class Project(chrisjen.Project):
             case it is built by `draft`.
         report: report generated after the project is applied. Defaults to
             `None`, in which case `Findings` is used.
-        item: the data that the workflow is applied to. Defaults to `None`.
+        item: the data that the workflow is applied to. Defaults to `None`,
+            in which case a loader in the workflow loads the data.
 
     Attributes:
         result: the `Dataset` made by the last call to `apply`.
@@ -72,18 +75,21 @@ class Project(chrisjen.Project):
     """ Initialization Methods """
 
     def __post_init__(self) -> None:
-        """Validates the item and report, and then drafts the project.
+        """Drafts the project and validates the item and report.
 
-        If there is no item, the project is drafted but not applied, even if
-        `automatic` is `True`. Pass the data to `apply` instead.
+        If there is no item and no loader in the workflow, the project is
+        drafted but not applied, even if `automatic` is `True`. Pass the data
+        to `apply` instead.
 
         """
         if self.report is None:
             self.report = self.library.all[options._DEFAULT_REPORT]()
-        if self.item is None:
-            self.automatic = False
-        else:
+        if self.workflow is None:
+            self.draft()
+        if self.item is not None:
             self.item = self._validate_item(self.item)
+        elif not self._has_loader():
+            self.automatic = False
         super().__post_init__()
 
     """ Class Methods """
@@ -254,6 +260,16 @@ class Project(chrisjen.Project):
 
     """ Private Methods """
 
+    def _has_loader(self) -> bool:
+        """Returns whether the workflow has a loader, which loads the data.
+
+        Returns:
+            Whether any node in the workflow, at any level, is a `Loader`.
+
+        """
+        return any(
+            isinstance(node, loaders.Loader) for node in _nodes(self.workflow))
+
     def _save_json(self, item: Any, folder: pathlib.Path, name: str) -> None:
         """Saves `item` as a json file.
 
@@ -312,25 +328,34 @@ class Project(chrisjen.Project):
         folder if it is not found in the current folder.
 
         Args:
-            item: the data, or anything that `Dataset.create` accepts.
+            item: the data, or anything that `Dataset.create` accepts. If it
+                is `None` and the workflow has a loader, the loader loads the
+                data into an empty `Dataset`.
 
         Raises:
-            ValueError: if `item` is `None`.
+            ValueError: if `item` is `None` and the workflow has no loader.
 
         Returns:
             A `Dataset`, with the "label", "task", "seed", and "groups" from
                 the "general" section of the settings if it did not have them.
 
         """
+        general = self.idea.get('general', {})
         if item is None:
-            message = 'there is no data: pass it as item'
-            raise ValueError(message)
+            if not self._has_loader():
+                message = (
+                    'there is no data: pass it as item, or load it with a '
+                    'loader (such as load_file) in the workflow'
+                )
+                raise ValueError(message)
+            # The loader applies the label, task, and groups, which an empty
+            # dataset cannot have.
+            return base.Dataset(seed = general.get('seed'))
         if isinstance(item, str | pathlib.Path):
             path = pathlib.Path(item)
             if not path.exists():
                 path = pathlib.Path(self.clerk.input_folder) / path
             item = path
-        general = self.idea.get('general', {})
         return base.Dataset.create(
             item,
             label = general.get('label'),
