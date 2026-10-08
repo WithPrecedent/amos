@@ -41,7 +41,8 @@ def main() -> None:
     FOLDER.mkdir(parents = True, exist_ok = True)
     for name, figure in project.result.figures.items():
         path = FOLDER / f'{name}.png'
-        figure.savefig(path, dpi = 150, bbox_inches = 'tight')
+        figure.savefig(
+            path, dpi = amos.options._FIGURE_DPI, bbox_inches = 'tight')
         print(f'saved {path.relative_to(ROOT)}')  # noqa: T201
     path = project.scorecard.to_image(FOLDER / 'scorecard.png', dpi = 150)
     print(f'saved {path.relative_to(ROOT)}')  # noqa: T201

@@ -14,8 +14,11 @@ Contents:
     _DEFAULT_TEST_SIZE: share of the rows that a splitter puts in the test set.
     _DOWNLOAD_TIMEOUT: seconds that `download` waits for a server to answer.
     _EXTRAS: optional `amos` extras that install each optional package.
+    _FIGURE_DPI: dots per inch of the figures that `Project.export` saves.
     _FILE_SETTINGS: values that loaders use in place of some of the shared
         settings of a `nagata` clerk.
+    _PLOT_COLORS: the color cycle of figures.
+    _PLOT_STYLE: the style of figures.
     _RECORDED_PACKAGES: packages whose versions are recorded by
         `Project.export`.
 
@@ -61,12 +64,17 @@ _EXTRAS: dict[str, str] = {
     'optuna_integration': 'tuning',
     'polars': 'polars',
     'pyfixest': 'statistics',
+    'scienceplots': 'plots',
     'seaborn': 'plots',
     'shap': 'explain',
     'skrub': 'encoders',
     'statsmodels': 'statistics',
     'tabpfn': 'tabpfn',
     'xgboost': 'boosting'}
+# Dots per inch of the figures that `Project.export` saves. Figures in the
+# default style are one column of a journal wide (3.3 inches), so they need
+# more dots than the 100 that `matplotlib` uses to be sharp in print.
+_FIGURE_DPI: int = 300
 # Values that loaders pass in place of the shared settings of a `nagata`
 # clerk (`FileFramework.settings`), by the name of the setting. The clerk's own
 # values suit quick tests (it reads only the first 1000 rows of a csv file,
@@ -75,6 +83,14 @@ _FILE_SETTINGS: dict[str, Any] = {
     'file_encoding': 'utf-8',
     'index_column': None,
     'test_size': None}
+# The color cycle of figures: the name of a style that only sets the colors,
+# such as SciencePlots' "bright" (Paul Tol's palette, which people with color
+# blindness can tell apart), or `None` for the colors of the style.
+_PLOT_COLORS: str | None = 'bright'
+# The style of figures: names of `matplotlib` or SciencePlots styles, applied
+# in order, or "xkcd". The default is SciencePlots' style for scientific
+# figures, with the sizes and fonts of figures in Nature.
+_PLOT_STYLE: tuple[str, ...] = ('science', 'nature')
 # Packages whose versions are written to "environment.json" by
 # `Project.export`, if they are installed.
 _RECORDED_PACKAGES: tuple[str, ...] = (
@@ -99,6 +115,7 @@ _RECORDED_PACKAGES: tuple[str, ...] = (
     'polars',
     'pyfixest',
     'python-docx',
+    'scienceplots',
     'seaborn',
     'shap',
     'skrub',

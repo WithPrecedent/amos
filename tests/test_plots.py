@@ -192,6 +192,25 @@ def test_shap_waterfall_keeps_its_size_and_interactive_mode(
     assert list(fitted.figures['shap_waterfall'].get_size_inches()) == [5, 4]
 
 
+def test_shap_bar_and_waterfall_use_the_colors_of_the_style(
+    fitted: amos.Dataset) -> None:
+    requires('shap.plots._style')
+    styles = importlib.import_module('shap.plots._style')
+    before = styles.get_style()
+    plots.ShapWaterfall().apply(fitted, rows = 20)
+    patches = fitted.figures['shap_waterfall'].axes[0].patches
+    drawn = {_hex(patch.get_facecolor()) for patch in patches}
+    # The bright cycle's blue lowers the prediction and its red raises it.
+    assert {'#4477aa', '#ee6677'} <= drawn
+    plots.ShapBar().apply(fitted, rows = 20)
+    bars = fitted.figures['shap_bar'].axes[0].patches
+    assert {_hex(bar.get_facecolor()) for bar in bars} == {'#ee6677'}
+    # shap's own colors are put back.
+    after = styles.get_style().asdict()
+    assert {k: _hex(v) for k, v in after.items()} == {
+        k: _hex(v) for k, v in before.asdict().items()}
+
+
 def test_shap_scatter_chooses_features(fitted: amos.Dataset) -> None:
     requires('shap')
     amos.evaluators.ShapImportance().apply(fitted, rows = 30)
@@ -382,10 +401,87 @@ def test_shape_functions(
 
 
 def test_plots_have_their_own_sizes(fitted: amos.Dataset) -> None:
+    # The usual sizes are scaled to the width of the style (Nature's, 3.3
+    # inches, rather than matplotlib's 6.4).
+    scale = 3.3 / 6.4
     plots.PairPlot().apply(fitted, limit = 2)
-    assert list(fitted.figures['pair_plot'].get_size_inches()) == [8, 8]
+    size = list(fitted.figures['pair_plot'].get_size_inches())
+    assert size == pytest.approx([8 * scale, 8 * scale])
     plots.PairPlot().apply(fitted, limit = 2, width = 4)
-    assert list(fitted.figures['pair_plot'].get_size_inches()) == [4, 8]
+    size = list(fitted.figures['pair_plot'].get_size_inches())
+    assert size == pytest.approx([4, 8 * scale])
+    plots.PairPlot().apply(fitted, limit = 2, style = 'default')
+    assert list(fitted.figures['pair_plot'].get_size_inches()) == [8, 8]
+
+
+def test_plots_use_the_style_of_nature_by_default(
+    fitted: amos.Dataset) -> None:
+    matplotlib = importlib.import_module('matplotlib')
+    before = dict(matplotlib.rcParams)
+    plots.RocCurve().apply(fitted)
+    figure = fitted.figures['roc_curve']
+    axes = figure.axes[0]
+    assert list(figure.get_size_inches()) == pytest.approx([3.3, 2.475])
+    assert _hex(axes.get_lines()[0].get_color()) == '#4477aa'
+    assert axes.xaxis.label.get_fontsize() == 7
+    assert not axes.xaxis.label.get_usetex()
+    assert axes.xaxis.get_major_ticks()[0]._tickdir == 'in'
+    # The settings of matplotlib are put back.
+    assert dict(matplotlib.rcParams) == before
+
+
+def test_plots_that_keep_their_size_enlarge_the_text_of_the_style(
+    fitted: amos.Dataset) -> None:
+    requires('shap')
+    plots.RocCurve().apply(fitted, title = 'small')
+    plots.ShapBar().apply(fitted, rows = 20, title = 'large')
+    small = fitted.figures['roc_curve']._suptitle.get_fontsize()
+    large = fitted.figures['shap_bar']._suptitle.get_fontsize()
+    # The SHAP plots keep matplotlib's width (6.4 inches) rather than
+    # Nature's (3.3), and their text is enlarged as much.
+    assert list(fitted.figures['shap_bar'].get_size_inches()) == [6.4, 4.8]
+    assert large == pytest.approx(small * 6.4 / 3.3)
+
+
+def test_colors_of_the_cycle_keep_the_style(
+    fitted_regression: amos.Dataset) -> None:
+    requires('statsmodels')
+    plots.QqPlot().apply(fitted_regression)
+    points, line = fitted_regression.figures['qq_plot'].axes[0].get_lines()
+    # "C0" and "C1" are the first colors of the bright cycle, even when the
+    # figure is drawn outside the style.
+    assert _hex(points.get_markerfacecolor()) == '#4477aa'
+    assert _hex(line.get_color()) == '#ee6677'
+
+
+def test_xkcd_and_other_styles(fitted: amos.Dataset) -> None:
+    matplotlib = importlib.import_module('matplotlib')
+    plots.RocCurve().apply(fitted, style = 'xkcd')
+    figure = fitted.figures['roc_curve']
+    line = figure.axes[0].get_lines()[0]
+    assert list(figure.get_size_inches()) == [6.4, 4.8]
+    assert line.get_sketch_params() is not None
+    assert _hex(line.get_color()) == '#4477aa'
+    plots.RocCurve().apply(fitted, style = ['ggplot'], colors = 'muted')
+    line = fitted.figures['roc_curve'].axes[0].get_lines()[0]
+    muted = matplotlib.style.library['muted']['axes.prop_cycle']
+    assert _hex(line.get_color()) == _hex(muted.by_key()['color'][0])
+    plots.RocCurve().apply(fitted, style = None, colors = None)
+    line = fitted.figures['roc_curve'].axes[0].get_lines()[0]
+    assert _hex(line.get_color()) == '#1f77b4'
+    plots.RocCurve().apply(fitted, style = 'science, ieee')
+    width = fitted.figures['roc_curve'].get_size_inches()[0]
+    assert width == pytest.approx(3.3)
+    with pytest.raises(ValueError, match = 'not styles'):
+        plots.RocCurve().apply(fitted, style = 'science, nope')
+    with pytest.raises(ValueError, match = 'color cycle'):
+        plots.RocCurve().apply(fitted, colors = 'science')
+
+
+def _hex(color: object) -> str:
+    """Returns a color of matplotlib as a hex code, in lower case."""
+    colors = importlib.import_module('matplotlib.colors')
+    return colors.to_hex(color).lower()
 
 
 def test_label_plot_counts_each_class() -> None:

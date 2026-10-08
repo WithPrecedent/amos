@@ -24,8 +24,6 @@ imported when a technique that needs them is used (see the extras in the
 
 | Name | Description |
 | --- | --- |
-| `auto_categorize` | Makes columns with few unique values categorical. |
-| `convert_types` | Changes the data types of columns. |
 | `drop_columns` | Removes columns. |
 | `drop_constant` | Removes columns that have only one value (and so tell you nothing). |
 | `drop_duplicates` | Removes rows that duplicate an earlier row. |
@@ -33,6 +31,28 @@ imported when a technique that needs them is used (see the extras in the
 | `filter_rows` | Keeps the rows that match a query. |
 | `keep_columns` | Keeps only some columns. The label and groups are always kept. |
 | `rename_columns` | Renames columns, including the label and groups of the dataset. |
+
+## Mungers (wrangler)
+
+| Name | Description |
+| --- | --- |
+| `auto_categorize` | Makes columns with few unique values categorical. |
+| `coalesce` | Takes the first value that is not missing from several columns. |
+| `combine_flags` | Combines flags into one: whether any or all are true, or how many are. |
+| `convert_types` | Changes the data types of columns. |
+| `count_patterns` | Counts the matches of patterns in text. |
+| `derive_columns` | Makes columns from expressions of other columns, such as "a / b". |
+| `extract_all` | Keeps every match of a pattern in text. |
+| `extract_pattern` | Keeps the first match of a pattern in text (or the groups of a match). |
+| `flag_patterns` | Makes columns that say whether text matches patterns. |
+| `map_patterns` | Turns text into values by the first pattern that it matches. |
+| `map_values` | Replaces values with others, such as "N/A" with a missing value. |
+| `normalize_text` | Normalizes the spaces, case, accents, and punctuation of text. |
+| `parse_booleans` | Turns text such as "yes" and "no" into booleans. |
+| `parse_dates` | Turns text into dates. |
+| `parse_numbers` | Turns text such as "$1,234.50" into numbers. |
+| `replace_text` | Replaces the matches of patterns in text. |
+| `split_text` | Splits text into columns where a pattern matches. |
 | `strip_text` | Trims spaces from text, and optionally makes it lowercase. |
 
 ## Describers (explorer)

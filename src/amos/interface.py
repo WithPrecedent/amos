@@ -163,7 +163,7 @@ class Project(chrisjen.Project):
         | metrics.csv | The model's metrics. |
         | predictions.csv | The labels, predictions, and probabilities. |
         | tables/{name}.csv | Each table. |
-        | figures/{name}.png | Each figure. |
+        | figures/{name}.png | Each figure (see `options._FIGURE_DPI`). |
         | scorecard.csv, .md | The scorecard of every branch (see `scorecard`). |
         | scorecard.docx | The scorecard as a Word document (with python-docx). |
         | scorecard.png | The scorecard as an image (with matplotlib). |
@@ -212,7 +212,8 @@ class Project(chrisjen.Project):
                 figure,
                 folder = folder / 'figures',
                 file_name = name,
-                file_format = 'png')
+                file_format = 'png',
+                dpi = options._FIGURE_DPI)
         if result.predictions is not None:
             # The Word and image versions are saved if their optional
             # packages are installed.

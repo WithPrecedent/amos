@@ -619,11 +619,11 @@ class Operation(chrisjen.Technique, abc.ABC):
     Every operation adds an entry to the dataset's `history`.
 
     `Operation` is a genre: its abstract subclasses (`Loader`, `Cleaner`,
-    `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`,
-    `Effect`, `Metric`, `Evaluator`, and `Plot`) are genres within it. To add a technique, subclass the genre that
-    fits and write the method it requires, or set `contents` to the tool to
-    wrap. To add a new kind of technique, subclass `Operation` and write
-    `implement`.
+    `Munger`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`,
+    `Validator`, `Effect`, `Metric`, `Evaluator`, and `Plot`) are genres
+    within it. To add a technique, subclass the genre that fits and write the
+    method it requires, or set `contents` to the tool to wrap. To add a new
+    kind of technique, subclass `Operation` and write `implement`.
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to

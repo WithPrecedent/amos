@@ -40,6 +40,12 @@ jobs:
     - name: install uv
       uses: astral-sh/setup-uv@v10.2.0
 
+    # xgboost and lightgbm need OpenMP, which macOS does not include. The
+    # README's study uses xgboost, so its example fails without it.
+    - name: install OpenMP on macOS
+      if: runner.os == 'macOS'
+      run: brew install libomp
+
     - name: install dependencies
       run: uv sync --python ${{ matrix.python-version }}
 

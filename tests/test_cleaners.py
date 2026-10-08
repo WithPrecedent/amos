@@ -9,22 +9,6 @@ import amos
 from amos import cleaners
 
 
-def test_auto_categorize(mixed: amos.Dataset) -> None:
-    mixed.data['few'] = [1, 2] * 100
-    cleaners.AutoCategorize().apply(mixed)
-    assert isinstance(mixed.data['region'].dtype, pd.CategoricalDtype)
-    assert isinstance(mixed.data['few'].dtype, pd.CategoricalDtype)
-    assert mixed.data['member'].dtype == bool
-    assert pd.api.types.is_float_dtype(mixed.data['income'].dtype)
-    assert 'few' in mixed.categoricals
-
-
-def test_convert_types(mixed: amos.Dataset) -> None:
-    cleaners.ConvertTypes().apply(mixed, types = {'member': 'int64'})
-    assert mixed.data['member'].dtype == 'int64'
-    assert 'member' in mixed.numerics
-
-
 def test_drop_columns(mixed: amos.Dataset) -> None:
     cleaners.DropColumns().apply(mixed, columns = ['joined', 'income'])
     assert mixed.features == ['age', 'region', 'member']
@@ -86,13 +70,3 @@ def test_rename_columns_renames_the_label(mixed: amos.Dataset) -> None:
     assert mixed.label == 'result'
     assert 'years' in mixed.features
     assert mixed.y.name == 'result'
-
-
-def test_strip_text(mixed: amos.Dataset) -> None:
-    mixed.data['region'] = mixed.data['region'].str.upper() + '  '
-    mixed.data.loc[0, 'region'] = '   '
-    cleaners.StripText().apply(mixed, lowercase = True)
-    assert set(mixed.data['region'].dropna()) == {
-        'north', 'south', 'east', 'west'}
-    assert pd.isna(mixed.data.loc[0, 'region'])
-    assert mixed.data['outcome'].iloc[1] in {'yes', 'no'}

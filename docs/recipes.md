@@ -166,7 +166,7 @@ print(result.categoricals, len(result.tables["analyst_comparison"]))
 Any technique can also be applied by hand, to check what it does:
 
 ```python
-cleaned = amos.cleaners.StripText().apply(cases.copy(), lowercase = True)
+cleaned = amos.mungers.StripText().apply(cases.copy(), lowercase = True)
 print(sorted(cleaned.data["court"].unique()))
 # ['appeals', 'district', 'supreme']
 ```

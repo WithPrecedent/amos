@@ -26,6 +26,7 @@ FIRST = '## Loaders (wrangler)'
 GENRES: tuple[tuple[str, str], ...] = (
     ('loader', 'Loaders (wrangler)'),
     ('cleaner', 'Cleaners (wrangler)'),
+    ('munger', 'Mungers (wrangler)'),
     ('describer', 'Describers (explorer)'),
     ('splitter', 'Splitters (analyst)'),
     ('imputer', 'Imputers (analyst)'),

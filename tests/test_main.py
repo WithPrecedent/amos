@@ -81,9 +81,9 @@ def test_public_names_exist() -> None:
 def test_every_genre_is_in_the_operation_layer() -> None:
     operations = chrisjen.library['vertex']['operation']
     for genre in (
-        'loader', 'cleaner', 'describer', 'splitter', 'transformer',
-        'sampler', 'model', 'validator', 'metric', 'evaluator', 'plot',
-        'effect'):
+        'loader', 'cleaner', 'munger', 'describer', 'splitter',
+        'transformer', 'sampler', 'model', 'validator', 'metric',
+        'evaluator', 'plot', 'effect'):
         assert isinstance(operations[genre], dict), genre
     assert isinstance(operations['metric']['group_metric'], dict)
     for genre in ('imputer', 'scaler', 'encoder', 'mixer', 'reducer'):
@@ -98,9 +98,10 @@ def test_every_name_in_the_library_is_unique() -> None:
 def test_every_concrete_operation_is_in_the_library() -> None:
     stored = set(chrisjen.library.all.values())
     modules = (
-        amos.loaders, amos.cleaners, amos.describers, amos.splitters,
-        amos.transformers, amos.samplers, amos.models, amos.validators,
-        amos.metrics, amos.evaluators, amos.plots, amos.effects)
+        amos.loaders, amos.cleaners, amos.mungers, amos.describers,
+        amos.splitters, amos.transformers, amos.samplers, amos.models,
+        amos.validators, amos.metrics, amos.evaluators, amos.plots,
+        amos.effects)
     for module in modules:
         for _, kind in inspect.getmembers(module, inspect.isclass):
             if (

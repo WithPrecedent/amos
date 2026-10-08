@@ -29,42 +29,6 @@ builds the workflow with [chrisjen](https://github.com/WithPrecedent/chrisjen),
 runs it on your data, compares every combination of the methods you list, and
 records everything needed to reproduce the result.
 
-```python
-import sklearn.datasets
-
-import amos
-
-cancer = sklearn.datasets.load_breast_cancer(as_frame = True)
-settings = {
-    "general": {"seed": 43},
-    "cancer_project": {"cancer_workers": "analyst, critic"},
-    "analyst": {
-        "design": "experiment",
-        "criterion": "roc_auc",
-        "steps": "split, scale, model",
-        "split_techniques": "stratified",
-        "scale_techniques": "standard, min_max",
-        "model_techniques": "baseline, sk_logit",
-    },
-    "critic": {"techniques": "scorecard, confusion"},
-}
-project = amos.Project.create(settings, item = cancer)
-print(project.result)
-# Dataset(rows=569, columns=31, label='target', task='classify', train=426, test=143, model=LogisticRegression)
-```
-
-That project split the data, tried four combinations of scaling and models,
-kept the one with the best ROC AUC on the test rows, and scored it. The
-comparison of all four is stored in a table:
-
-```python
-table = project.result.tables["analyst_comparison"]
-print(list(table.columns))
-# ['rank', 'score', 'roc_auc']
-print(table["roc_auc"].iloc[-1])
-# 0.5
-```
-
 ## Why use amos?
 
 <p align="center">
@@ -84,8 +48,9 @@ your methods:
 <tr><th>Stage</th><th>Steps</th><th>Techniques</th></tr>
 </thead>
 <tbody>
-<tr><td rowspan="2" valign="middle">wrangler</td><td>Loaders</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.Download"><code>download</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.LoadFile"><code>load_file</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.Openml"><code>openml</code></a></td></tr>
-<tr><td>Cleaners</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.AutoCategorize"><code>auto_categorize</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.ConvertTypes"><code>convert_types</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropColumns"><code>drop_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropConstant"><code>drop_constant</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropDuplicates"><code>drop_duplicates</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropMissing"><code>drop_missing</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.FilterRows"><code>filter_rows</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.KeepColumns"><code>keep_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.RenameColumns"><code>rename_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.StripText"><code>strip_text</code></a></td></tr>
+<tr><td rowspan="3" valign="middle">wrangler</td><td>Loaders</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.Download"><code>download</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.LoadFile"><code>load_file</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.Openml"><code>openml</code></a></td></tr>
+<tr><td>Cleaners</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropColumns"><code>drop_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropConstant"><code>drop_constant</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropDuplicates"><code>drop_duplicates</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropMissing"><code>drop_missing</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.FilterRows"><code>filter_rows</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.KeepColumns"><code>keep_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.RenameColumns"><code>rename_columns</code></a></td></tr>
+<tr><td>Mungers</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.AutoCategorize"><code>auto_categorize</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.Coalesce"><code>coalesce</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.CombineFlags"><code>combine_flags</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.ConvertTypes"><code>convert_types</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.CountPatterns"><code>count_patterns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.DeriveColumns"><code>derive_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.ExtractAll"><code>extract_all</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.ExtractPattern"><code>extract_pattern</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.FlagPatterns"><code>flag_patterns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.MapPatterns"><code>map_patterns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.MapValues"><code>map_values</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.NormalizeText"><code>normalize_text</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.ParseBooleans"><code>parse_booleans</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.ParseDates"><code>parse_dates</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.ParseNumbers"><code>parse_numbers</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.ReplaceText"><code>replace_text</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.SplitText"><code>split_text</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.StripText"><code>strip_text</code></a></td></tr>
 <tr><td>explorer</td><td>Describers</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.Correlations"><code>correlations</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.Describe"><code>describe</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.Frequencies"><code>frequencies</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.KaplanMeier"><code>kaplan_meier</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.LabelBalance"><code>label_balance</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.MissingValues"><code>missing_values</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.Summarize"><code>summarize</code></a></td></tr>
 <tr><td rowspan="10" valign="middle">analyst</td><td>Splitters</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/splitters/#amos.splitters.GroupSplit"><code>group_split</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/splitters/#amos.splitters.Stratified"><code>stratified</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/splitters/#amos.splitters.TimeSplit"><code>time_split</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/splitters/#amos.splitters.TrainTest"><code>train_test</code></a></td></tr>
 <tr><td>Imputers</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/transformers/#amos.transformers.IterativeImpute"><code>iterative_impute</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/transformers/#amos.transformers.KnnImpute"><code>knn_impute</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/transformers/#amos.transformers.MeanImpute"><code>mean_impute</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/transformers/#amos.transformers.MedianImpute"><code>median_impute</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/transformers/#amos.transformers.ModeImpute"><code>mode_impute</code></a></td></tr>
@@ -139,7 +104,7 @@ Open scholarship means that others can check your work. `amos` helps by:
 | [fairlearn](https://fairlearn.org) | Fairness metrics that compare a model across groups. |
 | [MAPIE](https://mapie.readthedocs.io) | Conformal prediction: intervals and sets with a known rate of coverage. |
 | [shap](https://shap.readthedocs.io) and [eli5](https://eli5.readthedocs.io) | Explaining models with SHAP values (and shap's plots of them) and weights. |
-| [matplotlib](https://matplotlib.org) and [seaborn](https://seaborn.pydata.org) | Figures and other visualizations. |
+| [matplotlib](https://matplotlib.org), [seaborn](https://seaborn.pydata.org), and [SciencePlots](https://github.com/garrettj403/SciencePlots) | Figures and other visualizations, in the style of a scientific journal (Nature's, by default) and with colors that people with color blindness can tell apart. |
 | [great_tables](https://posit-dev.github.io/great-tables/) and [python-docx](https://python-docx.readthedocs.io) | Scorecards as HTML tables and Word documents. |
 
 
@@ -165,6 +130,8 @@ it is defined, so it can be named in settings right away. To wrap a tool that
 `amos` does not include, name its import path:
 
 ```python
+import amos
+
 transformer = amos.Transformer(
     name = "yeo_johnson", contents = "sklearn.preprocessing.PowerTransformer")
 print(transformer.name)
@@ -202,7 +169,7 @@ amos[all]`, or choose:
 | `encoders` | category_encoders, skrub | Target encoders, and encoders for text and dates. |
 | `explain` | shap, eli5, InterpretML | `shap_importance`, the SHAP plots (such as `shap_beeswarm`), `explain_weights`, and `explainable_boosting`. |
 | `fairness` | fairlearn | Fairness metrics and the `fairness` table. |
-| `plots` | matplotlib, seaborn | The artist's figures, and scorecards as images. |
+| `plots` | matplotlib, seaborn, SciencePlots | The artist's figures, and scorecards as images. |
 | `polars` | Polars, pyarrow | Reading Polars data frames. |
 | `sampling` | imbalanced-learn | Samplers such as `smote`. |
 | `statistics` | statsmodels, pyfixest | `ols`, `glm`, `logit`, `fixest`, and the other models with inference (such as `poisson`, `probit`, and `mixedlm`). |
@@ -221,8 +188,8 @@ amos[all]`, or choose:
 
 #### Describe your study
 
-Most users describe a study in a settings file. This is the Wisconsin breast
-cancer study from above, with every stage, as an ini file:
+Most users describe a study in a settings file. This is a study of the
+Wisconsin breast cancer data that uses every stage, as an ini file:
 
 <!-- file: cancer.ini -->
 ```ini
@@ -246,13 +213,13 @@ steps = split, scale, sample, model
 split_techniques = stratified
 scale_techniques = standard, min_max
 sample_techniques = none, smote
-model_techniques = sk_logit, random_forest
+model_techniques = sk_logit, random_forest, xgboost
 
 [critic]
 techniques = scorecard, confusion, permutation_importance
 
 [artist]
-techniques = roc_curve, importance_plot
+techniques = roc_curve, importance_plot, confusion_heatmap, shap_waterfall
 
 [random_forest_parameters]
 n_estimators = 100
@@ -263,14 +230,23 @@ title = How well the best model separates the classes
 [importance_plot_parameters]
 title = The ten features that matter most
 limit = 10
+
+[confusion_heatmap_parameters]
+title = The test rows by their actual and predicted classes
+
+[shap_waterfall_parameters]
+title = How each feature moved the prediction for one tumor
 ```
 
 The "general" section names the label (the column that models predict) and
 the seed. The project section lists the workers. In the "analyst", each
 `{step}_techniques` setting lists alternatives, and the `experiment` design
-tries every combination: 2 scalers, 2 samplers, and 2 models make 8
-combinations. Parameters for any technique go in a `{technique}_parameters`
-section.
+tries every combination: 2 scalers, 2 samplers, and 3 models (scikit-learn's
+logistic regression, a random forest, and xgboost's gradient boosting) make
+12 combinations. Parameters for any technique go in a `{technique}_parameters`
+section. The study uses optional packages (imbalanced-learn for `smote`,
+xgboost, shap for `shap_waterfall`, and matplotlib, seaborn, and SciencePlots
+for the figures), which `pip install amos[all]` installs.
 
 #### Run it
 
@@ -278,23 +254,34 @@ Pass the settings and the data (a `pandas.DataFrame`, a path to a data file,
 or a scikit-learn dataset) to `Project.create`:
 
 ```python
+import sklearn.datasets
+
+import amos
+
+cancer = sklearn.datasets.load_breast_cancer(as_frame = True)
 project = amos.Project.create("cancer.ini", item = cancer, id = "first_run")
 result = project.result
 print(result.metrics["roc_auc"] > 0.95)
 # True
 print(sorted(result.figures))
-# ['importance_plot', 'roc_curve']
+# ['confusion_heatmap', 'importance_plot', 'roc_curve', 'shap_waterfall']
 ```
 
-The `artist` drew two figures, titled by the `roc_curve_parameters` and
-`importance_plot_parameters` sections. The ROC curve shows how well the best
-combination tells the two kinds of tumors apart on the test rows it never
-learned from. The importance plot shows how much its score drops when each
-feature is shuffled, which works for any model:
+The `artist` drew four figures, titled by their `{technique}_parameters`
+sections. The ROC curve shows how well the best combination tells the two
+kinds of tumors apart on the test rows it never learned from, and the
+confusion heatmap counts the test rows that it classified rightly and
+wrongly. The importance plot shows how much its score drops when each feature
+is shuffled, which works for any model, and the SHAP waterfall shows how each
+feature (after scaling) moved its prediction for one tumor:
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/roc_curve.png" alt="The ROC curve of the best model, with an area under the curve of 0.98" height="320"/>
+<img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/confusion_heatmap.png" alt="The test rows by their actual and predicted classes: 138 of the 143 are classified correctly" height="320"/>
+</p>
+<p align="center">
 <img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/importance_plot.png" alt="The ten features whose shuffling lowers the model's score the most" height="320"/>
+<img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/shap_waterfall.png" alt="How each feature moved the best model's prediction for one tumor, from the largest change to the smallest" height="320"/>
 </p>
 
 The result includes a `Dataset`, the fitted `model`, its `predictions`,
@@ -318,7 +305,7 @@ a Word document, or an image:
 ```python
 scorecard = project.scorecard
 print(len(scorecard.table), list(scorecard.table.columns[:5]))
-# 8 ['rank', 'split', 'scale', 'sample', 'model']
+# 12 ['rank', 'split', 'scale', 'sample', 'model']
 scorecard.to_csv("scorecard.csv")
 scorecard.to_markdown("scorecard.md")
 scorecard.to_word("scorecard.docx")
@@ -329,19 +316,13 @@ This is the scorecard of the study, saved as an image. The best branch is
 shaded:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/scorecard.png" alt="A table of the eight branches of the study, ranked by ROC AUC, with the scaler, sampler, and model of each and seven metrics" width="100%"/>
+<img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/scorecard.png" alt="A table of the twelve branches of the study, ranked by ROC AUC, with the scaler, sampler, and model of each and seven metrics" width="100%"/>
 </p>
 
 #### Export the results
 
 `export` saves everything needed to report and reproduce the results in a
-folder named for the run, including the scorecard in all four formats:
-
-```python
-folder = project.export()
-print(sorted(path.name for path in folder.iterdir()))
-# ['environment.json', 'figures', 'history.json', 'metrics.csv', 'predictions.csv', 'report.txt', 'scorecard.csv', 'scorecard.docx', 'scorecard.md', 'scorecard.png', 'settings.json', 'tables']
-```
+folder named for the run.
 
 There is much more to `amos`, including hyperparameter searches, statistical
 inference with `statsmodels`, every technique and its parameters, and how to

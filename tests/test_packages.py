@@ -27,6 +27,7 @@ IMPORT_NAMES = {
     'MAPIE': 'mapie',
     'Optuna': 'optuna',
     'Polars': 'polars',
+    'SciencePlots': 'scienceplots',
     'TabPFN': 'tabpfn',
     'imbalanced-learn': 'imblearn',
     'python-docx': 'docx',
@@ -48,7 +49,7 @@ def _readme_packages() -> list[str]:
 def test_every_package_in_the_readme_has_a_test() -> None:
     packages = _readme_packages()
     assert 'scikit-learn' in packages
-    assert len(packages) == 21
+    assert len(packages) == 22
     for package in packages:
         name = IMPORT_NAMES.get(package, package.replace('-', '_'))
         assert callable(globals().get(f'test_{name}')), package
@@ -190,6 +191,28 @@ def test_matplotlib(classified: amos.Dataset, tmp_path: pathlib.Path) -> None:
     path = tmp_path / 'histograms.png'
     figure.savefig(path)
     assert path.read_bytes().startswith(b'\x89PNG')
+
+
+def test_scienceplots(fitted: amos.Dataset) -> None:
+    requires('matplotlib')
+    requires('scienceplots')
+    importlib.import_module('scienceplots')
+    library = importlib.import_module('matplotlib.style').library
+    colors = importlib.import_module('matplotlib.colors')
+    amos.plots.RocCurve().apply(fitted)
+    figure = fitted.figures['roc_curve']
+    axes = figure.axes[0]
+    # The figure has the size and fonts of the "nature" style, the ticks of
+    # the "science" style, and the first color of the "bright" cycle.
+    nature, science = library['nature'], library['science']
+    assert figure.get_size_inches()[0] == pytest.approx(
+        nature['figure.figsize'][0])
+    assert axes.xaxis.label.get_fontsize() == nature['font.size']
+    tick = axes.xaxis.get_major_ticks()[0]
+    assert tick._tickdir == science['xtick.direction']
+    bright = library['bright']['axes.prop_cycle'].by_key()['color']
+    assert colors.to_hex(axes.get_lines()[0].get_color()) == (
+        colors.to_hex(bright[0]))
 
 
 def test_docx(fitted: amos.Dataset, tmp_path: pathlib.Path) -> None:

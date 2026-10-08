@@ -24,7 +24,7 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Project` | A `chrisjen.Project` that makes your data into a `Dataset`, applies the workflow to a copy of it, and can `export` the results. |
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
-| `Loader`, `Cleaner`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Plot`, `Effect` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, and `Metric` has the genre `GroupMetric` (fairness metrics). |
+| `Loader`, `Cleaner`, `Munger`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Plot`, `Effect` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, and `Metric` has the genre `GroupMetric` (fairness metrics). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
 | `Findings` | The default report. |
 
@@ -44,7 +44,7 @@ import sklearn.datasets
 import amos
 
 print(sorted(amos.library["vertex"]["operation"]))
-# ['cleaner', 'describer', 'effect', 'evaluator', 'loader', 'metric', 'model', 'plot', 'sampler', 'splitter', 'transformer', 'validator']
+# ['cleaner', 'describer', 'effect', 'evaluator', 'loader', 'metric', 'model', 'munger', 'plot', 'sampler', 'splitter', 'transformer', 'validator']
 print(amos.library.classify("smote"), amos.library.classify("one_hot"))
 # sampler encoder
 print(amos.library.all["random_forest"])
@@ -220,6 +220,102 @@ source = https://example.com/data/cases.csv.gz
 
 To write a loader for another source, see "Writing your own techniques"
 below.
+
+## Munging data
+
+Cleaners remove rows and columns. *Mungers* change what is in the columns, or
+make new columns from them, without adding or removing rows. Each one changes
+a whole column at once with the vectorized methods of `pandas`, so they are
+fast even with a lot of data. None of them learns from the data, so, like
+cleaners, they belong in the wrangler, before the data is split. The
+[technique catalog](catalog.md#mungers-wrangler) describes each one:
+
+| Kind | Mungers |
+| --- | --- |
+| Text | `strip_text`, `normalize_text`, `replace_text` |
+| Patterns in text | `flag_patterns`, `count_patterns`, `map_patterns`, `extract_pattern`, `extract_all`, `split_text` |
+| Values and types | `map_values`, `parse_numbers`, `parse_dates`, `parse_booleans`, `convert_types`, `auto_categorize` |
+| Combining columns | `coalesce`, `combine_flags`, `derive_columns` |
+
+Many mungers search text for patterns, which are [regular
+expressions](https://docs.python.org/3/library/re.html). A pattern is found
+anywhere in the text, so "revers" is found in "Reversed and remanded", and
+"revers|vacat" finds either word. Characters with special meanings, such as
+"." and "(", need a backslash to stand for themselves ("F\.3d"). Set
+"ignorecase" to ignore the difference between capital and lower-case letters.
+Missing text matches nothing.
+
+A munger that searches text reads one `column`. `flag_patterns` and
+`count_patterns` make a column for each name in their "patterns", and the
+others make the column in their "name" (or, without one, replace the column
+they read). Parameters that map names or patterns to values, such as
+"patterns", need settings that have mappings: a toml, json, or yaml file, or
+a Python `dict` (an ini file has none). In toml, text in single quotes keeps
+its backslashes as they are:
+
+<!-- file: coding.toml -->
+```toml
+[coding_project]
+coding_workers = "wrangler"
+
+[wrangler]
+techniques = "split_text, flag_patterns, map_patterns, parse_numbers"
+
+[split_text_parameters]
+column = "caption"
+pattern = '\s+v\.\s+'
+names = ["party1", "party2"]
+
+[flag_patterns_parameters]
+column = "caption"
+
+[flag_patterns_parameters.patterns]
+government = 'United States|\bState of\b'
+
+[map_patterns_parameters]
+column = "disposition"
+name = "outcome"
+ignorecase = true
+
+[map_patterns_parameters.patterns]
+'revers|vacat' = "reversed"
+affirm = "affirmed"
+
+[parse_numbers_parameters]
+columns = "damages"
+```
+
+```python
+opinions = pd.DataFrame({
+    "caption": ["United States v. Smith", "Jones v. Acme Corp.", "Doe v. Roe"],
+    "disposition": ["REVERSED and remanded", "Affirmed.", "Vacated."],
+    "damages": ["$1,200", "n/a", "$350.50"],
+})
+coding = amos.Project.create("coding.toml", item = opinions)
+coded = coding.result.data
+print(coded["party1"].tolist(), coded["party2"].tolist())
+# ['United States', 'Jones', 'Doe'] ['Smith', 'Acme Corp.', 'Roe']
+print(coded["government"].tolist(), coded["outcome"].tolist())
+# [True, False, False] ['reversed', 'affirmed', 'reversed']
+print(coded["damages"].tolist())
+# [1200.0, nan, 350.5]
+print(coding.result.history[0])
+# {'technique': 'split_text', 'changed': [], 'created': ['party1', 'party2']}
+```
+
+Each munger records the columns whose values or types it changed and the
+columns it made. Like any technique, a munger can also be applied by hand. A
+pattern with named groups makes a column of each group:
+
+```python
+citations = amos.Dataset(
+    pd.DataFrame({"cite": ["512 F.3d 1093", "98 F.4th 12", "unpublished"]}))
+amos.mungers.ExtractPattern().apply(
+    citations, column = "cite", pattern = r"(?P<volume>\d+) F\.\w+ (?P<page>\d+)")
+amos.mungers.ParseNumbers().apply(citations, columns = ["volume", "page"])
+print(citations.data["volume"].tolist(), citations.data["page"].tolist())
+# [512.0, 98.0, nan] [1093.0, 12.0, nan]
+```
 
 ## How techniques work
 
@@ -524,7 +620,8 @@ print(dataset.metrics["concordance"] > 0.5)
 
 The artist's plots draw `matplotlib` figures, which are stored in the
 dataset's `figures` and saved by `Project.export`. Every plot takes a "width"
-and "height" (in inches) and a "title". They fall into a few families:
+and "height" (in inches), a "title", and the style parameters below. They fall
+into a few families:
 
 | Family | Plots |
 | --- | --- |
@@ -560,6 +657,55 @@ print(sorted(dataset.figures))
 # ['coefficient_plot', 'influence_plot', 'qq_plot']
 ```
 
+### Styles
+
+Every figure has the same style, so that a paper's figures match. By
+default, it is the "science" style of
+[SciencePlots](https://github.com/garrettj403/SciencePlots) with its "nature"
+style, which gives figures the size and fonts of a figure in Nature: one
+column (3.3 inches) wide, with 7-point text. The colors are SciencePlots'
+"bright" cycle (Paul Tol's), which people with color blindness can tell
+apart. Each plot takes:
+
+| Parameter | Meaning |
+| --- | --- |
+| `style` | Names of `matplotlib` or SciencePlots styles (such as "science", "nature", "ieee", "ggplot", or "default"), applied in order, or "xkcd", for figures that look drawn by hand. "none" uses the current settings of `matplotlib`. |
+| `colors` | A color cycle, such as "bright", "vibrant", "muted", or "high-contrast", applied after the style (so "xkcd" keeps it), or "none" for the colors of the style. |
+| `latex` | Whether to set the text with LaTeX, which must be installed. By default, `matplotlib` sets the text and math itself, whatever the style says. |
+
+Set them for every plot in the "{worker}_parameters" section of the artist,
+or for one plot in its own section. The defaults are `options._PLOT_STYLE`
+and `options._PLOT_COLORS`:
+
+```ini
+[artist_parameters]
+style = xkcd
+```
+
+Unless a plot is given a "width" or "height", its usual size is scaled to the
+width of the style, and `Project.export` saves figures at 300 dots per inch
+(`options._FIGURE_DPI`), so that they are sharp in print. "xkcd" uses the
+"xkcd Script", "Comic Neue", or "Comic Sans MS" font if one is installed,
+and the usual font if not.
+
+```python
+amos.plots.QqPlot().apply(dataset)
+print(dataset.figures["qq_plot"].get_size_inches())
+# [3.3   2.475]
+amos.plots.QqPlot().apply(dataset, style = "xkcd")
+print(dataset.figures["qq_plot"].get_size_inches())
+# [6.4 4.8]
+```
+
+Plots drawn by other packages follow the style as far as those packages
+allow. shap draws with `matplotlib`, so the SHAP plots take the style's
+fonts, lines, and ticks. `shap_bar` and `shap_waterfall` also take the first
+two colors of the style's cycle (in "bright", blue for features that lower
+the prediction and red for those that raise it), but the other SHAP plots
+keep shap's own red and blue scale. shap also fixes the sizes of its text,
+so the SHAP plots (and statsmodels' `influence_plot`, which does too) keep
+their usual sizes (6.4 by 4.8 inches for most), so that their text fits.
+
 ## Writing your own techniques
 
 Subclass the genre that fits and write the method it requires. The class is
@@ -570,6 +716,7 @@ be named in settings right away.
 | --- | --- | --- |
 | `Loader` | `load(self, source, **kwargs)` | The data: a `DataFrame` or anything that `Dataset.create` accepts. `self.read(path, **kwargs)` loads a file with the clerk. |
 | `Cleaner` | `clean(self, data, **kwargs)` | The cleaned `DataFrame`. |
+| `Munger` | `munge(self, data, **kwargs)` | The `DataFrame` with changed or new columns, and the same rows. |
 | `Describer` | `describe(self, item, **kwargs)` | A table, stored in `tables`. |
 | `Splitter` | `divide(self, item, test_size, **kwargs)` | The training and test index labels. |
 | `Evaluator` | `evaluate(self, item, **kwargs)` | A table, stored in `tables`. |
@@ -807,6 +954,8 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | --- | --- |
 | `ValueError: there is no data` | The project has no `item` and no loader. Pass the data as `item`, or add a loader (such as `load_file`) to the wrangler. |
 | `ValueError: '...' has nothing to load` | A loader has no "source". Set it in the `{loader}_parameters` section. |
+| `ValueError: the pattern '...' is not valid: ...` | A munger's pattern is not a valid regular expression. A character with a special meaning (such as "(") needs a backslash to stand for itself. |
+| `TypeError: '...' uses text, but '...' is not text` | A munger that searches text was given a column of numbers, dates, or booleans. |
 | `ValueError: the dataset has no label` | A technique needs a label. Set "label" in the "general" section or pass it to `Dataset`. |
 | `ValueError: the data has not been split` | A technique asked for the test rows before a splitter was applied. |
 | `ValueError: '...' cannot use the dates or text in [...]` | A model was given text or dates. Encode them (with an encoder such as `one_hot`) or remove them (with `drop_columns`) first. |

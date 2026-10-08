@@ -110,7 +110,7 @@ def test_models_accept_categories() -> None:
     requires('lightgbm')
     dataset = amos.Dataset(make_mixed(), label = 'outcome', seed = SEED)
     amos.cleaners.DropColumns().apply(dataset, columns = ['joined'])
-    amos.cleaners.AutoCategorize().apply(dataset, columns = ['region'])
+    amos.mungers.AutoCategorize().apply(dataset, columns = ['region'])
     models.Lightgbm().apply(dataset, n_estimators = 5)
     assert len(dataset.predictions) == 200
 
@@ -291,7 +291,7 @@ def test_catboost_uses_categories_directly() -> None:
     requires('catboost')
     dataset = amos.Dataset(make_mixed(), label = 'outcome', seed = SEED)
     amos.cleaners.DropColumns().apply(dataset, columns = ['joined'])
-    amos.cleaners.AutoCategorize().apply(dataset, columns = ['region'])
+    amos.mungers.AutoCategorize().apply(dataset, columns = ['region'])
     amos.splitters.Stratified().apply(dataset)
     models.Catboost().apply(dataset, iterations = 20)
     assert dataset.model.get_params()['cat_features'] == ['region']

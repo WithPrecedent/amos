@@ -8,7 +8,11 @@ SHAP plots lend it their figure while shap draws, and take it back after.)
 `Project.export` saves them as image files, and in a notebook, a figure is
 shown by making it the last line of a cell.
 
-Every plot accepts "width" and "height" (in inches) and "title" parameters.
+Every plot accepts "width" and "height" (in inches) and "title" parameters,
+and "style", "colors", and "latex" parameters that set how it looks (see
+`Plot.implement`). By default, figures have SciencePlots' style for
+scientific figures, with the size and fonts of a figure in Nature, and a
+cycle of colors that people with color blindness can tell apart.
 
 Contents:
     Plot: base class for techniques that draw a figure.
@@ -60,13 +64,14 @@ import contextlib
 import dataclasses
 import importlib
 import math
+import re
 from collections.abc import Callable, Hashable, Iterator, Sequence
 from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
 
-from . import base, describers, evaluators, models, utilities
+from . import base, describers, evaluators, models, options, utilities
 
 # Labels of the axis of an `importance_plot`, by the table it draws, in the
 # order that the tables are looked for.
@@ -77,6 +82,13 @@ _IMPORTANCE_LABELS: dict[str, str] = {
 # Names that statsmodels, pyfixest, and others give the intercept.
 _INTERCEPTS: frozenset[str] = frozenset({
     'const', 'Intercept', '(Intercept)', 'intercept'})
+# A color of the cycle of the style, such as "C0" (the first).
+_CYCLE_COLOR: re.Pattern[str] = re.compile(r'C\d+')
+# Settings of `matplotlib` for the sizes of text.
+_FONT_SIZES: tuple[str, ...] = (
+    'font.size', 'axes.labelsize', 'axes.titlesize', 'figure.labelsize',
+    'figure.titlesize', 'legend.fontsize', 'legend.title_fontsize',
+    'xtick.labelsize', 'ytick.labelsize')
 # The kinds of `models.Statsmodel` that an `influence_plot` draws.
 _INFLUENCE: frozenset[str] = frozenset({'glm', 'ols'})
 # Columns of a table of coefficients that a `coefficient_plot` draws.
@@ -99,8 +111,14 @@ class Plot(base.Operation, abc.ABC):
 
     """
 
-    # The usual width and height of the figure, in inches.
+    # The usual width and height of the figure, in inches, for `matplotlib`'s
+    # default style. They are scaled to the width of the style that is used.
     size: ClassVar[tuple[float, float]] = (6.4, 4.8)
+    # Whether `size` is scaled to the width of the style. The plots of tools
+    # that fix the sizes of their text (such as shap) keep their usual sizes,
+    # so that the text fits, and the style's sizes of text are enlarged to
+    # match.
+    scaled: ClassVar[bool] = True
 
     """ Required Methods """
 
@@ -127,16 +145,36 @@ class Plot(base.Operation, abc.ABC):
         width: float | None = None,
         height: float | None = None,
         title: str | None = None,
+        *,
+        style: str | Sequence[str] | None = options._PLOT_STYLE,
+        colors: str | None = options._PLOT_COLORS,
+        latex: bool = False,
         **kwargs: Any) -> base.Dataset:
-        """Draws a figure and adds it to the figures of `item`.
+        """Draws a figure in a style and adds it to the figures of `item`.
 
         Args:
             item: the dataset to draw.
             width: width of the figure in inches. Defaults to `None`, which
-                uses the plot's usual width (6.4 for most plots).
+                uses the plot's usual width for the style (3.3 for most plots
+                in the default style, the width of a column in Nature).
             height: height of the figure in inches. Defaults to `None`, which
-                uses the plot's usual height (4.8 for most plots).
+                uses the plot's usual height for the style (2.5 for most
+                plots in the default style).
             title: title of the figure. Defaults to `None`.
+            style: name of a `matplotlib` or SciencePlots style (such as
+                "science", "nature", "ieee", "ggplot", or "default"), a list
+                of them (applied in order), or "xkcd", which makes figures
+                look drawn by hand (on its own or after other styles). `None`
+                (or "none") uses the current settings of `matplotlib`.
+                Defaults to `options._PLOT_STYLE`.
+            colors: name of a color cycle (a style that only sets colors,
+                such as SciencePlots' "bright", "vibrant", "muted", or
+                "high-contrast"), applied after `style`, or `None` (or
+                "none") for the colors of `style`. Defaults to
+                `options._PLOT_COLORS`.
+            latex: whether to set the text with LaTeX, which must be
+                installed. Defaults to `False`, in which case `matplotlib`
+                sets the text (and math), whatever `style` says.
             **kwargs: parameters for `draw`.
 
         Returns:
@@ -144,16 +182,37 @@ class Plot(base.Operation, abc.ABC):
 
         """
         figures = utilities.import_tool('matplotlib.figure')
-        figure = figures.Figure(
-            figsize = (
-                self.size[0] if width is None else width,
-                self.size[1] if height is None else height),
-            layout = 'constrained')
-        drawn = self.draw(item, figure, **kwargs)
-        if drawn is not None:
-            figure = drawn
-        if title is not None:
-            figure.suptitle(title)
+        with contextlib.ExitStack() as stack:
+            matplotlib = stack.enter_context(
+                _styled(style, colors, latex = latex))
+            # How much smaller (or larger) figures are in the style than in
+            # `matplotlib`'s default style.
+            ratio = (
+                matplotlib.rcParams['figure.figsize'][0]
+                / matplotlib.rcParamsDefault['figure.figsize'][0])
+            scale = ratio if self.scaled else 1.0
+            if not self.scaled:
+                # A plot that keeps its usual size has the text of the
+                # style, enlarged as much as the plot was not shrunk.
+                stack.enter_context(matplotlib.rc_context(
+                    _font_sizes(matplotlib.rcParams, 1 / ratio)))
+            figure = figures.Figure(
+                figsize = (
+                    self.size[0] * scale if width is None else width,
+                    self.size[1] * scale if height is None else height),
+                layout = 'constrained')
+            drawn = self.draw(item, figure, **kwargs)
+            if drawn is not None:
+                figure = drawn
+            if title is not None:
+                figure.suptitle(title)
+            # `matplotlib` makes some parts of a figure (such as most of its
+            # ticks) only when the figure is drawn, and finds the colors of
+            # lines in the cycle (such as "C0") then too, so both are done
+            # here, in the style, rather than when it is shown or saved.
+            _fix_colors(figure)
+            _hide_minor_ticks(figure)
+            figure.draw_without_rendering()
         item.figures[self.name] = figure
         item.record(self.name, figure = self.name)
         return item
@@ -339,6 +398,8 @@ class ConfusionHeatmap(Plot):
         axes = figure.subplots()
         seaborn.heatmap(
             matrix, annot = True, fmt = 'd', cmap = 'Blues', ax = axes)
+        # Minor ticks (which some styles show) mean nothing between classes.
+        axes.minorticks_off()
 
 
 @dataclasses.dataclass
@@ -372,6 +433,8 @@ class CorrelationHeatmap(Plot):
             vmax = 1,
             square = True,
             ax = axes)
+        # Minor ticks (which some styles show) mean nothing between columns.
+        axes.minorticks_off()
 
 
 @dataclasses.dataclass
@@ -586,6 +649,8 @@ class InfluencePlot(Plot):
 
     """
 
+    scaled: ClassVar[bool] = False
+
     def draw(
         self,
         item: base.Dataset,
@@ -756,6 +821,8 @@ class MissingHeatmap(Plot):
             cbar = False,
             yticklabels = False,
             ax = axes)
+        # Minor ticks (which some styles show) mean nothing between columns.
+        axes.minorticks_off()
         axes.set_ylabel('rows')
 
 
@@ -884,6 +951,13 @@ class PartialDependence(Plot):
         features = list(features)
         # scikit-learn only draws the average for a pair of features.
         kinds = [kind if isinstance(f, str) else 'average' for f in features]
+        # With "both", scikit-learn draws the rows and the average in its own
+        # blue and orange, rather than in the colors of the style.
+        colors = {}
+        if 'both' in kinds:
+            colors = {
+                'ice_lines_kw': {'color': 'C0'},
+                'pd_line_kw': {'color': 'C1'}}
         inspection.PartialDependenceDisplay.from_estimator(
             model,
             x,
@@ -891,7 +965,8 @@ class PartialDependence(Plot):
             kind = kinds if len(set(kinds)) > 1 else kind,
             target = target,
             random_state = item.seed,
-            ax = figure.subplots())
+            ax = figure.subplots(),
+            **colors)
 
 
 @dataclasses.dataclass
@@ -1018,8 +1093,17 @@ class QqPlot(Plot):
         gofplots = utilities.import_tool('statsmodels.graphics.gofplots')
         y = item.y.loc[item.predictions.index]
         residuals = (y - item.predictions).astype(float)
+        axes = figure.subplots()
+        # statsmodels draws the points in blue and the line in red, rather
+        # than in the colors of the style.
         gofplots.qqplot(
-            residuals, line = '45', fit = True, ax = figure.subplots())
+            residuals,
+            line = '45',
+            fit = True,
+            ax = axes,
+            markerfacecolor = 'C0',
+            markeredgecolor = 'C0')
+        axes.get_lines()[-1].set_color('C1')
 
 
 @dataclasses.dataclass
@@ -1129,6 +1213,8 @@ class ShapBar(Plot):
 
     """
 
+    scaled: ClassVar[bool] = False
+
     def draw(
         self,
         item: base.Dataset,
@@ -1175,6 +1261,8 @@ class ShapBeeswarm(Plot):
     or are found as it finds them.
 
     """
+
+    scaled: ClassVar[bool] = False
 
     def draw(
         self,
@@ -1224,6 +1312,8 @@ class ShapDecision(Plot):
     are found as it finds them.
 
     """
+
+    scaled: ClassVar[bool] = False
 
     def draw(
         self,
@@ -1277,6 +1367,8 @@ class ShapEmbedding(Plot):
     found as it finds them.
 
     """
+
+    scaled: ClassVar[bool] = False
 
     def draw(
         self,
@@ -1336,6 +1428,7 @@ class ShapForce(Plot):
     """
 
     size: ClassVar[tuple[float, float]] = (14.0, 4.0)
+    scaled: ClassVar[bool] = False
 
     def draw(
         self,
@@ -1397,6 +1490,8 @@ class ShapGroupDifference(Plot):
     as it finds them.
 
     """
+
+    scaled: ClassVar[bool] = False
 
     def draw(
         self,
@@ -1473,6 +1568,8 @@ class ShapHeatmap(Plot):
 
     """
 
+    scaled: ClassVar[bool] = False
+
     def draw(
         self,
         item: base.Dataset,
@@ -1520,6 +1617,8 @@ class ShapPartialDependence(Plot):
     average. For a classifier, the output is the probability of `category`.
 
     """
+
+    scaled: ClassVar[bool] = False
 
     def draw(
         self,
@@ -1573,6 +1672,8 @@ class ShapScatter(Plot):
     if it was applied, or are found as it finds them.
 
     """
+
+    scaled: ClassVar[bool] = False
 
     def draw(
         self,
@@ -1632,6 +1733,8 @@ class ShapViolin(Plot):
 
     """
 
+    scaled: ClassVar[bool] = False
+
     def draw(
         self,
         item: base.Dataset,
@@ -1678,6 +1781,8 @@ class ShapWaterfall(Plot):
     finds them, for the first rows of the test data.
 
     """
+
+    scaled: ClassVar[bool] = False
 
     def draw(
         self,
@@ -2211,6 +2316,45 @@ def _figure_legend(figure: Any, axes: Any, title: str | None) -> None:
     figure.legend(handles, labels, title = title, loc = 'outside right upper')
 
 
+def _fix_colors(figure: Any) -> None:
+    """Replaces the colors of lines that name colors of the cycle.
+
+    A line keeps a color such as "C0" (the first color of the cycle) as it
+    was given, and finds it in the cycle of whatever style is used when the
+    line is drawn. The color is found now instead, in the current style.
+
+    Args:
+        figure: a figure. Its lines are changed in place.
+
+    """
+    colors = importlib.import_module('matplotlib.colors')
+    lines = importlib.import_module('matplotlib.lines')
+    for line in figure.findobj(lines.Line2D):
+        for part in ('color', 'markerfacecolor', 'markeredgecolor'):
+            value = getattr(line, f'get_{part}')()
+            if isinstance(value, str) and _CYCLE_COLOR.fullmatch(value):
+                getattr(line, f'set_{part}')(colors.to_rgba(value))
+
+
+def _font_sizes(settings: Any, factor: float) -> dict[str, float]:
+    """Returns the sizes of text in `settings`, multiplied by `factor`.
+
+    Sizes given as words (such as "large") are relative to "font.size", so
+    they change with it.
+
+    Args:
+        settings: the settings of `matplotlib` (its `rcParams`).
+        factor: how much larger to make the text.
+
+    Returns:
+        The new sizes, by the names of the settings.
+
+    """
+    return {
+        name: settings[name] * factor for name in _FONT_SIZES
+        if isinstance(settings[name], int | float)}
+
+
 def _grid(figure: Any, count: int) -> list[Any]:
     """Returns axes for `count` small plots, in rows of up to four.
 
@@ -2229,6 +2373,24 @@ def _grid(figure: Any, count: int) -> list[Any]:
     for axes in list(grid.flat)[count:]:
         axes.set_visible(False)
     return list(grid.flat)[:count]
+
+
+def _hide_minor_ticks(figure: Any) -> None:
+    """Hides the minor ticks of axes of categories, such as features' names.
+
+    Some styles (such as "science") show minor ticks, which mean nothing
+    between categories.
+
+    Args:
+        figure: a figure. Its axes are changed in place.
+
+    """
+    category = importlib.import_module('matplotlib.category')
+    ticker = importlib.import_module('matplotlib.ticker')
+    for axes in figure.axes:
+        for axis in (axes.xaxis, axes.yaxis):
+            if isinstance(axis.units, category.UnitData):
+                axis.set_minor_locator(ticker.NullLocator())
 
 
 def _importances(
@@ -2325,10 +2487,13 @@ def _prediction_error(item: base.Dataset, figure: Any, kind: str) -> None:
         raise ValueError(message)
     metrics = importlib.import_module('sklearn.metrics')
     axes = figure.subplots()
+    # scikit-learn draws the points in its own blue, rather than in the first
+    # color of the style.
     metrics.PredictionErrorDisplay.from_predictions(
         item.y.loc[item.predictions.index],
         item.predictions,
         kind = kind,
+        scatter_kwargs = {'color': 'C0'},
         ax = axes)
 
 
@@ -2345,7 +2510,9 @@ def _pyplot(figure: Any, seed: int | None) -> Iterator[Any]:
 
     Some shap plots also use `numpy`'s global random numbers (to jitter dots
     or to bootstrap), so they are seeded with `seed` in the context, and put
-    back as they were afterwards.
+    back as they were afterwards. And shap's bar and waterfall plots are
+    colored with the colors of the style (see `_shap_colors`), and shap's own
+    colors are put back afterwards.
 
     Args:
         figure: the figure to lend.
@@ -2371,9 +2538,25 @@ def _pyplot(figure: Any, seed: int | None) -> Iterator[Any]:
         figure, max(before, default = 0) + 1)
     figures.set_active(manager)
     np.random.seed(seed)  # noqa: NPY002
+    # shap places the ticks of some plots (such as its bar and waterfall
+    # plots) so that `matplotlib` would make billions of minor ticks between
+    # them, so styles that show minor ticks (such as "science") cannot.
+    minor = {'xtick.minor.visible': False, 'ytick.minor.visible': False}
+    # shap's colors can only be set in versions that have this (experimental)
+    # module.
     try:
-        yield shap
+        styles = importlib.import_module('shap.plots._style')
+    except ImportError:
+        styles = None
+    colors = None if styles is None else styles.get_style()
+    try:
+        if styles is not None:
+            styles.set_style(**_shap_colors(matplotlib))
+        with matplotlib.rc_context(minor):
+            yield shap
     finally:
+        if styles is not None:
+            styles.set_style(colors)
         np.random.set_state(state)  # noqa: NPY002
         for number in set(pyplot.get_fignums()) - before:
             made = figures.get_fig_manager(number).canvas.figure
@@ -2441,6 +2624,34 @@ def _scoring(item: base.Dataset) -> str:
     return 'accuracy' if item.task == 'classify' else 'r2'
 
 
+def _shap_colors(matplotlib: Any) -> dict[str, tuple[float, ...]]:
+    """Returns the colors of the style for shap's bar and waterfall plots.
+
+    shap colors features that raise a prediction red and those that lower it
+    blue (with lighter versions of both for parts of its waterfall plot),
+    rather than with the colors of the style. These are the first two colors
+    of the style's cycle instead: in "bright", blue (the first) for features
+    that lower a prediction and red (the second) for those that raise it.
+    The lighter versions are halfway to white.
+
+    Args:
+        matplotlib: the `matplotlib` module, in the style.
+
+    Returns:
+        shap's style options for the colors, by their names.
+
+    """
+    colors = importlib.import_module('matplotlib.colors')
+    cycle = matplotlib.rcParams['axes.prop_cycle'].by_key().get('color')
+    cycle = list(cycle or ['C0', 'C1'])
+    lower, higher = (np.asarray(colors.to_rgb(c)) for c in (cycle * 2)[:2])
+    return {
+        'primary_color_positive': tuple(higher),
+        'primary_color_negative': tuple(lower),
+        'secondary_color_positive': tuple((higher + 1) / 2),
+        'secondary_color_negative': tuple((lower + 1) / 2)}
+
+
 def _split(
     item: base.Dataset,
     by: str | None) -> tuple[pd.DataFrame, str | None, list[str] | None]:
@@ -2472,6 +2683,83 @@ def _split(
     else:
         order = sorted(values.dropna().unique())
     return data.assign(**{by: values}), by, order
+
+
+@contextlib.contextmanager
+def _styled(
+    style: str | Sequence[str] | None,
+    colors: str | None,
+    *,
+    latex: bool) -> Iterator[Any]:
+    """Applies a style to the figures made and drawn in the context.
+
+    The styles are applied over the current settings of `matplotlib`, which
+    are put back afterwards. SciencePlots, which adds its styles to those of
+    `matplotlib`, is only imported if a style is not one of `matplotlib`'s.
+
+    Args:
+        style: names of `matplotlib` or SciencePlots styles, applied in order,
+            and "xkcd", which is applied after them. `None` (or "none")
+            applies none.
+        colors: name of a color cycle, applied after the styles (but before
+            "xkcd", which keeps the colors), or `None` (or "none") for the
+            colors of the styles.
+        latex: whether to set the text with LaTeX.
+
+    Raises:
+        ValueError: if a style is not one of `matplotlib` or SciencePlots, or
+            `colors` is not a color cycle.
+
+    Yields:
+        Any: the `matplotlib` module.
+
+    """
+    matplotlib = utilities.import_tool('matplotlib')
+    styles = importlib.import_module('matplotlib.style')
+    # Settings files may list several styles in one text, as "science, nature".
+    names = [] if style is None else style.split(',') if isinstance(
+        style, str) else list(style)
+    names = [str(n).strip() for n in names]
+    names = [n for n in names if n and n.lower() != 'none']
+    cycle = None if colors is None or str(colors).lower() == 'none' else (
+        str(colors))
+    sheets = [n for n in names if n != 'xkcd'] + ([cycle] if cycle else [])
+    # "default" (the settings `matplotlib` starts with) is not in its library.
+    if any(s not in styles.library and s != 'default' for s in sheets):
+        utilities.import_tool('scienceplots')
+    unknown = [
+        n for n in names
+        if n not in styles.library and n not in {'default', 'xkcd'}]
+    if unknown:
+        message = (
+            f'{unknown} are not styles of matplotlib or SciencePlots (see '
+            f'matplotlib.style.available)'
+        )
+        raise ValueError(message)
+    # A color cycle is a style that sets only the colors of the cycle.
+    if cycle and set(styles.library.get(cycle, ())) != {'axes.prop_cycle'}:
+        message = (
+            f'colors must be a color cycle (such as "bright", "vibrant", '
+            f'"muted", or "high-contrast"), not {cycle!r}'
+        )
+        raise ValueError(message)
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(matplotlib.rc_context())
+        if sheets:
+            styles.use(sheets)
+        matplotlib.rcParams['text.usetex'] = bool(latex)
+        if 'xkcd' in names:
+            pyplot = importlib.import_module('matplotlib.pyplot')
+            stack.enter_context(pyplot.xkcd())
+            # `matplotlib` warns each time that it looks for a font of xkcd's
+            # that is not installed, so only those that are installed are
+            # used (or the usual font, if none are).
+            fonts = importlib.import_module('matplotlib.font_manager')
+            installed = {f.name for f in fonts.fontManager.ttflist}
+            matplotlib.rcParams['font.family'] = [
+                f for f in matplotlib.rcParams['font.family']
+                if f in installed] or ['sans-serif']
+        yield matplotlib
 
 
 def _unwrapped(item: base.Dataset) -> Any:

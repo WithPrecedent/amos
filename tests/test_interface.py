@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import pathlib
@@ -167,6 +168,9 @@ def test_export_saves_everything(tmp_path: pathlib.Path) -> None:
         'actual', 'predicted', 'probability_0', 'probability_1']
     report = (folder / 'report.txt').read_text('utf-8')
     assert report == project.report.contents
+    image = importlib.import_module('PIL.Image')
+    with image.open(folder / 'figures/confusion_heatmap.png') as figure:
+        assert round(figure.info['dpi'][0]) == amos.options._FIGURE_DPI
 
 
 def test_export_after_each_apply_if_the_settings_say_so(

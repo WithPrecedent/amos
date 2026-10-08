@@ -8,6 +8,8 @@ Contents:
     parameters_of: returns the parameters of a built tool.
     preserved_logging: restores the root logger after code that changes it.
     search_space: divides parameters into fixed values and values to search.
+    select_columns: returns the names of columns, checking that they are in
+        the data.
 
 """
 
@@ -19,12 +21,15 @@ import inspect
 import logging
 import platform
 import sys
-from collections.abc import Callable, Iterator, Mapping
-from typing import Any
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 
 import chrisjen.utilities
 
 from . import options
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 # The kinds of hyperparameter search that models support.
 _SEARCHES: frozenset[str] = frozenset({'grid', 'optuna', 'random'})
@@ -224,6 +229,33 @@ def search_space(
         else:
             space[name] = value
     return fixed, space
+
+
+def select_columns(
+    data: pd.DataFrame,
+    columns: Sequence[str] | str | None) -> list[str]:
+    """Returns `columns` as a `list`, checking that they are in `data`.
+
+    Args:
+        data: the data.
+        columns: a column name, a sequence of names, or `None` for every
+            column.
+
+    Raises:
+        KeyError: if a column is not in `data`.
+
+    Returns:
+        The names of the columns.
+
+    """
+    if columns is None:
+        return list(data.columns)
+    names = [columns] if isinstance(columns, str) else list(columns)
+    missing = [c for c in names if c not in data.columns]
+    if missing:
+        message = f'the columns {missing} are not in the data'
+        raise KeyError(message)
+    return names
 
 
 """ Private Functions """

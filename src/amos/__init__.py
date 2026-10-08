@@ -21,6 +21,7 @@ __all__: list[str] = [
     'Metric',
     'Mixer',
     'Model',
+    'Munger',
     'Operation',
     'Plot',
     'Project',
@@ -46,6 +47,7 @@ from .interface import Project
 from .loaders import Loader
 from .metrics import GroupMetric, Metric
 from .models import Model
+from .mungers import Munger
 from .plots import Plot
 from .reports import Findings
 from .samplers import Sampler

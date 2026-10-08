@@ -1,16 +1,15 @@
 """Techniques that clean data, usually before it is studied or analyzed.
 
-These are the techniques of the "wrangler" stage of a project. Each one changes
-the rows or columns of the data. Cleaners learn nothing from the data that
-could leak from the test rows into the training rows (they do not, for
-example, fill missing values with an average), so they are safe to use before
-the data is split. To fill missing values, use an imputer from the
-`transformers` module after splitting.
+These are techniques of the "wrangler" stage of a project. Each one removes
+(or keeps) rows or columns, or renames columns. Techniques that change what is
+in the columns are mungers (see the `mungers` module). Cleaners learn nothing
+from the data that could leak from the test rows into the training rows (they
+do not, for example, fill missing values with an average), so they are safe
+to use before the data is split. To fill missing values, use an imputer from
+the `transformers` module after splitting.
 
 Contents:
     Cleaner: base class for techniques that clean data.
-    AutoCategorize: makes columns with few unique values categorical.
-    ConvertTypes: changes the data types of columns.
     DropColumns: removes columns.
     DropConstant: removes columns that have only one value.
     DropDuplicates: removes duplicate rows.
@@ -18,7 +17,6 @@ Contents:
     FilterRows: keeps the rows that match a query.
     KeepColumns: keeps only some columns (and the label).
     RenameColumns: renames columns.
-    StripText: trims spaces from (and optionally lowercases) text.
 
 """
 
@@ -31,7 +29,7 @@ from typing import Any
 
 import pandas as pd
 
-from . import base, options
+from . import base, utilities
 
 
 @dataclasses.dataclass
@@ -89,70 +87,6 @@ class Cleaner(base.Operation, abc.ABC):
 
 
 @dataclasses.dataclass
-class AutoCategorize(Cleaner):
-    """Makes columns with few unique values categorical.
-
-    Text and number columns with `threshold` unique values or fewer become the
-    `pandas` "category" type, so they are encoded (rather than scaled) by the
-    analyst. Boolean columns are not changed.
-
-    """
-
-    def clean(
-        self,
-        data: pd.DataFrame,
-        columns: Sequence[str] | None = None,
-        threshold: int = options._CATEGORY_THRESHOLD,
-        **kwargs: Any) -> pd.DataFrame:
-        """Makes columns with `threshold` unique values or fewer categorical.
-
-        Args:
-            data: the data to clean.
-            columns: columns to check. Defaults to `None`, which checks every
-                column.
-            threshold: most unique values that a categorical column can have.
-                Defaults to `options._CATEGORY_THRESHOLD`.
-            **kwargs: not used.
-
-        Returns:
-            The data, with categorical columns.
-
-        """
-        for column in _columns(data, columns):
-            values = data[column]
-            if pd.api.types.is_bool_dtype(values.dtype):
-                continue
-            if values.nunique(dropna = True) <= threshold:
-                data[column] = values.astype('category')
-        return data
-
-
-@dataclasses.dataclass
-class ConvertTypes(Cleaner):
-    """Changes the data types of columns."""
-
-    def clean(
-        self,
-        data: pd.DataFrame,
-        types: Mapping[str, Any] | None = None,
-        **kwargs: Any) -> pd.DataFrame:
-        """Changes the type of each column in `types`.
-
-        Args:
-            data: the data to clean.
-            types: `dict` mapping column names to `pandas` data types (such as
-                "category", "float", or "boolean"). Defaults to `None`, which
-                changes nothing.
-            **kwargs: not used.
-
-        Returns:
-            The data, with the new types.
-
-        """
-        return data.astype(dict(types or {}))
-
-
-@dataclasses.dataclass
 class DropColumns(Cleaner):
     """Removes columns."""
 
@@ -173,7 +107,8 @@ class DropColumns(Cleaner):
             The data, without `columns`.
 
         """
-        return data.drop(columns = _columns(data, columns or []))
+        dropped = utilities.select_columns(data, columns or [])
+        return data.drop(columns = dropped)
 
 
 @dataclasses.dataclass
@@ -218,7 +153,9 @@ class DropDuplicates(Cleaner):
             The data, without duplicate rows.
 
         """
-        subset = None if columns is None else _columns(data, columns)
+        subset = (
+            None if columns is None
+            else utilities.select_columns(data, columns))
         return data.drop_duplicates(subset = subset)
 
 
@@ -243,7 +180,9 @@ class DropMissing(Cleaner):
             The data, without rows that have missing values.
 
         """
-        subset = None if columns is None else _columns(data, columns)
+        subset = (
+            None if columns is None
+            else utilities.select_columns(data, columns))
         return data.dropna(subset = subset)
 
 
@@ -300,7 +239,7 @@ class KeepColumns(Cleaner):
         """
         if columns is None:
             return data
-        kept = _columns(data, columns)
+        kept = utilities.select_columns(data, columns)
         for name in [label, *groups]:
             if name is not None and name not in kept:
                 kept.append(name)
@@ -366,71 +305,3 @@ class RenameColumns(Cleaner):
             if item.label in names:
                 item.label = names[item.label]
         return super().implement(item, **kwargs)
-
-
-@dataclasses.dataclass
-class StripText(Cleaner):
-    """Trims spaces from text, and optionally makes it lowercase."""
-
-    def clean(
-        self,
-        data: pd.DataFrame,
-        *,
-        columns: Sequence[str] | None = None,
-        lowercase: bool = False,
-        **kwargs: Any) -> pd.DataFrame:
-        """Trims spaces from the text in `columns`.
-
-        Args:
-            data: the data to clean.
-            columns: columns to change. Defaults to `None`, which changes every
-                text column.
-            lowercase: whether to make the text lowercase too. Defaults to
-                `False`.
-            **kwargs: not used.
-
-        Returns:
-            The data, with trimmed text. Empty text becomes a missing value.
-
-        """
-        if columns is None:
-            columns = [
-                c for c in data.columns
-                if pd.api.types.is_string_dtype(data[c].dtype)
-                and not isinstance(data[c].dtype, pd.CategoricalDtype)]
-        for column in _columns(data, columns):
-            text = data[column].str.strip()
-            if lowercase:
-                text = text.str.lower()
-            data[column] = text.mask(text == '')
-        return data
-
-
-""" Private Functions """
-
-
-def _columns(
-    data: pd.DataFrame,
-    columns: Sequence[str] | str | None) -> list[str]:
-    """Returns `columns` as a `list`, checking that they are in `data`.
-
-    Args:
-        data: the data.
-        columns: a column name, a sequence of names, or `None` for every
-            column.
-
-    Raises:
-        KeyError: if a column is not in `data`.
-
-    Returns:
-        The names of the columns.
-
-    """
-    if columns is None:
-        return list(data.columns)
-    names = [columns] if isinstance(columns, str) else list(columns)
-    missing = [c for c in names if c not in data.columns]
-    if missing:
-        message = f'the columns {missing} are not in the data'
-        raise KeyError(message)
-    return names

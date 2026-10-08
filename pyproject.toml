@@ -50,7 +50,7 @@ causal = ["doubleml>=0.9"]
 encoders = ["category-encoders>=2.6", "skrub>=0.5"]
 explain = ["eli5>=0.16", "interpret-core>=0.6", "shap>=0.45"]
 fairness = ["fairlearn>=0.12"]
-plots = ["matplotlib>=3.8", "seaborn>=0.13"]
+plots = ["matplotlib>=3.8", "scienceplots>=2.1", "seaborn>=0.13"]
 polars = ["polars>=1.0", "pyarrow>=15"]
 sampling = ["imbalanced-learn>=0.12"]
 statistics = ["pyfixest>=0.30", "statsmodels>=0.14"]
@@ -107,6 +107,7 @@ tests = [
     "pyarrow>=15",
     "pyfixest>=0.30",
     "python-docx>=1.1",
+    "scienceplots>=2.1",
     "seaborn>=0.13",
     "shap>=0.45",
     "skrub>=0.5",
