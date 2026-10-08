@@ -34,7 +34,7 @@ def _fitted(labels: tuple[str, str] = ('no', 'yes')) -> amos.Dataset:
     dataset = amos.Dataset(
         data, label = 'outcome', seed = SEED, groups = ['race'])
     amos.splitters.Stratified().apply(dataset)
-    return amos.models.SkLogit().apply(dataset)
+    return amos.models.Logit().apply(dataset)
 
 
 @pytest.mark.parametrize(('name', 'kind'), GROUP_METRICS)
@@ -77,7 +77,7 @@ def test_group_metrics_need_a_group(fitted: amos.Dataset) -> None:
 
 def test_group_metrics_need_two_classes(multiclass: amos.Dataset) -> None:
     multiclass.data['half'] = np.arange(len(multiclass.data)) % 2
-    amos.models.SkLogit().apply(multiclass)
+    amos.models.Logit().apply(multiclass)
     with pytest.raises(ValueError, match = 'two classes'):
         amos.metrics.DemographicParity().apply(multiclass, group = 'half')
 

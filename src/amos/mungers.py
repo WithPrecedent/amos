@@ -284,12 +284,11 @@ class CombineFlags(Munger):
             message = f'{self.name!r} needs a name for the column it makes'
             raise ValueError(message)
         flags = np.column_stack([_truth(data[c], c) for c in names])
-        if how == 'any':
-            data[name] = flags.any(axis = 1)
-        elif how == 'all':
-            data[name] = flags.all(axis = 1)
-        else:
+        if how == 'count':
             data[name] = flags.sum(axis = 1).astype('int64')
+        else:
+            data[name] = np.asarray(
+                flags.any(axis = 1) if how == 'any' else flags.all(axis = 1))
         return data
 
 
@@ -519,8 +518,8 @@ class ExtractPattern(Munger):
             return data
         source = compiled.pattern if compiled.groups else _capture(
             compiled.pattern)
-        found = text.str.extract(source, flags = flags, expand = False)
-        data[name or column] = _tidy(found)
+        match = text.str.extract(source, flags = flags, expand = False)
+        data[name or column] = _tidy(match)
         return data
 
 
@@ -1176,7 +1175,7 @@ def _text(data: pd.DataFrame, column: Any, technique: str) -> pd.Series:
         message = f'{technique!r} needs the name of a column of text'
         raise ValueError(message)
     utilities.select_columns(data, [column])
-    values = data[column]
+    values: pd.Series = data[column]
     if isinstance(values.dtype, pd.CategoricalDtype):
         values = values.astype(values.cat.categories.dtype)
     if not pd.api.types.is_string_dtype(values.dtype):
@@ -1236,7 +1235,7 @@ def _truth(values: pd.Series, column: Any) -> np.ndarray:
             f'make it one'
         )
         raise TypeError(message)
-    return values.astype(float).fillna(0).to_numpy() != 0
+    return np.asarray(values.astype(float).fillna(0).to_numpy() != 0)
 
 
 def _words(values: Sequence[Any] | Any) -> list[str]:

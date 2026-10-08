@@ -55,7 +55,7 @@ def test_curves_for_each_of_three_classes(
     name: str,
     multiclass: amos.Dataset,
     tmp_path: pathlib.Path) -> None:
-    amos.models.SkLogit().apply(multiclass)
+    amos.models.Logit().apply(multiclass)
     amos.library.borrow(name)().apply(multiclass)
     _check(multiclass, name, tmp_path)
     assert len(multiclass.figures[name].axes[0].get_lines()) >= 3
@@ -154,7 +154,7 @@ def test_shap_bar_draws_the_shap_importance(fitted: amos.Dataset) -> None:
 
 def test_shap_plots_explain_a_chosen_class(multiclass: amos.Dataset) -> None:
     requires('shap')
-    amos.models.SkLogit().apply(multiclass)
+    amos.models.Logit().apply(multiclass)
     amos.evaluators.ShapImportance().apply(multiclass, rows = 30)
     values = np.abs(multiclass.fitted['shap_importance'].values)
     for position, category in enumerate(multiclass.classes):
@@ -209,6 +209,27 @@ def test_shap_bar_and_waterfall_use_the_colors_of_the_style(
     after = styles.get_style().asdict()
     assert {k: _hex(v) for k, v in after.items()} == {
         k: _hex(v) for k, v in before.asdict().items()}
+
+
+def test_shap_waterfall_puts_its_labels_beside_its_arrows(
+    fitted: amos.Dataset) -> None:
+    requires('shap')
+    plots.ShapWaterfall().apply(fitted, rows = 20)
+    figure = fitted.figures['shap_waterfall']
+    axes = figure.axes[0]
+    figure.draw_without_rendering()
+    frame = axes.get_window_extent()
+    assert axes.texts
+    for label in axes.texts:
+        # Each label is past the point of its arrow, in the arrow's color,
+        # and inside the axes.
+        assert label.get_horizontalalignment() in {'left', 'right'}
+        assert _hex(label.get_color()) in {'#4477aa', '#ee6677'}
+        box = label.get_window_extent()
+        assert frame.x0 - 1 <= box.x0
+        assert box.x1 <= frame.x1 + 1
+    # shap's twin axes for the expected value and the prediction match it.
+    assert {axis.get_xlim() for axis in figure.axes} == {axes.get_xlim()}
 
 
 def test_shap_scatter_chooses_features(fitted: amos.Dataset) -> None:

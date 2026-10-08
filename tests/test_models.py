@@ -76,12 +76,12 @@ def test_regressors(
 
 def test_a_model_for_another_task_raises(regressed: amos.Dataset) -> None:
     with pytest.raises(ValueError, match = 'can classify'):
-        models.SkLogit().apply(regressed)
+        models.Logit().apply(regressed)
 
 
 def test_a_model_needs_a_label() -> None:
     with pytest.raises(ValueError, match = 'needs a dataset with a label'):
-        models.SkLogit().apply(pd.DataFrame({'a': [1, 2]}))
+        models.Logit().apply(pd.DataFrame({'a': [1, 2]}))
 
 
 def _encoded(split: bool = True) -> amos.Dataset:
@@ -96,14 +96,14 @@ def _encoded(split: bool = True) -> amos.Dataset:
 
 def test_models_without_a_split_predict_every_row() -> None:
     dataset = _encoded(split = False)
-    models.SkLogit().apply(dataset)
+    models.Logit().apply(dataset)
     assert len(dataset.predictions) == 200
 
 
 def test_models_explain_that_they_need_numbers() -> None:
     dataset = amos.Dataset(make_mixed(), label = 'outcome')
     with pytest.raises(ValueError, match = r"\['region', 'joined'\]"):
-        models.SkLogit().apply(dataset)
+        models.Logit().apply(dataset)
 
 
 def test_models_accept_categories() -> None:

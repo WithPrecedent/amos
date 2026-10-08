@@ -1825,6 +1825,7 @@ class ShapWaterfall(Plot):
             with _pyplot(figure, item.seed) as shap:
                 shap.plots.waterfall(
                     explanation[position], max_display = limit, show = False)
+                _labels_beside_arrows(figure)
         finally:
             del figure.set_size_inches
 
@@ -2426,6 +2427,63 @@ def _keep_size(*args: Any, **kwargs: Any) -> None:
         **kwargs: not used.
 
     """
+
+
+def _labels_beside_arrows(figure: Any) -> None:
+    """Puts the labels of the arrows of shap's waterfall plot beside them.
+
+    shap writes the SHAP value of each feature inside its arrow, in white, if
+    it fits there when shap draws it, and beside the arrow otherwise. But the
+    figure's layout then makes room for the names of the features, which
+    narrows the arrows, so a label can spill out of its arrow onto the white
+    background. Every label is put just past the point of its arrow instead,
+    in the arrow's color, and the x axis is widened if it needs to be to hold
+    them (with shap's twin axes for the expected value and the prediction,
+    which must match it).
+
+    Args:
+        figure: a figure with shap's waterfall plot, which pyplot manages.
+            It is changed in place.
+
+    """
+    patches = importlib.import_module('matplotlib.patches')
+    transforms = importlib.import_module('matplotlib.transforms')
+    axes = figure.axes[0]
+    arrows = {}
+    for arrow in axes.patches:
+        if isinstance(arrow, patches.FancyArrow):
+            ys = arrow.get_xy()[:, 1]
+            arrows[round((ys.min() + ys.max()) / 2, 6)] = arrow
+    for label in axes.texts:
+        arrow = arrows.get(round(label.get_position()[1], 6))
+        if arrow is None:
+            continue
+        xs = arrow.get_xy()[:, 0]
+        # shap writes the values that raise the prediction with a plus sign.
+        higher = label.get_text().startswith('+')
+        label.set_x(xs.max() if higher else xs.min())
+        label.set_horizontalalignment('left' if higher else 'right')
+        label.set_color(arrow.get_facecolor())
+        label.set_transform(transforms.offset_copy(
+            axes.transData, fig = figure, x = 5 if higher else -5,
+            units = 'points'))
+    # Widening the axis makes the arrows shorter, so it is widened until the
+    # labels stop moving past its ends.
+    for _ in range(5):
+        figure.draw_without_rendering()
+        renderer = figure.canvas.get_renderer()
+        frame = axes.get_window_extent(renderer)
+        labels = transforms.Bbox.union(
+            [t.get_window_extent(renderer) for t in axes.texts] or [frame])
+        lower, upper = axes.get_xlim()
+        per_pixel = (upper - lower) / frame.width
+        widened = (
+            lower - max(0.0, frame.x0 - labels.x0) * per_pixel,
+            upper + max(0.0, labels.x1 - frame.x1) * per_pixel)
+        if np.allclose(widened, (lower, upper)):
+            break
+        for twin in axes.get_shared_y_axes().get_siblings(axes):
+            twin.set_xlim(widened)
 
 
 def _model(item: base.Dataset) -> Any:

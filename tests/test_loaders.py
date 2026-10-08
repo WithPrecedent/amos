@@ -262,7 +262,7 @@ def _settings(**extra: Any) -> dict[str, Any]:
             'load_techniques': 'load_file',
             'clean_techniques': 'drop_duplicates'},
         'load_file_parameters': {'source': 'cases.csv'},
-        'analyst': {'techniques': 'stratified, sk_logit, accuracy'},
+        'analyst': {'techniques': 'stratified, logit, accuracy'},
         **extra}
 
 

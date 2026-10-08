@@ -70,7 +70,7 @@ def test_sklearn(classified: amos.Dataset) -> None:
     x_train, x_test = classified.x_train, classified.x_test
     y_train, y_test = classified.y_train, classified.y_test
     amos.transformers.Standard().apply(classified)
-    amos.models.SkLogit().apply(classified)
+    amos.models.Logit().apply(classified)
     amos.metrics.RocAuc().apply(classified)
     scaler = preprocessing.StandardScaler().fit(x_train)
     expected = scaler.transform(x_test)
@@ -318,7 +318,7 @@ def test_fairlearn() -> None:
     dataset = _mixed()
     dataset.groups = ['member']
     amos.transformers.OneHot().apply(dataset)
-    amos.models.SkLogit().apply(dataset)
+    amos.models.Logit().apply(dataset)
     amos.metrics.EqualizedOdds().apply(dataset)
     rows = dataset.predictions.index
     expected = fairness.equalized_odds_difference(

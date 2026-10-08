@@ -16,7 +16,7 @@ def test_experiment_keeps_the_best_path_and_compares_them(
         name = 'analyst', criteria = amos.metrics.Accuracy())
     experiment.populate([[
         amos.models.Baseline(name = 'baseline'),
-        amos.models.SkLogit(name = 'logit')]])
+        amos.models.Logit(name = 'logit')]])
     result = experiment.apply(classified)
     assert experiment.winner == 'logit'
     assert result.model is not None
@@ -44,7 +44,7 @@ def test_experiment_reports_the_real_value_of_a_lower_is_better_metric(
         name = 'analyst', criteria = amos.metrics.LogLoss())
     experiment.populate([[
         amos.models.Baseline(name = 'baseline'),
-        amos.models.SkLogit(name = 'logit')]])
+        amos.models.Logit(name = 'logit')]])
     result = experiment.apply(classified)
     table = result.tables['analyst_comparison']
     assert experiment.winner == 'logit'
@@ -58,7 +58,7 @@ def test_experiment_includes_metrics_from_each_path(
         name = 'analyst', criteria = amos.metrics.Accuracy())
     experiment.populate([
         [amos.models.Baseline(name = 'baseline'),
-         amos.models.SkLogit(name = 'logit')],
+         amos.models.Logit(name = 'logit')],
         amos.evaluators.Scorecard(name = 'scorecard')])
     result = experiment.apply(classified)
     table = result.tables['analyst_comparison']

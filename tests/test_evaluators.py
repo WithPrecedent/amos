@@ -60,7 +60,7 @@ def test_permutation_importance_for_regression(
     assert 'permutation_importance' in fitted_regression.tables
 
 
-@pytest.mark.parametrize('model', ['sk_logit', 'random_forest', 'knn'])
+@pytest.mark.parametrize('model', ['logit', 'random_forest', 'knn'])
 def test_shap_importance(model: str, classified: amos.Dataset) -> None:
     requires('shap')
     amos.library.borrow(model)().apply(classified)

@@ -26,9 +26,9 @@ Contents:
     Adaboost, Baseline, BinomialBayesMixedglm, Catboost, Cox, DecisionTree,
         ElasticNet, ExplainableBoosting, ExtraTrees, Fixest, GEE,
         GeneralizedPoisson, GLM, GradientBoosting, KNN, Lasso, Lightgbm,
-        Linear, Logit, Mixedlm, Mnlogit, NaiveBayes, NegativeBinomial,
-        NeuralNetwork, OLS, OrdinalRegression, Poisson, Probit,
-        QuantileRegression, RandomForest, Ridge, RobustRegression, SkLogit,
+        Linear, Logit, LogitSM, Mixedlm, Mnlogit, NaiveBayes,
+        NegativeBinomial, NeuralNetwork, OLS, OrdinalRegression, Poisson,
+        Probit, QuantileRegression, RandomForest, Ridge, RobustRegression,
         SVM, Tabpfn, WLS, Xgboost, ZeroInflatedPoisson: models.
 
 """
@@ -735,7 +735,7 @@ class Statsmodel:
         if self.output not in {'binary', 'classes'}:
             message = (
                 'only a classifier predicts probabilities: a binomial glm or '
-                'gee, logit, probit, binomial_bayes_mixedglm, mnlogit, or '
+                'gee, logit_sm, probit, binomial_bayes_mixedglm, mnlogit, or '
                 'ordinal_regression'
             )
             raise AttributeError(message)
@@ -1883,12 +1883,27 @@ class Linear(Model):
 
 
 @dataclasses.dataclass
-class Logit(_Statsmodels, Model):
+class Logit(Model):
+    """Logistic regression from scikit-learn.
+
+    scikit-learn adds a ridge (L2) penalty by default. Use `logit_sm` for
+    statsmodels' logistic regression, without a penalty and with p-values.
+
+    """
+
+    tools: ClassVar[Mapping[str, Any]] = {
+        'classify': 'sklearn.linear_model.LogisticRegression'}
+    parameters: base.GenericDict = dataclasses.field(
+        default_factory = lambda: {'max_iter': 1000})
+
+
+@dataclasses.dataclass
+class LogitSM(_Statsmodels, Model):
     """Logistic regression from statsmodels, with inference.
 
-    Unlike `sk_logit`, it has no penalty, so its coefficients have standard
-    errors, p-values, and confidence intervals (as does `glm` for a label of
-    two classes).
+    Unlike `logit` (scikit-learn's logistic regression), it has no penalty,
+    so its coefficients have standard errors, p-values, and confidence
+    intervals (as does `glm` for a label of two classes).
 
     """
 
@@ -2079,21 +2094,6 @@ class RobustRegression(_Statsmodels, Model):
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     kind: ClassVar[str] = 'robust_regression'
-
-
-@dataclasses.dataclass
-class SkLogit(Model):
-    """Logistic regression from scikit-learn.
-
-    scikit-learn adds a ridge (L2) penalty by default. Use `logit` for
-    statsmodels' logistic regression, without a penalty and with p-values.
-
-    """
-
-    tools: ClassVar[Mapping[str, Any]] = {
-        'classify': 'sklearn.linear_model.LogisticRegression'}
-    parameters: base.GenericDict = dataclasses.field(
-        default_factory = lambda: {'max_iter': 1000})
 
 
 @dataclasses.dataclass

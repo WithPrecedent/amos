@@ -27,7 +27,7 @@ def _settings(**analyst: Any) -> dict[str, Any]:
             'steps': 'split, scale, model',
             'split_techniques': 'stratified',
             'scale_techniques': 'standard, none',
-            'model_techniques': 'sk_logit, baseline',
+            'model_techniques': 'logit, baseline',
             **analyst},
         'critic': {'techniques': 'scorecard'}}
 
@@ -49,7 +49,7 @@ def test_scorecard_has_a_row_for_each_branch(project: amos.Project) -> None:
     assert set(table['split']) == {'stratified'}
     # The best branch is first, and its scores are the final model's.
     assert table['roc_auc'].is_monotonic_decreasing
-    assert table.loc[0, 'model'] == 'sk_logit'
+    assert table.loc[0, 'model'] == 'logit'
     assert table.loc[0, 'f1'] == pytest.approx(project.result.metrics['f1'])
     assert list(table['model'].iloc[2:]) == ['baseline', 'baseline']
 
@@ -97,7 +97,7 @@ def test_a_dataset_without_branches_has_one_row(fitted: amos.Dataset) -> None:
     table = scorecard.table
     assert len(table) == 1
     assert list(table.columns[:4]) == ['rank', 'splitter', 'scaler', 'model']
-    assert table.loc[0, 'model'] == 'sk_logit'
+    assert table.loc[0, 'model'] == 'logit'
     assert scorecard.heading == 'The final model'
 
 
@@ -132,7 +132,7 @@ def test_branches_built_in_code_are_named_by_genre(
         name = 'models', criteria = amos.metrics.Accuracy())
     experiment.populate([
         [amos.transformers.Standard(), chrisjen.NullVertex()],
-        [amos.models.Baseline(), amos.models.SkLogit()]])
+        [amos.models.Baseline(), amos.models.Logit()]])
     result = experiment.apply(classified)
     table = Scorecard.create(result).table
     assert list(table.columns[:3]) == ['rank', 'scaler', 'model']
@@ -146,11 +146,11 @@ def test_other_criteria_add_a_score_column(classified: amos.Dataset) -> None:
 
     experiment = amos.Experiment(
         name = 'models', criteria = chrisjen.Criteria(contents = accuracy))
-    experiment.populate([[amos.models.Baseline(), amos.models.SkLogit()]])
+    experiment.populate([[amos.models.Baseline(), amos.models.Logit()]])
     scorecard = Scorecard.create(experiment.apply(classified))
     assert scorecard.table.columns[-1] == 'score'
     assert scorecard.table['score'].is_monotonic_decreasing
-    assert scorecard.table.loc[0, 'model'] == 'sk_logit'
+    assert scorecard.table.loc[0, 'model'] == 'logit'
     assert scorecard.heading == '2 branches'
 
 

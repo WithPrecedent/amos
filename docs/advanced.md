@@ -438,7 +438,7 @@ statsmodels stores the same table:
 | `mixedlm` | `MixedLM` | Regression with a random intercept for each of "groups" (such as each judge). |
 | `gee` | `GEE` | A `glm` for rows correlated within "groups", with "covariance" "independence" or "exchangeable". |
 | `poisson`, `negative_binomial`, `generalized_poisson`, `zero_inflated_poisson` | `Poisson`, `NegativeBinomial`, `GeneralizedPoisson`, `ZeroInflatedPoisson` | Counts: whole numbers of 0 or more, which may vary more than a Poisson's or have extra zeros. |
-| `logit`, `probit` | `Logit`, `Probit` | Two classes. Unlike `sk_logit` (scikit-learn's logistic regression), `logit` has no penalty. |
+| `logit_sm`, `probit` | `Logit`, `Probit` | Two classes. Unlike `logit` (scikit-learn's logistic regression), `logit_sm` has no penalty. |
 | `binomial_bayes_mixedglm` | `BinomialBayesMixedGLM` | Two classes, with a random intercept for each of "groups", fitted by variational Bayes. Its table has the mean and standard deviation of each coefficient's posterior and its 95% credible interval, and no p-values. |
 | `mnlogit` | `MNLogit` | Any number of classes. Each class after the first has its own coefficients, named "{feature} ({class})". |
 | `ordinal_regression` | `OrderedModel` | Ordered classes, as an ordered logit (or probit, with "distribution"). Its classes are ordered as the categories of an ordered categorical label, and otherwise sorted. |
@@ -522,7 +522,7 @@ print("clinic" in dataset.features)
 # False
 amos.splitters.Stratified().apply(dataset)
 amos.transformers.Standard().apply(dataset)
-amos.models.SkLogit().apply(dataset)
+amos.models.Logit().apply(dataset)
 amos.evaluators.Fairness().apply(dataset)
 print(list(dataset.tables["fairness"].index))
 # ['north', 'south', 'difference', 'ratio']
@@ -577,7 +577,7 @@ treated = pd.DataFrame({"age": age, "program": program, "outcome": outcome})
 dataset = amos.Dataset(treated, label = "outcome", seed = 43)
 amos.effects.PartiallyLinear().apply(
     dataset, treatment = "program", outcome_model = "linear",
-    treatment_model = "sk_logit")
+    treatment_model = "logit")
 effect = dataset.tables["partially_linear"].loc["program"]
 print(effect["ci_lower"] < 2 < effect["ci_upper"])
 # True
@@ -801,7 +801,7 @@ amos.splitters.Stratified().apply(dataset)
 experiment = amos.Experiment(name = "models", criteria = amos.metrics.F1())
 experiment.populate([
     [amos.transformers.Standard(), amos.transformers.Robust()],
-    [amos.models.Baseline(), amos.models.SkLogit()],
+    [amos.models.Baseline(), amos.models.Logit()],
 ])
 result = experiment.apply(dataset)
 print(experiment.winner.endswith("logit"))
@@ -838,7 +838,7 @@ steps = split, scale, sample, model, validate
 split_techniques = stratified
 scale_techniques = standard
 sample_techniques = none, smote
-model_techniques = sk_logit, random_forest
+model_techniques = logit, random_forest
 validate_techniques = stratified_k_fold
 ```
 
@@ -857,7 +857,7 @@ dataset = amos.Dataset.create(cancer, seed = 43)
 amos.splitters.Stratified().apply(dataset)
 amos.transformers.Standard().apply(dataset)
 amos.samplers.Smote().apply(dataset)
-amos.models.SkLogit().apply(dataset)
+amos.models.Logit().apply(dataset)
 amos.validators.StratifiedKFold().apply(dataset, metrics = ["roc_auc", "f1"])
 print(dataset.tables["stratified_k_fold"].columns.tolist())
 # ['train', 'validation', 'roc_auc', 'f1']

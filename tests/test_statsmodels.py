@@ -210,19 +210,19 @@ def test_the_same_results_as_statsmodels() -> None:
         results.params)
 
 
-def test_logit_is_statsmodels_and_sk_logit_is_scikit_learn() -> None:
+def test_logit_is_scikit_learn_and_logit_sm_is_statsmodels() -> None:
     api = importlib.import_module('statsmodels.api')
-    dataset, _ = _data(models.Logit)
-    models.Logit().apply(dataset)
+    dataset, _ = _data(models.LogitSM)
+    models.LogitSM().apply(dataset)
     results = api.Logit(
         dataset.y_train.astype(float),
         api.add_constant(dataset.x_train.astype(float))).fit(disp = 0)
     np.testing.assert_allclose(
-        dataset.tables['logit_coefficients']['p_value'], results.pvalues)
-    models.SkLogit().apply(dataset)
+        dataset.tables['logit_sm_coefficients']['p_value'], results.pvalues)
+    models.Logit().apply(dataset)
     assert type(dataset.model).__name__ == 'LogisticRegression'
     # Effects find the same models by name, as the right kind.
-    learner = amos.effects._learner('logit', 'classify', SEED)
+    learner = amos.effects._learner('logit_sm', 'classify', SEED)
     assert (learner.kind, learner.output) == ('logit', 'binary')
 
 
@@ -249,9 +249,9 @@ def test_collinear_features_are_left_out(
     data['target'] = (data['x0'] - data['x1'] + rng.logistic(size = 300) > 0)
     dataset = amos.Dataset(data, label = 'target', seed = SEED)
     amos.splitters.Stratified().apply(dataset)
-    models.Logit().apply(dataset)
+    models.LogitSM().apply(dataset)
     assert dataset.model.dropped_ == ['copy']
-    table = dataset.tables['logit_coefficients']
+    table = dataset.tables['logit_sm_coefficients']
     assert table.loc['copy'].isna().all()
     estimated = table.drop(index = 'copy')
     assert np.isfinite(estimated[['coefficient', 'standard_error']]).all().all()

@@ -19,7 +19,7 @@ def _grouped() -> amos.Dataset:
     dataset = amos.Dataset(
         data, label = 'target', seed = SEED, groups = ['court'])
     amos.splitters.Stratified().apply(dataset)
-    amos.models.SkLogit().apply(dataset)
+    amos.models.Logit().apply(dataset)
     return dataset
 
 
@@ -78,7 +78,7 @@ def test_a_regression_is_scored_with_its_own_metrics(
 def test_validators_check_what_they_need(classified: amos.Dataset) -> None:
     with pytest.raises(ValueError, match = 'apply a model first'):
         amos.validators.KFold().apply(classified)
-    amos.models.SkLogit().apply(classified)
+    amos.models.Logit().apply(classified)
     with pytest.raises(ValueError, match = 'groups'):
         amos.validators.GroupKFold().apply(classified)
     with pytest.raises(KeyError):
@@ -86,7 +86,7 @@ def test_validators_check_what_they_need(classified: amos.Dataset) -> None:
 
 
 def test_a_group_column_can_be_named(classified: amos.Dataset) -> None:
-    amos.models.SkLogit().apply(classified)
+    amos.models.Logit().apply(classified)
     # The model did not learn from "court", so the validator does not use it.
     classified.data['court'] = np.resize(list('abcde'), len(classified.data))
     amos.validators.LeaveOneGroupOut().apply(classified, groups = 'court')
@@ -111,7 +111,7 @@ def test_time_series_split_orders_the_rows(regressed: amos.Dataset) -> None:
 
 def test_leave_one_row_out_scores_every_prediction_together(
     classified: amos.Dataset) -> None:
-    amos.models.SkLogit().apply(classified)
+    amos.models.Logit().apply(classified)
     amos.validators.LeaveOneRowOut().apply(classified)
     table = classified.tables['leave_one_row_out']
     assert table.index.equals(classified.train)
@@ -131,7 +131,7 @@ def test_samplers_are_applied_again_and_their_rows_are_not_scored() -> None:
     real = len(dataset.train)
     amos.samplers.Smote().apply(dataset)
     assert len(dataset.synthetic) == len(dataset.train) - real
-    amos.models.SkLogit().apply(dataset)
+    amos.models.Logit().apply(dataset)
     amos.validators.StratifiedKFold().apply(dataset)
     table = dataset.tables['stratified_k_fold']
     assert table['validation'].sum() == real
@@ -196,7 +196,7 @@ def test_an_experiment_compares_the_scores_of_each_branch() -> None:
             'criterion': 'accuracy',
             'steps': 'split, model, validate',
             'split_techniques': 'stratified',
-            'model_techniques': 'sk_logit, baseline',
+            'model_techniques': 'logit, baseline',
             'validate_techniques': 'stratified_k_fold'},
         'critic': {'techniques': 'scorecard'}}
     project = amos.Project.create(settings, item = make_numeric(), id = 'run')
@@ -206,4 +206,4 @@ def test_an_experiment_compares_the_scores_of_each_branch() -> None:
     comparison = project.result.tables['analyst_comparison']
     assert 'cv_accuracy' in comparison.columns
     # The comparison ranks the branches by the score on the test rows.
-    assert table.loc[0, 'model'] == 'sk_logit'
+    assert table.loc[0, 'model'] == 'logit'

@@ -178,7 +178,8 @@ imported when a technique that needs them is used (see the extras in the
 | `lasso` |  | `sklearn.linear_model.Lasso` | Linear regression with a lasso (L1) penalty. |
 | `lightgbm` | `lightgbm.LGBMClassifier` | `lightgbm.LGBMRegressor` | LightGBM gradient boosting. |
 | `linear` |  | `sklearn.linear_model.LinearRegression` | Ordinary least squares regression from scikit-learn. |
-| `logit` | `amos.models.Statsmodel` |  | Logistic regression from statsmodels, with inference. |
+| `logit` | `sklearn.linear_model.LogisticRegression` |  | Logistic regression from scikit-learn. |
+| `logit_sm` | `amos.models.Statsmodel` |  | Logistic regression from statsmodels, with inference. |
 | `mixedlm` |  | `amos.models.Statsmodel` | A linear mixed model from statsmodels, with inference. |
 | `mnlogit` | `amos.models.Statsmodel` |  | Multinomial logistic regression from statsmodels, with inference. |
 | `naive_bayes` | `sklearn.naive_bayes.GaussianNB` |  | Gaussian naive Bayes. |
@@ -192,7 +193,6 @@ imported when a technique that needs them is used (see the extras in the
 | `random_forest` | `sklearn.ensemble.RandomForestClassifier` | `sklearn.ensemble.RandomForestRegressor` | A random forest. |
 | `ridge` |  | `sklearn.linear_model.Ridge` | Linear regression with a ridge (L2) penalty. |
 | `robust_regression` |  | `amos.models.Statsmodel` | Robust linear regression from statsmodels, with inference. |
-| `sk_logit` | `sklearn.linear_model.LogisticRegression` |  | Logistic regression from scikit-learn. |
 | `svm` | `sklearn.svm.SVC` | `sklearn.svm.SVR` | A support vector machine (with probabilities for classification). |
 | `tabpfn` | `tabpfn.TabPFNClassifier` | `tabpfn.TabPFNRegressor` | TabPFN, a pretrained model that is often the most accurate on small data. |
 | `wls` |  | `amos.models.Statsmodel` | Weighted least squares regression from statsmodels, with inference. |
