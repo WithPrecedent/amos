@@ -66,6 +66,22 @@ _STATSMODELS: dict[str, str] = {
     'robust_regression': 'values',
     'wls': 'values',
     'zero_inflated_poisson': 'counts'}
+# Kinds of `Statsmodel` whose fitting methods need features that are not
+# combinations of each other (collinear), so collinear features are left out.
+# The others (least squares and generalized linear models) find coefficients
+# for collinear features themselves.
+_INDEPENDENT: frozenset[str] = frozenset({
+    'binomial_bayes_mixedglm',
+    'gee',
+    'generalized_poisson',
+    'logit',
+    'mixedlm',
+    'mnlogit',
+    'negative_binomial',
+    'ordinal_regression',
+    'poisson',
+    'probit',
+    'zero_inflated_poisson'})
 
 
 @dataclasses.dataclass
@@ -638,6 +654,10 @@ class Statsmodel:
             of the categories of a label that is an ordered categorical, and
             otherwise sorted.
         feature_names_in_: the features (not the groups or weights).
+        dropped_: features that were left out because they are combinations
+            of the features before them (collinear), which most models
+            fitted by maximum likelihood cannot estimate. Their rows in
+            `coefficients` are empty.
 
     """
 
@@ -656,6 +676,8 @@ class Statsmodel:
     levels_: Any = dataclasses.field(default = None, init = False, repr = False)
     feature_names_in_: Any = dataclasses.field(
         default = None, init = False, repr = False)
+    dropped_: list[str] = dataclasses.field(
+        default_factory = list, init = False, repr = False)
 
     """ Properties """
 
@@ -664,14 +686,15 @@ class Statsmodel:
         """Returns the coefficients of the features.
 
         An "mnlogit" has a row of coefficients for each class after the
-        first.
+        first. A feature that was left out (see `dropped_`) has a missing
+        coefficient.
 
         """
         params = self._params()
         names = [str(n) for n in self.feature_names_in_]
         if isinstance(params, pd.DataFrame):
-            return np.asarray(params.loc[names]).T
-        return np.asarray(params.loc[names])
+            return np.asarray(params.reindex(names)).T
+        return np.asarray(params.reindex(names))
 
     @property
     def output(self) -> str:
@@ -729,37 +752,49 @@ class Statsmodel:
                 "ci_upper". The coefficients of an "mnlogit" are named
                 "{feature} ({class})". A "binomial_bayes_mixedglm" reports the
                 mean and standard deviation of each coefficient's posterior
-                and its 95% credible interval, and no p-values.
+                and its 95% credible interval, and no p-values. A feature
+                that was left out (see `dropped_`) has an empty row, and the
+                statistics are missing if statsmodels could not find the
+                covariance of the coefficients.
 
         """
         results = self.results
+        labels = None
         if self.kind == 'binomial_bayes_mixedglm':
             means = self._params()
             deviations = pd.Series(np.asarray(results.fe_sd), index = means.index)
             # Variational Bayes gives each coefficient a normal posterior.
-            return pd.DataFrame({
+            table = pd.DataFrame({
                 'coefficient': means,
                 'standard_error': deviations,
                 'statistic': means / deviations,
                 'p_value': np.nan,
                 'ci_lower': means - 1.96 * deviations,
                 'ci_upper': means + 1.96 * deviations})
-        columns = [results.params, results.bse, results.tvalues, results.pvalues]
-        intervals = results.conf_int()
-        if isinstance(results.params, pd.DataFrame):
-            labels = [str(c) for c in self.classes_[1:]]
-            columns = [_by_class(frame, labels) for frame in columns]
-            # The intervals are already in the same order, class by class.
-            intervals = pd.DataFrame(
-                intervals.to_numpy(), index = columns[0].index)
-        params, errors, statistics, p_values = columns
-        return pd.DataFrame({
-            'coefficient': params,
-            'standard_error': errors,
-            'statistic': statistics,
-            'p_value': p_values,
-            'ci_lower': intervals.iloc[:, 0],
-            'ci_upper': intervals.iloc[:, 1]})
+        else:
+            params = results.params
+            columns = [params] + [
+                _statistic(results, name, params)
+                for name in ('bse', 'tvalues', 'pvalues')]
+            try:
+                intervals = np.asarray(results.conf_int())
+            except ValueError:
+                intervals = np.full((params.size, 2), np.nan)
+            if isinstance(params, pd.DataFrame):
+                labels = [str(c) for c in self.classes_[1:]]
+                columns = [_by_class(frame, labels) for frame in columns]
+            # The intervals are in the same order as the coefficients (class
+            # by class, for an mnlogit).
+            table = pd.DataFrame({
+                'coefficient': columns[0],
+                'standard_error': columns[1],
+                'statistic': columns[2],
+                'p_value': columns[3],
+                'ci_lower': intervals[:, 0],
+                'ci_upper': intervals[:, 1]})
+        empty = list(self.dropped_) if labels is None else [
+            f'{name} ({label})' for label in labels for name in self.dropped_]
+        return table.reindex([*table.index, *empty])
 
     def fit(self, x: pd.DataFrame, y: pd.Series) -> Statsmodel:
         """Fits the model.
@@ -778,7 +813,12 @@ class Statsmodel:
         extras = {self.groups, self.weights} - {None}
         self.feature_names_in_ = np.asarray(
             [c for c in x.columns if c not in extras])
-        self.results = self._estimate(self._endog(y), self._exog(x), x)
+        self.dropped_ = []
+        exog = self._exog(x)
+        if self.kind in _INDEPENDENT:
+            self.dropped_ = _collinear(exog)
+            exog = exog.drop(columns = self.dropped_)
+        self.results = self._estimate(self._endog(y), exog, x)
         return self
 
     def get_params(
@@ -987,14 +1027,15 @@ class Statsmodel:
             x: features, and any other columns, which are left out.
 
         Returns:
-            The exogenous variables for statsmodels.
+            The exogenous variables for statsmodels, without the features in
+                `dropped_`.
 
         """
         exog = x[list(self.feature_names_in_)].astype(float)
         exog.columns = [str(c) for c in exog.columns]
         if self.constant and self.kind != 'ordinal_regression':
             exog.insert(0, 'const', 1.0)
-        return exog
+        return exog.drop(columns = self.dropped_)
 
     def _mean(self, x: pd.DataFrame) -> np.ndarray:
         """Returns the model's prediction of the mean of the label.
@@ -2162,6 +2203,37 @@ def _by_class(frame: pd.DataFrame, labels: Sequence[str]) -> pd.Series:
     return pd.Series(values, index = names)
 
 
+def _collinear(exog: pd.DataFrame) -> list[str]:
+    """Returns the columns that are combinations of the columns before them.
+
+    The rank of the columns is found by singular values, which do not depend
+    on rounding the way that inverting a matrix does, so the same columns are
+    found on every computer. Each column is scaled to a length of 1 first, so
+    that the scales of the columns do not matter.
+
+    Args:
+        exog: the exogenous variables, including any constant.
+
+    Returns:
+        The names of the collinear columns (none if there are missing values,
+            which statsmodels reports itself).
+
+    """
+    values = exog.to_numpy(dtype = float)
+    if np.isnan(values).any():
+        return []
+    lengths = np.linalg.norm(values, axis = 0)
+    values = values / np.where(lengths > 0, lengths, 1.0)
+    kept: list[int] = []
+    collinear: list[str] = []
+    for position, name in enumerate(exog.columns):
+        if np.linalg.matrix_rank(values[:, [*kept, position]]) > len(kept):
+            kept.append(position)
+        else:
+            collinear.append(str(name))
+    return collinear
+
+
 def _family(name: str, item: base.Dataset, parameters: Mapping[str, Any]) -> str:
     """Returns the family of a `glm` or `gee`, checking that it suits the task.
 
@@ -2214,6 +2286,25 @@ def _statsmodels_class(module: Any, name: str) -> type:
         message = f'{name!r} is not in {module.__name__}'
         raise ValueError(message) from error
     return kind
+
+
+def _statistic(results: Any, name: str, like: Any) -> Any:
+    """Returns a statistic of statsmodels results, or missing values.
+
+    Args:
+        results: fitted statsmodels results.
+        name: name of the statistic (such as "bse").
+        like: the coefficients, to copy the shape of.
+
+    Returns:
+        The statistic, or missing values in the shape of `like` if statsmodels
+            could not find the covariance of the coefficients.
+
+    """
+    try:
+        return getattr(results, name)
+    except ValueError:
+        return like * np.nan
 
 
 def _with_groups(

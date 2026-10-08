@@ -350,7 +350,11 @@ statsmodels stores the same table:
 `mixedlm`, `gee`, and `binomial_bayes_mixedglm` use the dataset's first group
 unless "groups" names a column, and the groups and weights are not features.
 The predictions of `mixedlm` and `binomial_bayes_mixedglm` use the fixed
-effects only, so they suit groups that the model has not seen. amos classifies whole
+effects only, so they suit groups that the model has not seen. A feature that is a
+combination of others (collinear) has no coefficient of its own. `ols`, `wls`,
+`glm`, `quantile_regression`, and `robust_regression` share the effect among
+such features, and the other models leave them out: the model's `dropped_`
+lists them, and their rows in the table of coefficients are empty. amos classifies whole
 numbers with few values, so set "task" to "regress" in the "general" section
 for a label of counts. The rest of statsmodels' models either do not predict a
 label from features (such as `MANOVA`; `PCA` and `Factor` are below), or

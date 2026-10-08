@@ -210,17 +210,17 @@ def test_the_same_results_as_statsmodels() -> None:
         results.params)
 
 
-def test_logit_is_statsmodels_and_sk_logit_is_scikit_learn(
-    classified: amos.Dataset) -> None:
+def test_logit_is_statsmodels_and_sk_logit_is_scikit_learn() -> None:
     api = importlib.import_module('statsmodels.api')
-    models.Logit().apply(classified)
+    dataset, _ = _data(models.Logit)
+    models.Logit().apply(dataset)
     results = api.Logit(
-        classified.y_train.astype(float),
-        api.add_constant(classified.x_train.astype(float))).fit(disp = 0)
+        dataset.y_train.astype(float),
+        api.add_constant(dataset.x_train.astype(float))).fit(disp = 0)
     np.testing.assert_allclose(
-        classified.tables['logit_coefficients']['p_value'], results.pvalues)
-    models.SkLogit().apply(classified)
-    assert type(classified.model).__name__ == 'LogisticRegression'
+        dataset.tables['logit_coefficients']['p_value'], results.pvalues)
+    models.SkLogit().apply(dataset)
+    assert type(dataset.model).__name__ == 'LogisticRegression'
     # Effects find the same models by name, as the right kind.
     learner = amos.effects._learner('logit', 'classify', SEED)
     assert (learner.kind, learner.output) == ('logit', 'binary')
@@ -240,17 +240,34 @@ def test_binomial_bayes_mixedglm_reports_its_posteriors() -> None:
     assert np.allclose(dataset.probabilities.sum(axis = 1), 1)
 
 
-def test_collinear_features_still_have_coefficients() -> None:
+def test_collinear_features_are_left_out(
+    classified: amos.Dataset,
+    multiclass: amos.Dataset) -> None:
     rng = np.random.default_rng(SEED)
     data = pd.DataFrame(rng.normal(size = (300, 2)), columns = ['x0', 'x1'])
     data['copy'] = data['x0']
     data['target'] = (data['x0'] - data['x1'] + rng.logistic(size = 300) > 0)
     dataset = amos.Dataset(data, label = 'target', seed = SEED)
     amos.splitters.Stratified().apply(dataset)
-    # A feature that copies another makes Newton's method fail, so the model
-    # is fitted by BFGS, and statsmodels warns that it has no standard errors.
-    with pytest.warns(Warning, match = 'Inverting hessian failed'):
-        models.Logit().apply(dataset)
+    models.Logit().apply(dataset)
+    assert dataset.model.dropped_ == ['copy']
     table = dataset.tables['logit_coefficients']
-    assert np.isfinite(table['coefficient']).all()
-    assert table['standard_error'].isna().all()
+    assert table.loc['copy'].isna().all()
+    estimated = table.drop(index = 'copy')
+    assert np.isfinite(estimated[['coefficient', 'standard_error']]).all().all()
+    assert np.isnan(dataset.model.coef_[-1])
+    # A generalized linear model finds coefficients for collinear features
+    # itself.
+    models.GLM().apply(classified)
+    assert classified.model.dropped_ == []
+    # Two features of `classified` and `multiclass` are combinations of the
+    # others, which these models leave out the same way on every computer.
+    classified.data['court'] = np.resize(list('abcdef'), len(classified.data))
+    models.GEE().apply(classified, groups = 'court')
+    assert len(classified.model.dropped_) == 2
+    assert np.allclose(classified.probabilities.sum(axis = 1), 1)
+    models.Mnlogit().apply(multiclass)
+    dropped = multiclass.model.dropped_
+    assert len(dropped) == 2
+    table = multiclass.tables['mnlogit_coefficients']
+    assert table.loc[f'{dropped[0]} (2)'].isna().all()
