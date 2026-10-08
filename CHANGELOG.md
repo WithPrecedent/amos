@@ -4,6 +4,50 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.2.3
+
+* Renamed scikit-learn's logistic regression from `logit` to `sk_logit`, and
+  the scikit-learn PCA reducer from `pca` to `pca_reduce`, so that `logit`
+  and `pca` are the statsmodels techniques below. Settings that name `logit`
+  or `pca` must use the new names to keep their old behavior.
+* Replaced lifelines with statsmodels for the survival tools (`cox`,
+  `kaplan_meier`, `concordance`, and `survival_curves`), so the `survival`
+  extra installs statsmodels. amos now requires pandas 3.
+* Added loaders, a new genre for the wrangler: `load_file`, `download`, and
+  `openml` load data through the project's clerk (its `nagata.FileManager`).
+  Files are found, and downloads are saved, in the clerk's input folder, and
+  a project with a loader needs no `item`. Loaders read every row and read
+  text as UTF-8.
+* Added validators, a new genre for the analyst: `k_fold`,
+  `stratified_k_fold`, `group_k_fold`, `stratified_group_k_fold`,
+  `repeated_k_fold`, `repeated_stratified_k_fold`, `shuffle_split`,
+  `stratified_shuffle_split`, `group_shuffle_split`, `leave_one_group_out`,
+  `leave_one_row_out`, and `time_series_split`. After the model, a validator
+  refits copies of it on folds of the training rows and scores each fold
+  with the critic's metrics. Their means are stored in `metrics` as
+  "cv_{metric}", so scorecards and an experiment's comparison show them.
+* Datasets record the training rows that a sampler made up (`synthetic`).
+  Validators never score them, and apply the samplers again in each fold.
+* Added models from statsmodels, each with a table of coefficients: `logit`,
+  `probit`, `mnlogit`, `ordinal_regression`, `wls`, `quantile_regression`,
+  `robust_regression`, `mixedlm`, `gee`, `binomial_bayes_mixedglm`,
+  `poisson`, `negative_binomial`, `generalized_poisson`, and
+  `zero_inflated_poisson`. `mixedlm`, `gee`, and `binomial_bayes_mixedglm`
+  use the dataset's first group unless "groups" names a column.
+* The statsmodels models that cannot estimate a feature that is a
+  combination of others (collinear) leave it out, the same way on every
+  computer: the model's `dropped_` lists it, and its row in the table of
+  coefficients is empty.
+* A `glm` or `gee` of a family that regresses refuses a classified label,
+  and the models of counts explain how to regress a label of few whole
+  numbers. Effects can use the statsmodels models as learners.
+* Added `pca` and `factor_analysis` to the critic: statsmodels' analyses of
+  the features that the model learned from.
+* `influence_plot` now draws a `glm`.
+* The README's table of stages lists every technique, divided into the steps
+  of each stage, with a link to each one's API documentation. The advanced
+  user guide has new sections on loading data and cross-validation.
+
 ## 0.2.2
 
 * Added eleven plots from shap to the artist: `shap_bar`, `shap_beeswarm`,
