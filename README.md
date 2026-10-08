@@ -156,7 +156,7 @@ csv, Markdown, LaTeX, HTML, Word, or an image).
 Name the columns that identify groups as `groups`, and `amos` keeps them out of the model's
 features while it uses them to check fairness across groups, to add fixed
 effects and cluster standard errors, and to keep each group in one set when
-it splits the data. 
+it splits the data.
 
 ### Extensible
 
