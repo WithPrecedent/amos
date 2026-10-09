@@ -354,7 +354,7 @@ class CoefficientPlot(Plot):
     """Coefficients with their confidence intervals (a forest plot).
 
     Draws a table of coefficients made by `ols`, `glm`, `fixest`, or `cox`
-    ("{model}_coefficients"), or of the effects that an inference (such as
+    ("{model}_coefficients"), or of the effects that an inferer (such as
     `partially_linear`) estimated: a dot for each coefficient and a line for
     its confidence interval, with a dashed line at zero. The table is
     `source`, or the last such table made. The intercept is left out unless
@@ -2314,7 +2314,7 @@ def _coefficients(item: base.Dataset, source: str | None) -> pd.DataFrame:
     if source is None and not names:
         message = (
             'there is no table of coefficients: apply "ols", "glm", "fixest", '
-            '"cox", or an inference first')
+            '"cox", or an inferer first')
         raise ValueError(message)
     return item.tables[source or names[-1]]
 

@@ -62,6 +62,7 @@ _EXTRAS: dict[str, str] = {
     'lightgbm': 'boosting',
     'mapie': 'uncertainty',
     'matplotlib': 'plots',
+    'networkx': 'causal',
     'optuna': 'tuning',
     'optuna_integration': 'tuning',
     'polars': 'polars',

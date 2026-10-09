@@ -365,7 +365,7 @@ def test_doubleml(regressed: amos.Dataset) -> None:
     linear_model = importlib.import_module('sklearn.linear_model')
     model_selection = importlib.import_module('sklearn.model_selection')
     data = regressed.data.copy()
-    amos.inferences.PartiallyLinear().apply(
+    amos.inferers.PartiallyLinear().apply(
         regressed, treatment = 'x0', outcome_model = 'linear', n_folds = 3)
     controls = ['x1', 'x2', 'x3', 'x4']
     estimator = doubleml.DoubleMLPLR(
@@ -396,7 +396,7 @@ def test_causalml() -> None:
         'need': need, 'treated': treated,
         'outcome': 2 * treated + need + rng.normal(size = 400)})
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
-    amos.inferences.TLearner().apply(
+    amos.inferers.TLearner().apply(
         dataset, treatment = 'treated', outcome_model = 'linear')
     # Imported after amos has imported it, which keeps matplotlib's style.
     meta = importlib.import_module('causalml.inference.meta')
@@ -415,7 +415,7 @@ def test_dowhy(regressed: amos.Dataset) -> None:
     requires('dowhy')
     dowhy = importlib.import_module('dowhy')
     data = regressed.data.astype(float)
-    amos.inferences.RegressionAdjustment().apply(regressed, treatment = 'x0')
+    amos.inferers.RegressionAdjustment().apply(regressed, treatment = 'x0')
     model = dowhy.CausalModel(
         data = data, treatment = 'x0', outcome = 'target',
         common_causes = ['x1', 'x2', 'x3', 'x4'])
@@ -440,7 +440,7 @@ def test_tigramite() -> None:
             + rng.normal())
     data = pd.DataFrame(values, columns = ['rain', 'floods'])
     dataset = amos.Dataset(data, label = 'floods', seed = SEED)
-    amos.inferences.PCMCI().apply(dataset, max_lag = 2)
+    amos.inferers.PCMCI().apply(dataset, max_lag = 2)
     method = pcmci.PCMCI(
         frames.DataFrame(values, var_names = ['rain', 'floods']),
         cond_ind_test = parcorr.ParCorr(significance = 'analytic'),

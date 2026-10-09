@@ -1,4 +1,4 @@
-"""Tests the inferences module (DoubleML, DoWhy, causalml, and tigramite)."""
+"""Tests the inferers module (DoubleML, DoWhy, causalml, and tigramite)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 from conftest import SEED, package_of, requires, techniques
 
 import amos
-from amos import inferences
+from amos import inferers
 
 FAST = {'outcome_model': 'linear', 'treatment_model': 'logit', 'n_folds': 3}
 COLUMNS = [
@@ -74,7 +74,7 @@ def _covers(table: pd.DataFrame, row: object, value: float) -> bool:
     return bool(table.loc[row, 'ci_lower'] < value < table.loc[row, 'ci_upper'])
 
 
-def test_each_package_is_a_genre_of_inferences() -> None:
+def test_each_package_is_a_genre_of_inferers() -> None:
     genres = {
         'causalml': {'dr_learner', 's_learner', 't_learner', 'tmle', 'x_learner'},
         'doubleml': {
@@ -92,15 +92,15 @@ def test_each_package_is_a_genre_of_inferences() -> None:
         found = techniques(genre)
         assert {name for name, _ in found} == names, genre
         assert {package_of(kind) for _, kind in found} == {genre}
-    assert len(techniques('inference')) == 28
+    assert len(techniques('inferer')) == 28
 
 
 # DoubleML
 
 
 @pytest.mark.parametrize('kind', [
-    inferences.PartiallyLinear, inferences.InteractiveRegression])
-def test_doubleml_finds_the_true_effect(kind: type[amos.Inference]) -> None:
+    inferers.PartiallyLinear, inferers.InteractiveRegression])
+def test_doubleml_finds_the_true_effect(kind: type[amos.Inferer]) -> None:
     requires('doubleml')
     dataset = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
     kind().apply(dataset, treatment = 'treated', **FAST)
@@ -114,10 +114,10 @@ def test_doubleml_finds_the_true_effect(kind: type[amos.Inference]) -> None:
 
 
 @pytest.mark.parametrize(('kind', 'treatment_model'), [
-    (inferences.PartiallyLinearIV, 'linear'),
-    (inferences.InteractiveIV, 'logit')])
+    (inferers.PartiallyLinearIV, 'linear'),
+    (inferers.InteractiveIV, 'logit')])
 def test_doubleml_finds_the_effect_through_an_instrument(
-    kind: type[amos.Inference], treatment_model: str) -> None:
+    kind: type[amos.Inferer], treatment_model: str) -> None:
     requires('doubleml')
     dataset = amos.Dataset(_instrumented(), label = 'outcome', seed = SEED)
     kind().apply(
@@ -127,17 +127,17 @@ def test_doubleml_finds_the_effect_through_an_instrument(
     assert _covers(dataset.tables[kind().name], 'treated', 2.0)
 
 
-def test_doubleml_instrumented_inferences_need_an_instrument() -> None:
+def test_doubleml_instrumented_inferers_need_an_instrument() -> None:
     requires('doubleml')
     dataset = amos.Dataset(_instrumented(), label = 'outcome', seed = SEED)
     with pytest.raises(ValueError, match = 'instrument'):
-        inferences.InteractiveIV().apply(dataset, treatment = 'treated', **FAST)
+        inferers.InteractiveIV().apply(dataset, treatment = 'treated', **FAST)
 
 
 def test_interactive_regression_finds_the_effect_on_the_treated() -> None:
     requires('doubleml')
     dataset = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
-    inferences.InteractiveRegression().apply(
+    inferers.InteractiveRegression().apply(
         dataset, treatment = 'treated', score = 'ATTE', **FAST)
     assert _covers(dataset.tables['interactive_regression'], 'treated', 2.0)
 
@@ -147,12 +147,12 @@ def test_partially_logistic_finds_a_rise_in_the_odds() -> None:
     data = _treated(rows = 600)
     data['outcome'] = (data['outcome'] > data['outcome'].median()).astype(int)
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
-    inferences.PartiallyLogistic().apply(
+    inferers.PartiallyLogistic().apply(
         dataset, treatment = 'treated', treatment_model = 'logit', n_folds = 3)
     assert dataset.tables['partially_logistic'].loc['treated', 'ci_lower'] > 0
     # Its outcome model must also regress the log-odds.
     with pytest.raises(ValueError, match = 'cannot regress'):
-        inferences.PartiallyLogistic().apply(
+        inferers.PartiallyLogistic().apply(
             dataset, treatment = 'treated', outcome_model = 'logit')
 
 
@@ -160,7 +160,7 @@ def test_partially_logistic_needs_a_label_with_two_classes() -> None:
     requires('doubleml')
     dataset = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
     with pytest.raises(ValueError, match = 'two classes'):
-        inferences.PartiallyLogistic().apply(
+        inferers.PartiallyLogistic().apply(
             dataset, treatment = 'treated', **FAST)
 
 
@@ -174,42 +174,42 @@ def test_potential_outcomes_compares_each_level_to_the_reference() -> None:
         'sentence': np.array(['fine', 'probation', 'prison'])[levels],
         'outcome': 1.0 * levels + need + rng.normal(size = 600)})
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
-    inferences.PotentialOutcomes().apply(
+    inferers.PotentialOutcomes().apply(
         dataset, treatment = 'sentence', outcome_model = 'linear',
         treatment_model = 'logit', n_folds = 3)
     table = dataset.tables['potential_outcomes']
     assert list(table.index) == ['prison vs fine', 'probation vs fine']
     assert _covers(table, 'prison vs fine', 2.0)
     assert _covers(table, 'probation vs fine', 1.0)
-    inferences.PotentialOutcomes().apply(
+    inferers.PotentialOutcomes().apply(
         dataset, treatment = 'sentence', reference = 'probation',
         outcome_model = 'linear', treatment_model = 'logit', n_folds = 3)
     table = dataset.tables['potential_outcomes']
     assert list(table.index) == ['fine vs probation', 'prison vs probation']
     with pytest.raises(ValueError, match = 'levels'):
-        inferences.PotentialOutcomes().apply(
+        inferers.PotentialOutcomes().apply(
             dataset, treatment = 'sentence', reference = 'parole', **FAST)
 
 
 def test_quantile_effects_has_a_row_for_each_quantile() -> None:
     requires('doubleml')
     dataset = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
-    inferences.QuantileEffects().apply(
+    inferers.QuantileEffects().apply(
         dataset, treatment = 'treated', outcome_model = 'logit',
         treatment_model = 'logit', n_folds = 3)
     table = dataset.tables['quantile_effects']
     assert list(table.index) == [0.25, 0.5, 0.75]
     assert table.index.name == 'quantile'
     assert (table['coefficient'] > 0).all()
-    inferences.QuantileEffects().apply(
+    inferers.QuantileEffects().apply(
         dataset, treatment = 'treated', quantiles = [0.5], score = 'cvar',
         **FAST)
     assert list(dataset.tables['quantile_effects'].index) == [0.5]
     with pytest.raises(ValueError, match = 'score'):
-        inferences.QuantileEffects().apply(
+        inferers.QuantileEffects().apply(
             dataset, treatment = 'treated', score = 'median', **FAST)
     with pytest.raises(ValueError, match = 'instrument'):
-        inferences.QuantileEffects().apply(
+        inferers.QuantileEffects().apply(
             dataset, treatment = 'treated', score = 'local_quantile', **FAST)
 
 
@@ -227,16 +227,16 @@ def test_difference_in_differences_finds_the_effect_on_the_treated() -> None:
         'need': need, 'group': group, 'year': 2019 + after,
         'outcome': outcome})
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
-    inferences.DifferenceInDifferences().apply(
+    inferers.DifferenceInDifferences().apply(
         dataset, treatment = 'group', time = 'year', **FAST)
     assert _covers(dataset.tables['difference_in_differences'], 'group', 1.5)
     periods = dataset.tables['difference_in_differences_periods']
     assert list(periods.index) == [0.0]
     with pytest.raises(ValueError, match = 'time'):
-        inferences.DifferenceInDifferences().apply(
+        inferers.DifferenceInDifferences().apply(
             dataset, treatment = 'group', **FAST)
     with pytest.raises(ValueError, match = 'comparison'):
-        inferences.DifferenceInDifferences().apply(
+        inferers.DifferenceInDifferences().apply(
             dataset, treatment = 'group', time = 'year',
             comparison = 'everyone', **FAST)
 
@@ -254,7 +254,7 @@ def test_difference_in_differences_with_staggered_treatments() -> None:
     panel = pd.DataFrame(
         rows, columns = ['court', 'year', 'first', 'need', 'outcome'])
     dataset = amos.Dataset(panel, label = 'outcome', seed = SEED)
-    inferences.DifferenceInDifferences().apply(
+    inferers.DifferenceInDifferences().apply(
         dataset, treatment = 'first', time = 'year', unit = 'court', **FAST)
     assert _covers(dataset.tables['difference_in_differences'], 'first', 1.5)
     periods = dataset.tables['difference_in_differences_periods']
@@ -263,7 +263,7 @@ def test_difference_in_differences_with_staggered_treatments() -> None:
     # Before the treatment, there is no effect.
     assert _covers(periods, -1.0, 0.0)
     assert dataset.history[-1]['unit'] == 'court'
-    inferences.DifferenceInDifferences().apply(
+    inferers.DifferenceInDifferences().apply(
         dataset, treatment = 'first', time = 'year', unit = 'court',
         comparison = 'not_yet_treated', **FAST)
     assert _covers(dataset.tables['difference_in_differences'], 'first', 1.5)
@@ -289,14 +289,14 @@ def test_regression_discontinuity_finds_the_effect_at_the_cutoff(
             2 * treated + 0.1 * score + 0.5 * need
             + rng.normal(0, 0.5, 1000))})
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
-    inferences.RegressionDiscontinuity().apply(
+    inferers.RegressionDiscontinuity().apply(
         dataset, treatment = 'treated', running = 'score', cutoff = 50, **FAST)
     table = dataset.tables['regression_discontinuity']
     assert list(table.columns) == COLUMNS
     assert _covers(table, 'treated', 2.0)
     assert dataset.fitted['regression_discontinuity'].fuzzy is fuzzy
     with pytest.raises(ValueError, match = 'running'):
-        inferences.RegressionDiscontinuity().apply(
+        inferers.RegressionDiscontinuity().apply(
             dataset, treatment = 'treated', **FAST)
 
 
@@ -308,11 +308,11 @@ def test_sample_selection_uses_only_the_seen_labels() -> None:
     data['seen'] = seen
     data['outcome'] = data['outcome'].where(seen == 1)
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
-    inferences.SampleSelection().apply(
+    inferers.SampleSelection().apply(
         dataset, treatment = 'treated', selected = 'seen', **FAST)
     assert _covers(dataset.tables['sample_selection'], 'treated', 2.0)
     with pytest.raises(ValueError, match = 'selected'):
-        inferences.SampleSelection().apply(
+        inferers.SampleSelection().apply(
             dataset, treatment = 'treated', **FAST)
 
 
@@ -331,7 +331,7 @@ def test_partially_linear_panel_removes_each_units_own_level() -> None:
         'dose': dose,
         'outcome': 1.2 * dose + need + level + rng.normal(size = units * periods)})
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
-    inferences.PartiallyLinearPanel().apply(
+    inferers.PartiallyLinearPanel().apply(
         dataset, treatment = 'dose', unit = 'court', time = 'year',
         outcome_model = 'linear', treatment_model = 'linear', n_folds = 3)
     table = dataset.tables['partially_linear_panel']
@@ -344,7 +344,7 @@ def test_doubleml_is_reproducible() -> None:
     first = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
     second = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
     for dataset in (first, second):
-        inferences.PartiallyLinear().apply(
+        inferers.PartiallyLinear().apply(
             dataset, treatment = 'treated', n_folds = 3,
             outcome_model = 'random_forest')
     pd.testing.assert_frame_equal(
@@ -357,7 +357,7 @@ def test_a_classified_label_and_text_treatment() -> None:
     data['outcome'] = (data['outcome'] > data['outcome'].median()).astype(int)
     data['treated'] = data['treated'].map({0: 'control', 1: 'program'})
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
-    inferences.InteractiveRegression().apply(
+    inferers.InteractiveRegression().apply(
         dataset, treatment = 'treated', outcome_model = 'logit', n_folds = 3)
     effect = dataset.tables['interactive_regression'].loc['treated', 'coefficient']
     # The program raises the chance of a high outcome.
@@ -365,40 +365,40 @@ def test_a_classified_label_and_text_treatment() -> None:
 
 
 def test_learners_are_amos_models() -> None:
-    forest = inferences._learner('random_forest', 'classify', SEED)
+    forest = inferers._learner('random_forest', 'classify', SEED)
     assert type(forest).__name__ == 'RandomForestClassifier'
     assert forest.random_state == SEED
-    logit = inferences._learner('logit', 'classify', None)
+    logit = inferers._learner('logit', 'classify', None)
     assert logit.max_iter == 1000
     with pytest.raises(ValueError, match = 'cannot regress'):
-        inferences._learner('logit', 'regress', SEED)
+        inferers._learner('logit', 'regress', SEED)
     with pytest.raises(KeyError, match = 'standard'):
-        inferences._learner('standard', 'regress', SEED)
+        inferers._learner('standard', 'regress', SEED)
 
 
-def test_inferences_need_a_treatment() -> None:
+def test_inferers_need_a_treatment() -> None:
     dataset = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
     for kind in (
-        inferences.PartiallyLinear, inferences.RegressionAdjustment,
-        inferences.TLearner, inferences.TimeSeriesEffect):
+        inferers.PartiallyLinear, inferers.RegressionAdjustment,
+        inferers.TLearner, inferers.TimeSeriesEffect):
         with pytest.raises(ValueError, match = 'treatment'):
             kind().apply(dataset)
 
 
-def test_inferences_need_numbers() -> None:
+def test_inferers_need_numbers() -> None:
     requires('doubleml')
     data = _treated()
     data['court'] = 'state'
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
     with pytest.raises(ValueError, match = 'court'):
-        inferences.PartiallyLinear().apply(dataset, treatment = 'treated')
+        inferers.PartiallyLinear().apply(dataset, treatment = 'treated')
 
 
 def test_interactive_regression_needs_two_treatment_values() -> None:
     requires('doubleml')
     dataset = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
     with pytest.raises(ValueError, match = 'to have 2 values'):
-        inferences.InteractiveRegression().apply(
+        inferers.InteractiveRegression().apply(
             dataset, treatment = 'income', n_folds = 2)
 
 
@@ -406,12 +406,12 @@ def test_interactive_regression_needs_two_treatment_values() -> None:
 
 
 CAUSALML = [
-    inferences.SLearner, inferences.TLearner, inferences.XLearner,
-    inferences.DRLearner, inferences.TMLE]
+    inferers.SLearner, inferers.TLearner, inferers.XLearner,
+    inferers.DRLearner, inferers.TMLE]
 
 
 @pytest.mark.parametrize('kind', CAUSALML)
-def test_causalml_finds_the_true_effect(kind: type[amos.Inference]) -> None:
+def test_causalml_finds_the_true_effect(kind: type[amos.Inferer]) -> None:
     requires('causalml')
     dataset = amos.Dataset(
         _instrumented().drop(columns = 'lottery'), label = 'outcome', seed = SEED)
@@ -423,7 +423,7 @@ def test_causalml_finds_the_true_effect(kind: type[amos.Inference]) -> None:
     # Each row is a group of the treatment, compared to the control.
     assert table.index.name == 'treated'
     assert _covers(table, '1', 2.0)
-    if kind is inferences.TMLE:
+    if kind is inferers.TMLE:
         assert 'tmle_effects' not in dataset.tables
     else:
         assert len(dataset.tables[f'{kind().name}_effects']) == len(dataset.data)
@@ -439,7 +439,7 @@ def test_causalml_compares_each_group_to_the_control() -> None:
         'program': np.array(['none', 'low', 'high'])[group],
         'outcome': 1.0 * group + need + rng.normal(size = 600)})
     dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
-    inferences.TLearner().apply(
+    inferers.TLearner().apply(
         dataset, treatment = 'program', control = 'none',
         outcome_model = 'linear')
     table = dataset.tables['t_learner']
@@ -447,7 +447,7 @@ def test_causalml_compares_each_group_to_the_control() -> None:
     assert _covers(table, 'low', 1.0)
     assert _covers(table, 'high', 2.0)
     with pytest.raises(ValueError, match = 'two values'):
-        inferences.TMLE().apply(
+        inferers.TMLE().apply(
             dataset, treatment = 'program', control = 'none',
             outcome_model = 'linear')
 
@@ -459,7 +459,7 @@ def test_causalml_keeps_the_style_of_matplotlib() -> None:
     code = (
         'import matplotlib, amos; '
         'colors = matplotlib.rcParams["axes.prop_cycle"]; '
-        'amos.inferences._import_causalml(); '
+        'amos.inferers._import_causalml(); '
         'assert matplotlib.rcParams["axes.prop_cycle"] == colors')
     subprocess.run([sys.executable, '-c', code], check = True)  # noqa: S603
 
@@ -469,21 +469,21 @@ def test_causalml_keeps_the_style_of_matplotlib() -> None:
 def test_causalml_explains_that_it_needs_an_older_python() -> None:
     dataset = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
     with pytest.raises(ImportError, match = '3.11 or 3.12'):
-        inferences.TLearner().apply(dataset, treatment = 'treated')
+        inferers.TLearner().apply(dataset, treatment = 'treated')
 
 
 # DoWhy
 
 
 DOWHY = [
-    inferences.RegressionAdjustment, inferences.GLMAdjustment,
-    inferences.DoublyRobust, inferences.PropensityMatching,
-    inferences.PropensityStratification, inferences.PropensityWeighting,
-    inferences.DistanceMatching]
+    inferers.RegressionAdjustment, inferers.GLMAdjustment,
+    inferers.DoublyRobust, inferers.PropensityMatching,
+    inferers.PropensityStratification, inferers.PropensityWeighting,
+    inferers.DistanceMatching]
 
 
 @pytest.mark.parametrize('kind', DOWHY)
-def test_dowhy_finds_the_true_effect(kind: type[amos.Inference]) -> None:
+def test_dowhy_finds_the_true_effect(kind: type[amos.Inferer]) -> None:
     requires('dowhy')
     dataset = amos.Dataset(
         _instrumented().drop(columns = 'lottery'), label = 'outcome', seed = SEED)
@@ -496,25 +496,25 @@ def test_dowhy_finds_the_true_effect(kind: type[amos.Inference]) -> None:
 def test_dowhy_finds_the_effect_through_an_instrument() -> None:
     requires('dowhy')
     dataset = amos.Dataset(_instrumented(), label = 'outcome', seed = SEED)
-    inferences.InstrumentalVariable().apply(
+    inferers.InstrumentalVariable().apply(
         dataset, treatment = 'treated', instrument = 'lottery',
         simulations = 20)
     assert _covers(dataset.tables['instrumental_variable'], 'treated', 2.0)
     with pytest.raises(ValueError, match = 'instrument'):
-        inferences.InstrumentalVariable().apply(dataset, treatment = 'treated')
+        inferers.InstrumentalVariable().apply(dataset, treatment = 'treated')
 
 
 def test_dowhy_refutes_its_estimates() -> None:
     requires('dowhy')
     dataset = amos.Dataset(
         _instrumented().drop(columns = 'lottery'), label = 'outcome', seed = SEED)
-    inferences.RegressionAdjustment().apply(
+    inferers.RegressionAdjustment().apply(
         dataset, treatment = 'treated', simulations = 10,
         refuters = 'placebo_treatment_refuter, random_common_cause')
     refutations = dataset.tables['regression_adjustment_refutations']
     assert len(refutations) == 2
     with pytest.raises(ValueError, match = 'refuters'):
-        inferences.RegressionAdjustment().apply(
+        inferers.RegressionAdjustment().apply(
             dataset, treatment = 'treated', refuters = 'bootstrap')
 
 
@@ -523,7 +523,7 @@ def test_dowhy_explains_how_to_install_it(
     monkeypatch.setitem(sys.modules, 'dowhy', None)
     dataset = amos.Dataset(_treated(), label = 'outcome', seed = SEED)
     with pytest.raises(ImportError, match = 'causal extra'):
-        inferences.RegressionAdjustment().apply(dataset, treatment = 'treated')
+        inferers.RegressionAdjustment().apply(dataset, treatment = 'treated')
 
 
 # tigramite
@@ -532,7 +532,7 @@ def test_dowhy_explains_how_to_install_it(
 def test_pcmci_finds_the_true_links() -> None:
     requires('tigramite')
     series = amos.Dataset(_weeks(), label = 'backlog', seed = SEED)
-    inferences.PCMCI().apply(series, max_lag = 3, alpha = 0.01)
+    inferers.PCMCI().apply(series, max_lag = 3, alpha = 0.01)
     table = series.tables['pcmci']
     assert list(table.columns) == [
         'cause', 'effect', 'lag', 'link', 'strength', 'p_value']
@@ -543,9 +543,9 @@ def test_pcmci_finds_the_true_links() -> None:
     assert series.history[-1]['links'] == 5
 
 
-@pytest.mark.parametrize('kind', [inferences.PCMCIPlus, inferences.LPCMCI])
+@pytest.mark.parametrize('kind', [inferers.PCMCIPlus, inferers.LPCMCI])
 def test_other_discoveries_find_the_causes_between_series(
-    kind: type[amos.Inference]) -> None:
+    kind: type[amos.Inferer]) -> None:
     requires('tigramite')
     series = amos.Dataset(_weeks(), label = 'backlog', seed = SEED)
     kind().apply(series, max_lag = 3, alpha = 0.01)
@@ -557,18 +557,18 @@ def test_other_discoveries_find_the_causes_between_series(
 def test_pcmci_uses_other_tests() -> None:
     requires('tigramite')
     series = amos.Dataset(_weeks(), label = 'backlog', seed = SEED)
-    inferences.PCMCI().apply(
+    inferers.PCMCI().apply(
         series, max_lag = 2, alpha = 0.01, test = 'robust_parcorr')
     links = series.tables['pcmci'][['cause', 'effect', 'lag']].values.tolist()
     assert ['filings', 'hearings', 1] in links
     with pytest.raises(ValueError, match = 'test'):
-        inferences.PCMCI().apply(series, test = 'granger')
+        inferers.PCMCI().apply(series, test = 'granger')
 
 
 def test_time_series_effect_finds_the_effect_through_a_chain() -> None:
     requires('tigramite')
     series = amos.Dataset(_weeks(), label = 'backlog', seed = SEED)
-    inferences.TimeSeriesEffect().apply(
+    inferers.TimeSeriesEffect().apply(
         series, treatment = 'filings', lag = 3, max_lag = 3, alpha = 0.01,
         simulations = 50)
     table = series.tables['time_series_effect']
@@ -576,7 +576,7 @@ def test_time_series_effect_finds_the_effect_through_a_chain() -> None:
     assert _covers(table, 'filings (lag 3)', 0.6 * 0.8)
     assert 'time_series_effect_links' in series.tables
     with pytest.raises(ValueError, match = 'lag'):
-        inferences.TimeSeriesEffect().apply(
+        inferers.TimeSeriesEffect().apply(
             series, treatment = 'filings', lag = 4, max_lag = 3)
 
 
@@ -586,4 +586,4 @@ def test_time_series_need_no_missing_values() -> None:
     data.loc[5, 'hearings'] = np.nan
     series = amos.Dataset(data, label = 'backlog', seed = SEED)
     with pytest.raises(ValueError, match = 'missing'):
-        inferences.PCMCI().apply(series, max_lag = 2)
+        inferers.PCMCI().apply(series, max_lag = 2)

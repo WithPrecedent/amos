@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = '0.2.4'
+__version__ = '0.2.5'
 
 __author__: str = 'Corey Rayburn Yung'
 
@@ -16,7 +16,7 @@ __all__: list[str] = [
     'Findings',
     'GroupMetric',
     'Imputer',
-    'Inference',
+    'Inferer',
     'Loader',
     'Metric',
     'Mixer',
@@ -42,7 +42,7 @@ from .base import Dataset, Operation
 from .cleaners import Cleaner
 from .describers import Describer
 from .evaluators import Evaluator
-from .inferences import Inference
+from .inferers import Inferer
 from .interface import Project
 from .loaders import Loader
 from .metrics import GroupMetric, Metric

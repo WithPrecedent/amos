@@ -4,6 +4,53 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.2.5
+
+* Renamed effects to inferers and moved them from the analyst to the
+  critic, since they judge what the data can say about causes. In Python,
+  `amos.effects` is now `amos.inferers` and `amos.Effect` is now
+  `amos.Inferer`, and the genre is "inferer" in the library. The names of
+  `partially_linear` and `interactive_regression` in settings are
+  unchanged. The inferers of each package are a genre of their own
+  (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`).
+* Added the rest of DoubleML's models: `partially_linear_iv`,
+  `partially_logistic`, `partially_linear_panel`, `interactive_iv`,
+  `potential_outcomes`, `quantile_effects`, `difference_in_differences`,
+  `regression_discontinuity`, and `sample_selection`.
+  `difference_in_differences` handles two or more periods, units first
+  treated in different periods, panels (with "unit"), and repeated
+  cross-sections, and stores the effect by the number of periods since the
+  treatment as "{name}_periods". `regression_discontinuity` is sharp or
+  fuzzy, as the data show, and needs rdrobust.
+* Added DoWhy's estimators: `regression_adjustment`, `glm_adjustment`,
+  `doubly_robust`, `propensity_matching`, `propensity_stratification`,
+  `propensity_weighting`, `distance_matching`, and `instrumental_variable`,
+  with bootstrapped confidence intervals ("simulations") and DoWhy's
+  refuters ("refuters"), whose results are stored as "{name}_refutations".
+* Added causalml's meta-learners: `s_learner`, `t_learner`, `x_learner`,
+  `dr_learner`, and `tmle`, which compare each value of the treatment with
+  a "control" and store the effect for each row as "{name}_effects".
+  causalml's R-learner, causal forest, and doubly robust learner with an
+  instrument are left out, since they do not work in causalml 0.17.
+* Added tigramite's causal discovery in time series: `pcmci`, `pcmci_plus`,
+  and `lpcmci`, which store the causal links between the variables that
+  they find, and `time_series_effect`, which estimates the effect of one
+  series on the label at a lag.
+* The `causal` extra installs DoubleML, tigramite, rdrobust, and networkx,
+  and causalml on Python 3.11 and 3.12 or DoWhy on Python 3.13 and later.
+  causalml has no version for Python 3.13 and later, and on Python 3.11 and
+  3.12 the versions of DoWhy that work with pandas 3 cannot be installed
+  with it. causalml's and DoWhy's inferers explain where they cannot be
+  used.
+* Every class and function that wraps a tool from another package names the
+  tool and its package in a "Wraps:" section of its docstring, with a link to
+  its documentation, so the API reference shows which tool each technique
+  uses.
+* Using causalml no longer changes matplotlib's style (causalml sets it to
+  "fivethirtyeight" when its meta-learners are imported).
+* The advanced user guide's section on causal inference covers every
+  inferer, with a table of which to use for each design of study.
+
 ## 0.2.4
 
 * Renamed scikit-learn's logistic regression from `sk_logit` to `logit`

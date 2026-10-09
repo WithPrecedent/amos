@@ -40,7 +40,7 @@ wheels = [
 
 [[package]]
 name = "amos"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "." }
 dependencies = [
     { name = "camina" },
@@ -69,6 +69,8 @@ all = [
     { name = "lightgbm" },
     { name = "mapie" },
     { name = "matplotlib" },
+    { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "optuna" },
     { name = "optuna-integration", extra = ["sklearn"] },
     { name = "polars" },
@@ -98,6 +100,8 @@ causal = [
     { name = "causalml", marker = "python_full_version < '3.13'" },
     { name = "doubleml" },
     { name = "dowhy", marker = "python_full_version >= '3.13'" },
+    { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "rdrobust" },
     { name = "tigramite" },
 ]
@@ -180,6 +184,8 @@ dev = [
     { name = "mkdocs-minify-plugin" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "mypy" },
+    { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "optuna" },
     { name = "optuna-integration", extra = ["sklearn"] },
     { name = "pandas-stubs" },
@@ -223,6 +229,8 @@ tests = [
     { name = "lightgbm" },
     { name = "mapie" },
     { name = "matplotlib" },
+    { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "optuna" },
     { name = "optuna-integration", extra = ["sklearn"] },
     { name = "polars" },
@@ -266,6 +274,7 @@ requires-dist = [
     { name = "mapie", marker = "extra == 'uncertainty'", specifier = ">=1.0" },
     { name = "matplotlib", marker = "extra == 'plots'", specifier = ">=3.8" },
     { name = "nagata", specifier = ">=0.2.0" },
+    { name = "networkx", marker = "extra == 'causal'", specifier = ">=3.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "optuna", marker = "extra == 'tuning'", specifier = ">=4.0" },
     { name = "optuna-integration", extras = ["sklearn"], marker = "extra == 'tuning'", specifier = ">=4.0" },
@@ -316,6 +325,7 @@ dev = [
     { name = "mkdocs-minify-plugin" },
     { name = "mkdocstrings", extras = ["python"] },
     { name = "mypy" },
+    { name = "networkx", specifier = ">=3.0" },
     { name = "optuna", specifier = ">=4.0" },
     { name = "optuna-integration", extras = ["sklearn"], specifier = ">=4.0" },
     { name = "pandas-stubs" },
@@ -355,6 +365,7 @@ tests = [
     { name = "lightgbm", specifier = ">=4.0" },
     { name = "mapie", specifier = ">=1.0" },
     { name = "matplotlib", specifier = ">=3.8" },
+    { name = "networkx", specifier = ">=3.0" },
     { name = "optuna", specifier = ">=4.0" },
     { name = "optuna-integration", extras = ["sklearn"], specifier = ">=4.0" },
     { name = "polars", specifier = ">=1.0" },

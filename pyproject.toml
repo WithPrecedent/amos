@@ -7,7 +7,7 @@ authors = [{name = "Corey Rayburn Yung", email = "coreyrayburnyung@gmail.com"}]
 license = {text = "Apache Software License 2.0"}
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.2.4"
+version = "0.2.5"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -49,10 +49,12 @@ boosting = ["catboost>=1.2", "lightgbm>=4.0", "xgboost>=2.0"]
 # causalml has no wheels past Python 3.12, and on Python 3.11 and 3.12 the
 # versions of DoWhy that work with pandas 3 need an older scipy than
 # causalml does, so causalml is installed before Python 3.13 and DoWhy after.
+# tigramite's models import networkx, which tigramite does not require.
 causal = [
     "causalml>=0.17; python_version < '3.13'",
     "doubleml>=0.11",
     "dowhy>=0.14; python_version >= '3.13'",
+    "networkx>=3.0",
     "rdrobust>=2.1",
     "tigramite>=5.2"]
 encoders = ["category-encoders>=2.6", "skrub>=0.5"]
@@ -111,6 +113,7 @@ tests = [
     "lightgbm>=4.0",
     "mapie>=1.0",
     "matplotlib>=3.8",
+    "networkx>=3.0",
     "optuna>=4.0",
     "optuna-integration[sklearn]>=4.0",
     "polars>=1.0",

@@ -39,7 +39,7 @@ GENRES: tuple[tuple[str, str], ...] = (
     ('validator', 'Validators (analyst)'),
     ('metric', 'Metrics (critic)'),
     ('evaluator', 'Evaluators (critic)'),
-    ('inference', 'Inferences (critic)'),
+    ('inferer', 'Inferers (critic)'),
     ('plot', 'Plots (artist)'))
 
 

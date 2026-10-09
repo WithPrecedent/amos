@@ -261,7 +261,7 @@ imported when a technique that needs them is used (see the extras in the
 | `scorecard` | The results of every branch of an analysis, ready to publish. |
 | `shap_importance` | The mean absolute SHAP value of each feature. |
 
-## Inferences (critic)
+## Inferers (critic)
 
 | Name | Tool | Description |
 | --- | --- | --- |

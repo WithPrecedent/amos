@@ -1,6 +1,6 @@
 """Techniques that infer causal effects: how much a treatment changes things.
 
-A model predicts the label. An inference measures how much a treatment (such
+A model predicts the label. An inferer measures how much a treatment (such
 as a program, a policy, or a type of ruling) changes the label, after
 accounting for the other features, or, for time series, which variables cause
 which others and when. These are techniques of the "critic" stage, since they
@@ -19,7 +19,7 @@ causalml has no version for Python 3.13 and later, and on Python 3.11 and
 causalml, so the `causal` extra installs causalml before Python 3.13 and
 DoWhy after.
 
-Unlike a model, an inference uses every row (it does not need a split) and
+Unlike a model, an inferer uses every row (it does not need a split) and
 makes no predictions. The effect of a treatment is a table in the dataset's
 `tables` under the technique's name, with a row for each effect (of each
 treatment, group, quantile, or level) and its estimate ("coefficient"),
@@ -30,7 +30,7 @@ most need every feature that affects both the treatment and the label to be
 among the features.
 
 Contents:
-    Inference: base class for techniques that infer causal effects.
+    Inferer: base class for techniques that infer causal effects.
     Causalml, Doubleml, Dowhy, Tigramite: genres of the techniques of each
         package.
     DRLearner, SLearner, TLearner, XLearner: causalml's meta-learners.
@@ -89,12 +89,12 @@ _COLUMNS: tuple[str, ...] = (
 # DoubleML's groups of units that difference-in-differences compares the
 # treated with.
 _COMPARISONS: frozenset[str] = frozenset({'never_treated', 'not_yet_treated'})
-# Packages whose messages (printed or logged) the inferences keep quiet.
+# Packages whose messages (printed or logged) the inferers keep quiet.
 _LOGGERS: tuple[str, ...] = ('causalml', 'dowhy', 'tigramite')
 # DoubleML's scores of `quantile_effects`, by the names that it takes.
 _QUANTILE_SCORES: dict[str, str] = {
     'cvar': 'CVaR', 'local_quantile': 'LPQ', 'quantile': 'PQ'}
-# DoWhy's refuters that its inferences can run.
+# DoWhy's refuters that its inferers can run.
 _REFUTERS: frozenset[str] = frozenset({
     'data_subset_refuter', 'placebo_treatment_refuter',
     'random_common_cause'})
@@ -112,10 +112,10 @@ _Z_95: float = 1.959963984540054
 
 
 @dataclasses.dataclass
-class Inference(base.Operation, abc.ABC):
+class Inferer(base.Operation, abc.ABC):
     """Base class for techniques that infer causal effects.
 
-    Most inferences share these parameters (set in the settings or passed to
+    Most inferers share these parameters (set in the settings or passed to
     `apply`); each technique lists the others that it takes:
 
     | Parameter | Meaning |
@@ -128,7 +128,7 @@ class Inference(base.Operation, abc.ABC):
     The techniques of each package are a genre within this one: `Doubleml`,
     `Dowhy`, `Causalml`, and `Tigramite`, which write `implement`. To add a
     technique of one of those packages, subclass its genre; to add one of
-    another kind, subclass `Inference` and write `implement`.
+    another kind, subclass `Inferer` and write `implement`.
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -144,7 +144,7 @@ class Inference(base.Operation, abc.ABC):
 
 @dataclasses.dataclass(frozen = True)
 class _Learners:
-    """Builds the models that an inference fits, named as `amos` models.
+    """Builds the models that an inferer fits, named as `amos` models.
 
     Args:
         outcome: name of the model of the label.
@@ -185,7 +185,7 @@ class _Learners:
 
 @dataclasses.dataclass(frozen = True)
 class _Setup:
-    """What the estimator of an inference is built from.
+    """What the estimator of an inferer is built from.
 
     Args:
         item: the dataset.
@@ -235,7 +235,7 @@ class _Arrays:
 
 
 @dataclasses.dataclass
-class Causalml(Inference, abc.ABC):
+class Causalml(Inferer, abc.ABC):
     """Genre of causalml's estimators of effects.
 
     causalml's meta-learners combine models of the label (and of the
@@ -381,7 +381,7 @@ class Causalml(Inference, abc.ABC):
         """Returns the causalml estimator, with the model of the label.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
 
         Returns:
             The estimator.
@@ -523,7 +523,7 @@ class TMLE(Causalml):
         """Returns causalml's `TMLELearner`, cross-fitted with `n_folds` folds.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
 
         Returns:
             The estimator.
@@ -576,7 +576,7 @@ class XLearner(Causalml):
 
 
 @dataclasses.dataclass
-class Doubleml(Inference, abc.ABC):
+class Doubleml(Inferer, abc.ABC):
     """Genre of DoubleML's models (double machine learning).
 
     Double (or debiased) machine learning fits a model of the label and one
@@ -680,7 +680,7 @@ class Doubleml(Inference, abc.ABC):
         """Returns the data for the model, changed if the model needs it.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
 
         Returns:
             The data.
@@ -694,7 +694,7 @@ class Doubleml(Inference, abc.ABC):
         """Returns the other arguments for DoubleML's data.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
 
         Returns:
             The arguments (by default, `data_options`).
@@ -707,7 +707,7 @@ class Doubleml(Inference, abc.ABC):
         """Returns the DoubleML estimator, ready to fit.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
             data: DoubleML's data of the label, treatment, and features.
 
         Returns:
@@ -722,7 +722,7 @@ class Doubleml(Inference, abc.ABC):
         """Returns the table of estimates of the fitted estimator.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
             estimator: the fitted DoubleML estimator.
 
         Returns:
@@ -773,7 +773,7 @@ class DifferenceInDifferences(Doubleml):
         """Returns the data, with the period in which each unit was treated.
 
         Args:
-            setup: the data and settings of the inference, with "time" and
+            setup: the data and settings of the inferer, with "time" and
                 "unit".
 
         Returns:
@@ -799,7 +799,7 @@ class DifferenceInDifferences(Doubleml):
         """Returns the column of the units, if each row is one.
 
         Args:
-            setup: the data and settings of the inference, with "unit".
+            setup: the data and settings of the inferer, with "unit".
 
         Returns:
             The arguments for DoubleML's data.
@@ -811,7 +811,7 @@ class DifferenceInDifferences(Doubleml):
         """Returns DoubleML's `DoubleMLDIDMulti`.
 
         Args:
-            setup: the data and settings of the inference, with "unit",
+            setup: the data and settings of the inferer, with "unit",
                 "comparison" ("never_treated" by default, or
                 "not_yet_treated"), and "score" ("observational" by default,
                 or "experimental").
@@ -848,7 +848,7 @@ class DifferenceInDifferences(Doubleml):
         """Returns the average effect, and stores the effect by period.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
             estimator: the fitted DoubleML estimator.
 
         Returns:
@@ -888,7 +888,7 @@ class InteractiveIV(Doubleml):
         """Returns DoubleML's `DoubleMLIIVM`.
 
         Args:
-            setup: the data and settings of the inference, with "instrument".
+            setup: the data and settings of the inferer, with "instrument".
             data: DoubleML's data of the label, treatment, and features.
 
         Returns:
@@ -927,7 +927,7 @@ class InteractiveRegression(Doubleml):
         """Returns DoubleML's interactive regression model (`DoubleMLIRM`).
 
         Args:
-            setup: the data and settings of the inference, with "score"
+            setup: the data and settings of the inferer, with "score"
                 ("ATE" by default, or "ATTE").
             data: DoubleML's data of the label, treatment, and features.
 
@@ -966,7 +966,7 @@ class PartiallyLinear(Doubleml):
         """Returns DoubleML's partially linear regression model (`DoubleMLPLR`).
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
             data: DoubleML's data of the label, treatment, and features.
 
         Returns:
@@ -1006,7 +1006,7 @@ class PartiallyLinearIV(Doubleml):
         """Returns DoubleML's `DoubleMLPLIV`.
 
         Args:
-            setup: the data and settings of the inference, with "instrument".
+            setup: the data and settings of the inferer, with "instrument".
             data: DoubleML's data of the label, treatment, and features.
 
         Returns:
@@ -1052,7 +1052,7 @@ class PartiallyLinearPanel(Doubleml):
         """Returns the data, with each unit numbered.
 
         Args:
-            setup: the data and settings of the inference, with "unit".
+            setup: the data and settings of the inferer, with "unit".
 
         Returns:
             The data.
@@ -1067,7 +1067,7 @@ class PartiallyLinearPanel(Doubleml):
         """Returns DoubleML's `DoubleMLPLPR`.
 
         Args:
-            setup: the data and settings of the inference, with "approach"
+            setup: the data and settings of the inferer, with "approach"
                 ("fd_exact" by default).
             data: DoubleML's data of the label, treatment, and features.
 
@@ -1087,7 +1087,7 @@ class PartiallyLinearPanel(Doubleml):
         """Returns the estimate, labeled with the name of the treatment.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
             estimator: the fitted DoubleML estimator.
 
         Returns:
@@ -1123,7 +1123,7 @@ class PartiallyLogistic(Doubleml):
         """Returns DoubleML's `DoubleMLLPLR`.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
             data: DoubleML's data of the label, treatment, and features.
 
         Raises:
@@ -1167,7 +1167,7 @@ class PotentialOutcomes(Doubleml):
         """Returns the data, with levels that are not numbers numbered.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
 
         Returns:
             The data.
@@ -1182,7 +1182,7 @@ class PotentialOutcomes(Doubleml):
         """Returns DoubleML's `DoubleMLAPOS`.
 
         Args:
-            setup: the data and settings of the inference, with "levels".
+            setup: the data and settings of the inferer, with "levels".
             data: DoubleML's data of the label, treatment, and features.
 
         Returns:
@@ -1203,7 +1203,7 @@ class PotentialOutcomes(Doubleml):
         """Returns the differences between each level and the reference.
 
         Args:
-            setup: the data and settings of the inference, with "levels" and
+            setup: the data and settings of the inferer, with "levels" and
                 "reference".
             estimator: the fitted DoubleML estimator.
 
@@ -1249,7 +1249,7 @@ class QuantileEffects(Doubleml):
         """Returns DoubleML's `DoubleMLQTE`.
 
         Args:
-            setup: the data and settings of the inference, with "quantiles",
+            setup: the data and settings of the inferer, with "quantiles",
                 "score", and "instrument".
             data: DoubleML's data of the label, treatment, and features.
 
@@ -1293,7 +1293,7 @@ class QuantileEffects(Doubleml):
         """Returns the estimates, with a row for each quantile.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
             estimator: the fitted DoubleML estimator.
 
         Returns:
@@ -1337,7 +1337,7 @@ class RegressionDiscontinuity(Doubleml):
         """Returns DoubleML's `RDFlex`.
 
         Args:
-            setup: the data and settings of the inference, with "running" and
+            setup: the data and settings of the inferer, with "running" and
                 "cutoff" (0 by default).
             data: DoubleML's data of the label, treatment, and features.
 
@@ -1364,7 +1364,7 @@ class RegressionDiscontinuity(Doubleml):
         """Returns the conventional estimate with its robust uncertainty.
 
         Args:
-            setup: the data and settings of the inference.
+            setup: the data and settings of the inferer.
             estimator: the fitted `RDFlex`.
 
         Returns:
@@ -1415,7 +1415,7 @@ class SampleSelection(Doubleml):
         labels of the rows that were not selected.
 
         Args:
-            setup: the data and settings of the inference, with "selected".
+            setup: the data and settings of the inferer, with "selected".
 
         Returns:
             The data.
@@ -1430,7 +1430,7 @@ class SampleSelection(Doubleml):
         """Returns DoubleML's `DoubleMLSSM`.
 
         Args:
-            setup: the data and settings of the inference, with "selected" and
+            setup: the data and settings of the inferer, with "selected" and
                 "instrument".
             data: DoubleML's data of the label, treatment, and features.
 
@@ -1455,7 +1455,7 @@ class SampleSelection(Doubleml):
 
 
 @dataclasses.dataclass
-class Dowhy(Inference, abc.ABC):
+class Dowhy(Inferer, abc.ABC):
     """Genre of DoWhy's methods of estimation.
 
     DoWhy models the features as causes of both the treatment and the label
@@ -1791,7 +1791,7 @@ class RegressionAdjustment(Dowhy):
 
 
 @dataclasses.dataclass
-class Tigramite(Inference, abc.ABC):
+class Tigramite(Inferer, abc.ABC):
     """Genre of tigramite's methods of causal discovery in time series.
 
     The rows are a time series, in order, and the variables are the label
@@ -2463,7 +2463,7 @@ def _prepare(
     item: base.Dataset,
     columns: Sequence[str],
     technique: str) -> tuple[pd.DataFrame, str, list[str]]:
-    """Returns the data of an inference: the label, `columns`, and the controls.
+    """Returns the data of an inferer: the label, `columns`, and the controls.
 
     The controls are the features that are not among `columns`.
 
@@ -2540,7 +2540,7 @@ def _propensity(
 
 @contextlib.contextmanager
 def _quiet() -> Iterator[None]:
-    """Keeps the inferences' packages from printing, logging, and warning.
+    """Keeps the inferers' packages from printing, logging, and warning.
 
     causalml prints a message when it is imported, and the packages log
     their progress and warn about the data.
@@ -2570,14 +2570,14 @@ def _record(
     tool: Any,
     table: pd.DataFrame,
     **details: Any) -> None:
-    """Records an inference in the dataset's history.
+    """Records what an inferer found in the dataset's history.
 
     Args:
         item: the dataset.
         technique: name of the technique.
         tool: the estimator that found the effect.
         table: the table of estimates.
-        **details: the inference's parameters to record.
+        **details: the inferer's parameters to record.
 
     """
     effect = float(table['coefficient'].iloc[0]) if len(table) else None

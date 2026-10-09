@@ -83,7 +83,7 @@ def test_every_genre_is_in_the_operation_layer() -> None:
     for genre in (
         'loader', 'cleaner', 'munger', 'describer', 'splitter',
         'transformer', 'sampler', 'model', 'validator', 'metric',
-        'evaluator', 'inference', 'plot'):
+        'evaluator', 'inferer', 'plot'):
         assert isinstance(operations[genre], dict), genre
     assert isinstance(operations['metric']['group_metric'], dict)
     for genre in ('imputer', 'scaler', 'encoder', 'mixer', 'reducer'):
@@ -101,7 +101,7 @@ def test_every_concrete_operation_is_in_the_library() -> None:
         amos.loaders, amos.cleaners, amos.mungers, amos.describers,
         amos.splitters, amos.transformers, amos.samplers, amos.models,
         amos.validators, amos.metrics, amos.evaluators, amos.plots,
-        amos.inferences)
+        amos.inferers)
     for module in modules:
         for _, kind in inspect.getmembers(module, inspect.isclass):
             if (

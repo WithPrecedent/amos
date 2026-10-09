@@ -42,7 +42,7 @@ Most contributions to `amos` are new techniques. To add one:
 
 1. Find the module of its genre (`loaders`, `cleaners`, `mungers`,
    `describers`, `splitters`, `transformers`, `samplers`, `models`,
-   `validators`, `metrics`, `evaluators`, `inferences`, or `plots`) and copy a
+   `validators`, `metrics`, `evaluators`, `inferers`, or `plots`) and copy a
    similar technique. Every class is a `dataclasses.dataclass`.
 2. Wrap tools from other packages by their import paths (in `contents` or
    `tools`), not by importing them at the top of a module. They are imported
