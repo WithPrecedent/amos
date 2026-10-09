@@ -264,14 +264,26 @@ class GroupMetric(Metric, abc.ABC):
 
 @dataclasses.dataclass
 class Accuracy(Metric):
-    """The share of rows classified correctly."""
+    """The share of rows classified correctly.
+
+    Wraps:
+        [`sklearn.metrics.accuracy_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.accuracy_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.accuracy_score'
 
 
 @dataclasses.dataclass
 class AveragePrecision(Metric):
-    """The area under the precision-recall curve."""
+    """The area under the precision-recall curve.
+
+    Wraps:
+        [`sklearn.metrics.average_precision_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.average_precision_score'
     uses_probabilities: ClassVar[bool] = True
@@ -279,14 +291,26 @@ class AveragePrecision(Metric):
 
 @dataclasses.dataclass
 class BalancedAccuracy(Metric):
-    """The average share of each class classified correctly."""
+    """The average share of each class classified correctly.
+
+    Wraps:
+        [`sklearn.metrics.balanced_accuracy_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.balanced_accuracy_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.balanced_accuracy_score'
 
 
 @dataclasses.dataclass
 class Brier(Metric):
-    """The mean squared error of the predicted probabilities (lower is better)."""
+    """The mean squared error of the predicted probabilities (lower is better).
+
+    Wraps:
+        [`sklearn.metrics.brier_score_loss`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.brier_score_loss.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.brier_score_loss'
     greater_is_better: ClassVar[bool] = False
@@ -295,21 +319,39 @@ class Brier(Metric):
 
 @dataclasses.dataclass
 class CohenKappa(Metric):
-    """Agreement between the predictions and labels beyond chance."""
+    """Agreement between the predictions and labels beyond chance.
+
+    Wraps:
+        [`sklearn.metrics.cohen_kappa_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.cohen_kappa_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.cohen_kappa_score'
 
 
 @dataclasses.dataclass
 class F1(Metric):
-    """The harmonic mean of precision and recall."""
+    """The harmonic mean of precision and recall.
+
+    Wraps:
+        [`sklearn.metrics.f1_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.f1_score'
 
 
 @dataclasses.dataclass
 class LogLoss(Metric):
-    """The negative log-likelihood of the true labels (lower is better)."""
+    """The negative log-likelihood of the true labels (lower is better).
+
+    Wraps:
+        [`sklearn.metrics.log_loss`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.log_loss.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.log_loss'
     greater_is_better: ClassVar[bool] = False
@@ -318,14 +360,26 @@ class LogLoss(Metric):
 
 @dataclasses.dataclass
 class Matthews(Metric):
-    """The Matthews correlation coefficient (phi for two classes)."""
+    """The Matthews correlation coefficient (phi for two classes).
+
+    Wraps:
+        [`sklearn.metrics.matthews_corrcoef`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.matthews_corrcoef.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.matthews_corrcoef'
 
 
 @dataclasses.dataclass
 class Precision(Metric):
-    """The share of rows predicted to be positive that are positive."""
+    """The share of rows predicted to be positive that are positive.
+
+    Wraps:
+        [`sklearn.metrics.precision_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.precision_score'
     parameters: base.GenericDict = dataclasses.field(
@@ -334,7 +388,13 @@ class Precision(Metric):
 
 @dataclasses.dataclass
 class Recall(Metric):
-    """The share of positive rows that are predicted to be positive."""
+    """The share of positive rows that are predicted to be positive.
+
+    Wraps:
+        [`sklearn.metrics.recall_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.recall_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.recall_score'
     parameters: base.GenericDict = dataclasses.field(
@@ -343,7 +403,13 @@ class Recall(Metric):
 
 @dataclasses.dataclass
 class RocAuc(Metric):
-    """The area under the receiver operating characteristic (ROC) curve."""
+    """The area under the receiver operating characteristic (ROC) curve.
+
+    Wraps:
+        [`sklearn.metrics.roc_auc_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.roc_auc_score'
     uses_probabilities: ClassVar[bool] = True
@@ -354,7 +420,13 @@ class RocAuc(Metric):
 
 @dataclasses.dataclass
 class DemographicParity(GroupMetric):
-    """The largest gap between groups in the share predicted to be positive."""
+    """The largest gap between groups in the share predicted to be positive.
+
+    Wraps:
+        [`fairlearn.metrics.demographic_parity_difference`](https://fairlearn.org/v0.14/api_reference/generated/fairlearn.metrics.demographic_parity_difference.html)
+        from fairlearn.
+
+    """
 
     contents: str = 'fairlearn.metrics.demographic_parity_difference'
     greater_is_better: ClassVar[bool] = False
@@ -362,14 +434,26 @@ class DemographicParity(GroupMetric):
 
 @dataclasses.dataclass
 class DemographicParityRatio(GroupMetric):
-    """The smallest group's share predicted positive over the largest's."""
+    """The smallest group's share predicted positive over the largest's.
+
+    Wraps:
+        [`fairlearn.metrics.demographic_parity_ratio`](https://fairlearn.org/v0.14/api_reference/generated/fairlearn.metrics.demographic_parity_ratio.html)
+        from fairlearn.
+
+    """
 
     contents: str = 'fairlearn.metrics.demographic_parity_ratio'
 
 
 @dataclasses.dataclass
 class EqualOpportunity(GroupMetric):
-    """The largest gap between groups in the true positive rate."""
+    """The largest gap between groups in the true positive rate.
+
+    Wraps:
+        [`fairlearn.metrics.equal_opportunity_difference`](https://fairlearn.org/v0.14/api_reference/generated/fairlearn.metrics.equal_opportunity_difference.html)
+        from fairlearn.
+
+    """
 
     contents: str = 'fairlearn.metrics.equal_opportunity_difference'
     greater_is_better: ClassVar[bool] = False
@@ -377,14 +461,26 @@ class EqualOpportunity(GroupMetric):
 
 @dataclasses.dataclass
 class EqualOpportunityRatio(GroupMetric):
-    """The smallest group's true positive rate over the largest's."""
+    """The smallest group's true positive rate over the largest's.
+
+    Wraps:
+        [`fairlearn.metrics.equal_opportunity_ratio`](https://fairlearn.org/v0.14/api_reference/generated/fairlearn.metrics.equal_opportunity_ratio.html)
+        from fairlearn.
+
+    """
 
     contents: str = 'fairlearn.metrics.equal_opportunity_ratio'
 
 
 @dataclasses.dataclass
 class EqualizedOdds(GroupMetric):
-    """The larger gap between groups in true or false positive rates."""
+    """The larger gap between groups in true or false positive rates.
+
+    Wraps:
+        [`fairlearn.metrics.equalized_odds_difference`](https://fairlearn.org/v0.14/api_reference/generated/fairlearn.metrics.equalized_odds_difference.html)
+        from fairlearn.
+
+    """
 
     contents: str = 'fairlearn.metrics.equalized_odds_difference'
     greater_is_better: ClassVar[bool] = False
@@ -392,7 +488,13 @@ class EqualizedOdds(GroupMetric):
 
 @dataclasses.dataclass
 class EqualizedOddsRatio(GroupMetric):
-    """The smaller ratio between groups of true or false positive rates."""
+    """The smaller ratio between groups of true or false positive rates.
+
+    Wraps:
+        [`fairlearn.metrics.equalized_odds_ratio`](https://fairlearn.org/v0.14/api_reference/generated/fairlearn.metrics.equalized_odds_ratio.html)
+        from fairlearn.
+
+    """
 
     contents: str = 'fairlearn.metrics.equalized_odds_ratio'
 
@@ -440,7 +542,13 @@ class Concordance(Metric):
 
 @dataclasses.dataclass
 class ExplainedVariance(Metric):
-    """The share of the variance of the label that the model explains."""
+    """The share of the variance of the label that the model explains.
+
+    Wraps:
+        [`sklearn.metrics.explained_variance_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.explained_variance_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.explained_variance_score'
     tasks: ClassVar[tuple[str, ...]] = ('regress',)
@@ -448,7 +556,13 @@ class ExplainedVariance(Metric):
 
 @dataclasses.dataclass
 class MAE(Metric):
-    """The mean absolute error (lower is better)."""
+    """The mean absolute error (lower is better).
+
+    Wraps:
+        [`sklearn.metrics.mean_absolute_error`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_absolute_error.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.mean_absolute_error'
     greater_is_better: ClassVar[bool] = False
@@ -457,7 +571,13 @@ class MAE(Metric):
 
 @dataclasses.dataclass
 class MAPE(Metric):
-    """The mean absolute percentage error (lower is better)."""
+    """The mean absolute percentage error (lower is better).
+
+    Wraps:
+        [`sklearn.metrics.mean_absolute_percentage_error`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_absolute_percentage_error.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.mean_absolute_percentage_error'
     greater_is_better: ClassVar[bool] = False
@@ -466,7 +586,13 @@ class MAPE(Metric):
 
 @dataclasses.dataclass
 class MSE(Metric):
-    """The mean squared error (lower is better)."""
+    """The mean squared error (lower is better).
+
+    Wraps:
+        [`sklearn.metrics.mean_squared_error`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_squared_error.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.mean_squared_error'
     greater_is_better: ClassVar[bool] = False
@@ -475,7 +601,13 @@ class MSE(Metric):
 
 @dataclasses.dataclass
 class R2(Metric):
-    """The coefficient of determination (R squared)."""
+    """The coefficient of determination (R squared).
+
+    Wraps:
+        [`sklearn.metrics.r2_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.r2_score'
     tasks: ClassVar[tuple[str, ...]] = ('regress',)
@@ -483,7 +615,13 @@ class R2(Metric):
 
 @dataclasses.dataclass
 class RMSE(Metric):
-    """The root mean squared error (lower is better)."""
+    """The root mean squared error (lower is better).
+
+    Wraps:
+        [`sklearn.metrics.root_mean_squared_error`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.root_mean_squared_error.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.metrics.root_mean_squared_error'
     greater_is_better: ClassVar[bool] = False

@@ -372,7 +372,13 @@ class Reducer(Transformer, abc.ABC):
 
 @dataclasses.dataclass
 class IterativeImpute(Imputer):
-    """Fills missing values by modeling each feature from the others."""
+    """Fills missing values by modeling each feature from the others.
+
+    Wraps:
+        [`sklearn.impute.IterativeImputer`](https://scikit-learn.org/stable/modules/generated/sklearn.impute.IterativeImputer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.impute.IterativeImputer'
 
@@ -399,14 +405,26 @@ class IterativeImpute(Imputer):
 
 @dataclasses.dataclass
 class KnnImpute(Imputer):
-    """Fills missing values with the average of the most similar rows."""
+    """Fills missing values with the average of the most similar rows.
+
+    Wraps:
+        [`sklearn.impute.KNNImputer`](https://scikit-learn.org/stable/modules/generated/sklearn.impute.KNNImputer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.impute.KNNImputer'
 
 
 @dataclasses.dataclass
 class MeanImpute(Imputer):
-    """Fills missing values with the mean of the training rows."""
+    """Fills missing values with the mean of the training rows.
+
+    Wraps:
+        [`sklearn.impute.SimpleImputer`](https://scikit-learn.org/stable/modules/generated/sklearn.impute.SimpleImputer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.impute.SimpleImputer'
     parameters: base.GenericDict = dataclasses.field(
@@ -415,7 +433,13 @@ class MeanImpute(Imputer):
 
 @dataclasses.dataclass
 class MedianImpute(Imputer):
-    """Fills missing values with the median of the training rows."""
+    """Fills missing values with the median of the training rows.
+
+    Wraps:
+        [`sklearn.impute.SimpleImputer`](https://scikit-learn.org/stable/modules/generated/sklearn.impute.SimpleImputer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.impute.SimpleImputer'
     parameters: base.GenericDict = dataclasses.field(
@@ -427,6 +451,10 @@ class ModeImpute(Imputer):
     """Fills missing values with the most common value of the training rows.
 
     Unlike the other imputers, this fills features of every kind.
+
+    Wraps:
+        [`sklearn.impute.SimpleImputer`](https://scikit-learn.org/stable/modules/generated/sklearn.impute.SimpleImputer.html)
+        from scikit-learn.
 
     """
 
@@ -442,7 +470,13 @@ class ModeImpute(Imputer):
 
 @dataclasses.dataclass
 class Bins(Scaler):
-    """Sorts each feature into bins with about the same number of rows."""
+    """Sorts each feature into bins with about the same number of rows.
+
+    Wraps:
+        [`sklearn.preprocessing.KBinsDiscretizer`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.KBinsDiscretizer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.KBinsDiscretizer'
     parameters: base.GenericDict = dataclasses.field(
@@ -456,42 +490,78 @@ class Bins(Scaler):
 
 @dataclasses.dataclass
 class Binarize(Scaler):
-    """Makes each feature 1 if it is above a threshold (0 by default)."""
+    """Makes each feature 1 if it is above a threshold (0 by default).
+
+    Wraps:
+        [`sklearn.preprocessing.Binarizer`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.Binarizer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.Binarizer'
 
 
 @dataclasses.dataclass
 class Gauss(Scaler):
-    """Makes each feature more like a normal distribution (Yeo-Johnson)."""
+    """Makes each feature more like a normal distribution (Yeo-Johnson).
+
+    Wraps:
+        [`sklearn.preprocessing.PowerTransformer`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PowerTransformer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.PowerTransformer'
 
 
 @dataclasses.dataclass
 class MaxAbs(Scaler):
-    """Divides each feature by its largest absolute value."""
+    """Divides each feature by its largest absolute value.
+
+    Wraps:
+        [`sklearn.preprocessing.MaxAbsScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MaxAbsScaler.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.MaxAbsScaler'
 
 
 @dataclasses.dataclass
 class MinMax(Scaler):
-    """Rescales each feature to the range from 0 to 1."""
+    """Rescales each feature to the range from 0 to 1.
+
+    Wraps:
+        [`sklearn.preprocessing.MinMaxScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.MinMaxScaler'
 
 
 @dataclasses.dataclass
 class Normalize(Scaler):
-    """Rescales each row to a length of 1."""
+    """Rescales each row to a length of 1.
+
+    Wraps:
+        [`sklearn.preprocessing.Normalizer`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.Normalizer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.Normalizer'
 
 
 @dataclasses.dataclass
 class Quantile(Scaler):
-    """Replaces each value with its quantile in the training rows."""
+    """Replaces each value with its quantile in the training rows.
+
+    Wraps:
+        [`sklearn.preprocessing.QuantileTransformer`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.QuantileTransformer'
 
@@ -515,14 +585,26 @@ class Quantile(Scaler):
 
 @dataclasses.dataclass
 class Robust(Scaler):
-    """Centers on the median and scales by the interquartile range."""
+    """Centers on the median and scales by the interquartile range.
+
+    Wraps:
+        [`sklearn.preprocessing.RobustScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.RobustScaler'
 
 
 @dataclasses.dataclass
 class Standard(Scaler):
-    """Centers each feature on 0 with a standard deviation of 1."""
+    """Centers each feature on 0 with a standard deviation of 1.
+
+    Wraps:
+        [`sklearn.preprocessing.StandardScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.StandardScaler'
 
@@ -532,14 +614,26 @@ class Standard(Scaler):
 
 @dataclasses.dataclass
 class BackwardDifference(Encoder):
-    """Compares each category to the one before it."""
+    """Compares each category to the one before it.
+
+    Wraps:
+        [`category_encoders.BackwardDifferenceEncoder`](https://contrib.scikit-learn.org/category_encoders/backward_difference.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.BackwardDifferenceEncoder'
 
 
 @dataclasses.dataclass
 class BaseN(Encoder):
-    """Writes the number of each category in base N (4 by default)."""
+    """Writes the number of each category in base N (4 by default).
+
+    Wraps:
+        [`category_encoders.BaseNEncoder`](https://contrib.scikit-learn.org/category_encoders/basen.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.BaseNEncoder'
     parameters: base.GenericDict = dataclasses.field(
@@ -548,21 +642,39 @@ class BaseN(Encoder):
 
 @dataclasses.dataclass
 class Binary(Encoder):
-    """Writes the number of each category in binary digits."""
+    """Writes the number of each category in binary digits.
+
+    Wraps:
+        [`category_encoders.BinaryEncoder`](https://contrib.scikit-learn.org/category_encoders/binary.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.BinaryEncoder'
 
 
 @dataclasses.dataclass
 class CatBoost(Encoder):
-    """Target encoding in the manner of CatBoost, which limits leakage."""
+    """Target encoding in the manner of CatBoost, which limits leakage.
+
+    Wraps:
+        [`category_encoders.CatBoostEncoder`](https://contrib.scikit-learn.org/category_encoders/catboost.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.CatBoostEncoder'
 
 
 @dataclasses.dataclass
 class Count(Encoder):
-    """Replaces each category with how often it is in the training rows."""
+    """Replaces each category with how often it is in the training rows.
+
+    Wraps:
+        [`category_encoders.CountEncoder`](https://contrib.scikit-learn.org/category_encoders/count.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.CountEncoder'
 
@@ -573,6 +685,10 @@ class DateParts(Encoder):
 
     This is the only encoder that changes dates (and only dates) by default,
     so it lets models use them. It wraps skrub's `DatetimeEncoder`.
+
+    Wraps:
+        [`skrub.DatetimeEncoder`](https://skrub-data.org/stable/reference/generated/skrub.DatetimeEncoder.html)
+        from skrub.
 
     """
 
@@ -591,6 +707,10 @@ class Gap(Encoder):
     substrings of its topic, so it can be interpreted. It wraps skrub's
     `GapEncoder` (10 topics by default).
 
+    Wraps:
+        [`skrub.GapEncoder`](https://skrub-data.org/stable/reference/generated/skrub.GapEncoder.html)
+        from skrub.
+
     """
 
     columnwise: ClassVar[bool] = True
@@ -600,7 +720,13 @@ class Gap(Encoder):
 
 @dataclasses.dataclass
 class Hashing(Encoder):
-    """Hashes the categories into a fixed number of columns."""
+    """Hashes the categories into a fixed number of columns.
+
+    Wraps:
+        [`category_encoders.HashingEncoder`](https://contrib.scikit-learn.org/category_encoders/hashing.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.HashingEncoder'
     parameters: base.GenericDict = dataclasses.field(
@@ -609,28 +735,52 @@ class Hashing(Encoder):
 
 @dataclasses.dataclass
 class Helmert(Encoder):
-    """Compares each category to the mean of the categories before it."""
+    """Compares each category to the mean of the categories before it.
+
+    Wraps:
+        [`category_encoders.HelmertEncoder`](https://contrib.scikit-learn.org/category_encoders/helmert.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.HelmertEncoder'
 
 
 @dataclasses.dataclass
 class JamesStein(Encoder):
-    """Target encoding shrunk toward the overall mean (James-Stein)."""
+    """Target encoding shrunk toward the overall mean (James-Stein).
+
+    Wraps:
+        [`category_encoders.JamesSteinEncoder`](https://contrib.scikit-learn.org/category_encoders/jamesstein.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.JamesSteinEncoder'
 
 
 @dataclasses.dataclass
 class LeaveOneOut(Encoder):
-    """Target encoding that leaves out each row's own label."""
+    """Target encoding that leaves out each row's own label.
+
+    Wraps:
+        [`category_encoders.LeaveOneOutEncoder`](https://contrib.scikit-learn.org/category_encoders/leaveoneout.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.LeaveOneOutEncoder'
 
 
 @dataclasses.dataclass
 class MEstimate(Encoder):
-    """Target encoding shrunk toward the overall mean by m rows."""
+    """Target encoding shrunk toward the overall mean by m rows.
+
+    Wraps:
+        [`category_encoders.MEstimateEncoder`](https://contrib.scikit-learn.org/category_encoders/mestimate.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.MEstimateEncoder'
 
@@ -641,6 +791,10 @@ class MinHash(Encoder):
 
     It wraps skrub's `MinHashEncoder` (30 columns for each column by
     default).
+
+    Wraps:
+        [`skrub.MinHashEncoder`](https://skrub-data.org/stable/reference/generated/skrub.MinHashEncoder.html)
+        from skrub.
 
     """
 
@@ -654,6 +808,10 @@ class OneHot(Encoder):
     """Makes a column of 0s and 1s for each category (dummy variables).
 
     Categories that are not in the training rows are all 0s.
+
+    Wraps:
+        [`sklearn.preprocessing.OneHotEncoder`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OneHotEncoder.html)
+        from scikit-learn.
 
     """
 
@@ -670,6 +828,10 @@ class Ordinal(Encoder):
 
     Categories that are not in the training rows are -1.
 
+    Wraps:
+        [`sklearn.preprocessing.OrdinalEncoder`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OrdinalEncoder.html)
+        from scikit-learn.
+
     """
 
     contents: str = 'sklearn.preprocessing.OrdinalEncoder'
@@ -681,21 +843,39 @@ class Ordinal(Encoder):
 
 @dataclasses.dataclass
 class PolynomialCoding(Encoder):
-    """Contrasts categories as an ordered (polynomial) sequence."""
+    """Contrasts categories as an ordered (polynomial) sequence.
+
+    Wraps:
+        [`category_encoders.PolynomialEncoder`](https://contrib.scikit-learn.org/category_encoders/polynomial.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.PolynomialEncoder'
 
 
 @dataclasses.dataclass
 class SumCoding(Encoder):
-    """Compares each category to the mean of all categories (effect coding)."""
+    """Compares each category to the mean of all categories (effect coding).
+
+    Wraps:
+        [`category_encoders.SumEncoder`](https://contrib.scikit-learn.org/category_encoders/sum.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.SumEncoder'
 
 
 @dataclasses.dataclass
 class Target(Encoder):
-    """Replaces each category with the mean label of its training rows."""
+    """Replaces each category with the mean label of its training rows.
+
+    Wraps:
+        [`category_encoders.TargetEncoder`](https://contrib.scikit-learn.org/category_encoders/targetencoder.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.TargetEncoder'
 
@@ -707,6 +887,10 @@ class Tfidf(Encoder):
     A strong default for text categories with many distinct values. It wraps
     skrub's `StringEncoder` (30 columns for each column by default).
 
+    Wraps:
+        [`skrub.StringEncoder`](https://skrub-data.org/stable/reference/generated/skrub.StringEncoder.html)
+        from skrub.
+
     """
 
     columnwise: ClassVar[bool] = True
@@ -716,7 +900,13 @@ class Tfidf(Encoder):
 
 @dataclasses.dataclass
 class WeightOfEvidence(Encoder):
-    """Replaces each category with its weight of evidence (binary labels)."""
+    """Replaces each category with its weight of evidence (binary labels).
+
+    Wraps:
+        [`category_encoders.WOEEncoder`](https://contrib.scikit-learn.org/category_encoders/woe.html)
+        from category_encoders.
+
+    """
 
     contents: str = 'category_encoders.WOEEncoder'
 
@@ -726,7 +916,13 @@ class WeightOfEvidence(Encoder):
 
 @dataclasses.dataclass
 class Interactions(Mixer):
-    """Adds the product of each pair of features."""
+    """Adds the product of each pair of features.
+
+    Wraps:
+        [`sklearn.preprocessing.PolynomialFeatures`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PolynomialFeatures.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.PolynomialFeatures'
     parameters: base.GenericDict = dataclasses.field(
@@ -737,7 +933,13 @@ class Interactions(Mixer):
 
 @dataclasses.dataclass
 class Polynomial(Mixer):
-    """Adds the squares and products of the features (degree 2 by default)."""
+    """Adds the squares and products of the features (degree 2 by default).
+
+    Wraps:
+        [`sklearn.preprocessing.PolynomialFeatures`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PolynomialFeatures.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.PolynomialFeatures'
     parameters: base.GenericDict = dataclasses.field(
@@ -746,7 +948,13 @@ class Polynomial(Mixer):
 
 @dataclasses.dataclass
 class Splines(Mixer):
-    """Replaces each feature with a set of spline curves."""
+    """Replaces each feature with a set of spline curves.
+
+    Wraps:
+        [`sklearn.preprocessing.SplineTransformer`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.SplineTransformer.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.preprocessing.SplineTransformer'
 
@@ -760,6 +968,10 @@ class KBest(Reducer):
 
     The default test is an F test suited to the task (`f_classif` or
     `f_regression`). Set "score_func" to another function or its import path.
+
+    Wraps:
+        [`sklearn.feature_selection.SelectKBest`](https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.SelectKBest.html)
+        from scikit-learn.
 
     """
 
@@ -808,6 +1020,10 @@ class PCAReduce(Reducer):
     By default, it keeps enough components to explain 95% of the variance.
     Scale the features first.
 
+    Wraps:
+        [`sklearn.decomposition.PCA`](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html)
+        from scikit-learn.
+
     """
 
     contents: str = 'sklearn.decomposition.PCA'
@@ -821,6 +1037,10 @@ class SelectPercentile(Reducer):
 
     The default test is an F test suited to the task (`f_classif` or
     `f_regression`). Set "score_func" to another function or its import path.
+
+    Wraps:
+        [`sklearn.feature_selection.SelectPercentile`](https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.SelectPercentile.html)
+        from scikit-learn.
 
     """
 
@@ -847,7 +1067,13 @@ class SelectPercentile(Reducer):
 
 @dataclasses.dataclass
 class VarianceThreshold(Reducer):
-    """Removes features whose variance is at or below a threshold (0)."""
+    """Removes features whose variance is at or below a threshold (0).
+
+    Wraps:
+        [`sklearn.feature_selection.VarianceThreshold`](https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.VarianceThreshold.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.feature_selection.VarianceThreshold'
 
@@ -915,6 +1141,12 @@ def _with_score_function(
     item: base.Dataset,
     parameters: dict[str, Any]) -> dict[str, Any]:
     """Returns `parameters` with a scoring function for feature selection.
+
+    Wraps:
+        - [`sklearn.feature_selection.f_classif`](https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.f_classif.html)
+          from scikit-learn, by default, to classify.
+        - [`sklearn.feature_selection.f_regression`](https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.f_regression.html)
+          from scikit-learn, by default, to regress.
 
     Args:
         item: the dataset.

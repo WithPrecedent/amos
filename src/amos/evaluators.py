@@ -109,7 +109,13 @@ class Evaluator(base.Operation, abc.ABC):
 
 @dataclasses.dataclass
 class ClassificationReport(Evaluator):
-    """Precision, recall, f1, and the number of rows of each class."""
+    """Precision, recall, f1, and the number of rows of each class.
+
+    Wraps:
+        [`sklearn.metrics.classification_report`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.classification_report.html)
+        from scikit-learn.
+
+    """
 
     def evaluate(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns scikit-learn's classification report as a table.
@@ -131,7 +137,13 @@ class ClassificationReport(Evaluator):
 
 @dataclasses.dataclass
 class Confusion(Evaluator):
-    """How many rows of each class were predicted to be each class."""
+    """How many rows of each class were predicted to be each class.
+
+    Wraps:
+        [`sklearn.metrics.confusion_matrix`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html)
+        from scikit-learn.
+
+    """
 
     def evaluate(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns the confusion matrix.
@@ -168,6 +180,12 @@ class Conformal(Evaluator):
     test row. The share of rows covered ("coverage") and the mean width of
     the intervals ("interval_width") or size of the sets ("set_size") are
     stored in the dataset's `metrics`.
+
+    Wraps:
+        - [`mapie.classification.CrossConformalClassifier`](https://mapie.readthedocs.io/en/stable/api/classification/#mapie.classification.CrossConformalClassifier)
+          from MAPIE, to classify.
+        - [`mapie.regression.CrossConformalRegressor`](https://mapie.readthedocs.io/en/stable/api/regression/#mapie.regression.CrossConformalRegressor)
+          from MAPIE, to regress.
 
     """
 
@@ -270,6 +288,10 @@ class ExplainWeights(Evaluator):
     for trees and boosting, they are the importances and their spread across
     the trees. The table is eli5's, with the 20 largest weights by default.
 
+    Wraps:
+        [`eli5.explain_weights_df`](https://eli5.readthedocs.io/en/latest/autodocs/eli5.html#eli5.explain_weights_df)
+        from eli5.
+
     """
 
     def evaluate(
@@ -316,6 +338,10 @@ class FactorAnalysis(Evaluator):
     the factors explain), and its uniqueness (the rest). By default, there is
     a factor for each eigenvalue of the features' correlations above 1
     (Kaiser's rule), and the loadings are rotated by varimax.
+
+    Wraps:
+        [`statsmodels.multivariate.factor.Factor`](https://www.statsmodels.org/stable/generated/statsmodels.multivariate.factor.Factor.html)
+        from statsmodels.
 
     """
 
@@ -373,6 +399,10 @@ class Fairness(Evaluator):
     (the selection rate), accuracy, and the true and false positive rates.
     The last two rows are the largest difference and the smallest ratio
     between groups. The label must have two classes.
+
+    Wraps:
+        [`fairlearn.metrics.MetricFrame`](https://fairlearn.org/v0.14/api_reference/generated/fairlearn.metrics.MetricFrame.html)
+        from fairlearn.
 
     """
 
@@ -475,6 +505,10 @@ class PCA(Evaluator):
     share of the variance it explains, and the loading of each feature on
     each component is stored in `tables` as "{name}_loadings".
 
+    Wraps:
+        [`statsmodels.multivariate.pca.PCA`](https://www.statsmodels.org/stable/generated/statsmodels.multivariate.pca.PCA.html)
+        from statsmodels.
+
     """
 
     def evaluate(
@@ -537,6 +571,10 @@ class PermutationImportance(Evaluator):
     classification) or R squared (for regression), and each feature is
     shuffled 10 times.
 
+    Wraps:
+        [`sklearn.inspection.permutation_importance`](https://scikit-learn.org/stable/modules/generated/sklearn.inspection.permutation_importance.html)
+        from scikit-learn.
+
     """
 
     def evaluate(
@@ -597,6 +635,14 @@ class Scorecard(Evaluator):
     several at once (`export`). If the dataset has groups and a label of two
     classes, fairness metrics are included. Make one from a dataset or an
     applied project with `create`, or use `Project.scorecard`.
+
+    Wraps:
+        - [`great_tables.GT`](https://posit-dev.github.io/great-tables/reference/GT.html)
+          from great_tables, for `to_html`.
+        - [`docx.Document`](https://python-docx.readthedocs.io/en/latest/api/document.html#docx.Document)
+          from python-docx, for `to_word`.
+        - [`matplotlib.axes.Axes.table`](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.table.html)
+          from matplotlib, for `to_image`.
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -1167,6 +1213,10 @@ class ShapImportance(Evaluator):
     further plots. For a classifier, the values are for the last class (the
     positive class of a binary label).
 
+    Wraps:
+        [`shap.Explainer`](https://shap.readthedocs.io/en/latest/generated/shap.Explainer.html)
+        from shap.
+
     """
 
     def evaluate(
@@ -1219,6 +1269,10 @@ def _explain(
     The explainer is chosen by `shap` for the model. If `shap` does not
     recognize the model, the model's prediction function is explained
     instead.
+
+    Wraps:
+        [`shap.Explainer`](https://shap.readthedocs.io/en/latest/generated/shap.Explainer.html)
+        from shap.
 
     Args:
         shap: the `shap` module.

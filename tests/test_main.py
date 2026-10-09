@@ -83,7 +83,7 @@ def test_every_genre_is_in_the_operation_layer() -> None:
     for genre in (
         'loader', 'cleaner', 'munger', 'describer', 'splitter',
         'transformer', 'sampler', 'model', 'validator', 'metric',
-        'evaluator', 'plot', 'effect'):
+        'evaluator', 'inference', 'plot'):
         assert isinstance(operations[genre], dict), genre
     assert isinstance(operations['metric']['group_metric'], dict)
     for genre in ('imputer', 'scaler', 'encoder', 'mixer', 'reducer'):
@@ -101,7 +101,7 @@ def test_every_concrete_operation_is_in_the_library() -> None:
         amos.loaders, amos.cleaners, amos.mungers, amos.describers,
         amos.splitters, amos.transformers, amos.samplers, amos.models,
         amos.validators, amos.metrics, amos.evaluators, amos.plots,
-        amos.effects)
+        amos.inferences)
     for module in modules:
         for _, kind in inspect.getmembers(module, inspect.isclass):
             if (
@@ -110,6 +110,27 @@ def test_every_concrete_operation_is_in_the_library() -> None:
                 and not inspect.isabstract(kind)
                 and abc.ABC not in kind.__bases__):
                 assert kind in stored, kind
+
+
+def test_every_wrapped_tool_is_linked_in_its_docstring() -> None:
+    # The API docs tell users which tool each technique wraps, with a link to
+    # its documentation, so the docstrings must keep up with the code.
+    for kind in set(chrisjen.library.all.values()):
+        if not isinstance(kind, type) or not issubclass(kind, amos.Operation):
+            continue
+        declared = [
+            getattr(kind, 'contents', None),
+            *getattr(kind, 'tools', {}).values()]
+        paths = [
+            p for p in declared
+            if isinstance(p, str) and not p.startswith('amos.')]
+        if not paths:
+            continue
+        docstring = inspect.getdoc(kind) or ''
+        assert 'Wraps:' in docstring, kind
+        for path in paths:
+            assert re.search(rf'\[`{re.escape(path)}[`.]', docstring), (kind, path)
+        assert '](https://' in docstring, kind
 
 
 def test_designs_and_report_are_available_by_name() -> None:

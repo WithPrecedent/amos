@@ -100,6 +100,14 @@ class Model(base.Operation, abc.ABC):
     amos.Model(name = "bayes_ridge", contents = "sklearn.linear_model.BayesianRidge")
     ```
 
+    Wraps:
+        - [`sklearn.model_selection.GridSearchCV`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html)
+          from scikit-learn, for a "grid" search.
+        - [`sklearn.model_selection.RandomizedSearchCV`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.RandomizedSearchCV.html)
+          from scikit-learn, for a "random" search.
+        - [`optuna_integration.OptunaSearchCV`](https://optuna-integration.readthedocs.io/en/stable/reference/generated/optuna_integration.OptunaSearchCV.html)
+          from Optuna, for an "optuna" search.
+
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
             `None`, in which case it is the snake case name of the class.
@@ -604,22 +612,26 @@ class Statsmodel:
 
     | Kind | statsmodels model | Predicts |
     | --- | --- | --- |
-    | "ols" | `OLS` | Values. |
-    | "wls" | `WLS` | Values, from rows with `weights`. |
-    | "glm" | `GLM` | Values, or a class (for the "binomial" `family`). |
-    | "gee" | `GEE` | The same as "glm", for rows correlated within `groups`. |
-    | "mixedlm" | `MixedLM` | Values, with a random intercept for each of `groups`. |
-    | "quantile_regression" | `QuantReg` | A `quantile` of the label. |
-    | "robust_regression" | `RLM` | Values, with less weight on outliers. |
-    | "poisson" | `Poisson` | Counts. |
-    | "negative_binomial" | `NegativeBinomial` | Counts that vary more than a Poisson's. |
-    | "generalized_poisson" | `GeneralizedPoisson` | Counts that vary more or less than a Poisson's. |
-    | "zero_inflated_poisson" | `ZeroInflatedPoisson` | Counts with more zeros than a Poisson's. |
-    | "logit" | `Logit` | One of two classes. |
-    | "probit" | `Probit` | One of two classes. |
-    | "binomial_bayes_mixedglm" | `BinomialBayesMixedGLM` | One of two classes, with a random intercept for each of `groups`. |
-    | "mnlogit" | `MNLogit` | One of any number of classes. |
-    | "ordinal_regression" | `OrderedModel` | One of ordered classes. |
+    | "ols" | [`OLS`](https://www.statsmodels.org/stable/generated/statsmodels.regression.linear_model.OLS.html) | Values. |
+    | "wls" | [`WLS`](https://www.statsmodels.org/stable/generated/statsmodels.regression.linear_model.WLS.html) | Values, from rows with `weights`. |
+    | "glm" | [`GLM`](https://www.statsmodels.org/stable/generated/statsmodels.genmod.generalized_linear_model.GLM.html) | Values, or a class (for the "binomial" `family`). |
+    | "gee" | [`GEE`](https://www.statsmodels.org/stable/generated/statsmodels.genmod.generalized_estimating_equations.GEE.html) | The same as "glm", for rows correlated within `groups`. |
+    | "mixedlm" | [`MixedLM`](https://www.statsmodels.org/stable/generated/statsmodels.regression.mixed_linear_model.MixedLM.html) | Values, with a random intercept for each of `groups`. |
+    | "quantile_regression" | [`QuantReg`](https://www.statsmodels.org/stable/generated/statsmodels.regression.quantile_regression.QuantReg.html) | A `quantile` of the label. |
+    | "robust_regression" | [`RLM`](https://www.statsmodels.org/stable/generated/statsmodels.robust.robust_linear_model.RLM.html) | Values, with less weight on outliers. |
+    | "poisson" | [`Poisson`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.Poisson.html) | Counts. |
+    | "negative_binomial" | [`NegativeBinomial`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.NegativeBinomial.html) | Counts that vary more than a Poisson's. |
+    | "generalized_poisson" | [`GeneralizedPoisson`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.GeneralizedPoisson.html) | Counts that vary more or less than a Poisson's. |
+    | "zero_inflated_poisson" | [`ZeroInflatedPoisson`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.count_model.ZeroInflatedPoisson.html) | Counts with more zeros than a Poisson's. |
+    | "logit" | [`Logit`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.Logit.html) | One of two classes. |
+    | "probit" | [`Probit`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.Probit.html) | One of two classes. |
+    | "binomial_bayes_mixedglm" | [`BinomialBayesMixedGLM`](https://www.statsmodels.org/stable/generated/statsmodels.genmod.bayes_mixed_glm.BinomialBayesMixedGLM.html) | One of two classes, with a random intercept for each of `groups`. |
+    | "mnlogit" | [`MNLogit`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.MNLogit.html) | One of any number of classes. |
+    | "ordinal_regression" | [`OrderedModel`](https://www.statsmodels.org/stable/generated/statsmodels.miscmodels.ordinal_model.OrderedModel.html) | One of ordered classes. |
+
+    Wraps:
+        [statsmodels](https://www.statsmodels.org/stable/),
+        whose model for each kind is linked in the table.
 
     Args:
         kind: the kind of model, from the table. Defaults to "ols".
@@ -1101,6 +1113,14 @@ class FixedEffects:
     column, as R's fixest does. The `coefficients` method returns the
     coefficients of the features and their statistics as a table.
 
+    Wraps:
+        - [`pyfixest.feols`](https://py-econometrics.github.io/pyfixest/reference/estimation.api.feols.feols.html)
+          from pyfixest, for the "gaussian" family.
+        - [`pyfixest.fepois`](https://py-econometrics.github.io/pyfixest/reference/estimation.api.fepois.fepois.html)
+          from pyfixest, for the "poisson" family.
+        - [`pyfixest.feglm`](https://py-econometrics.github.io/pyfixest/reference/estimation.api.feglm.feglm.html)
+          from pyfixest, for the "logit" and "probit" families.
+
     Args:
         fixed_effects: names of the columns whose levels get fixed effects.
             Defaults to `None`.
@@ -1335,6 +1355,10 @@ class ProportionalHazards:
     event. The `coefficients` method returns the coefficients, hazard ratios,
     and their statistics as a table.
 
+    Wraps:
+        [`statsmodels.duration.hazard_regression.PHReg`](https://www.statsmodels.org/stable/generated/statsmodels.duration.hazard_regression.PHReg.html)
+        from statsmodels.
+
     Args:
         event: name of the column that is 1 (or `True`) if the event
             happened and 0 if the row was censored. Defaults to `None`, which
@@ -1513,7 +1537,15 @@ class _Statsmodels:
 
 @dataclasses.dataclass
 class Adaboost(Model):
-    """AdaBoost: a sequence of small trees, each fixing the last one's errors."""
+    """AdaBoost: a sequence of small trees, each fixing the last one's errors.
+
+    Wraps:
+        - [`sklearn.ensemble.AdaBoostClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.AdaBoostClassifier.html)
+          from scikit-learn, to classify.
+        - [`sklearn.ensemble.AdaBoostRegressor`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.AdaBoostRegressor.html)
+          from scikit-learn, to regress.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.ensemble.AdaBoostClassifier',
@@ -1526,6 +1558,12 @@ class Baseline(Model):
 
     Every model should beat this. It is the standard comparison for showing
     that a model learned something from the features.
+
+    Wraps:
+        - [`sklearn.dummy.DummyClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.dummy.DummyClassifier.html)
+          from scikit-learn, to classify.
+        - [`sklearn.dummy.DummyRegressor`](https://scikit-learn.org/stable/modules/generated/sklearn.dummy.DummyRegressor.html)
+          from scikit-learn, to regress.
 
     """
 
@@ -1545,6 +1583,10 @@ class BinomialBayesMixedglm(_Statsmodels, Model):
     mean and standard deviation of each coefficient's posterior, and its 95%
     credible interval. Predictions use the fixed effects only, so they suit
     groups the model has not seen.
+
+    Wraps:
+        [`statsmodels.genmod.bayes_mixed_glm.BinomialBayesMixedGLM`](https://www.statsmodels.org/stable/generated/statsmodels.genmod.bayes_mixed_glm.BinomialBayesMixedGLM.html)
+        from statsmodels.
 
     """
 
@@ -1590,6 +1632,12 @@ class Catboost(Model):
     Categorical features (the `pandas` "category" type) are passed to it as
     categories, so they need no encoder.
 
+    Wraps:
+        - [`catboost.CatBoostClassifier`](https://catboost.ai/docs/en/concepts/python-reference_catboostclassifier)
+          from catboost, to classify.
+        - [`catboost.CatBoostRegressor`](https://catboost.ai/docs/en/concepts/python-reference_catboostregressor)
+          from catboost, to regress.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {
@@ -1633,6 +1681,10 @@ class Cox(Model):
     "{name}_coefficients". The predictions are the expected times until the
     event.
 
+    Wraps:
+        [`statsmodels.duration.hazard_regression.PHReg`](https://www.statsmodels.org/stable/generated/statsmodels.duration.hazard_regression.PHReg.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': ProportionalHazards}
@@ -1641,7 +1693,15 @@ class Cox(Model):
 
 @dataclasses.dataclass
 class DecisionTree(Model):
-    """A single decision tree."""
+    """A single decision tree.
+
+    Wraps:
+        - [`sklearn.tree.DecisionTreeClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html)
+          from scikit-learn, to classify.
+        - [`sklearn.tree.DecisionTreeRegressor`](https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeRegressor.html)
+          from scikit-learn, to regress.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.tree.DecisionTreeClassifier',
@@ -1650,7 +1710,13 @@ class DecisionTree(Model):
 
 @dataclasses.dataclass
 class ElasticNet(Model):
-    """Linear regression with both lasso and ridge penalties."""
+    """Linear regression with both lasso and ridge penalties.
+
+    Wraps:
+        [`sklearn.linear_model.ElasticNet`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html)
+        from scikit-learn.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'regress': 'sklearn.linear_model.ElasticNet'}
@@ -1665,6 +1731,12 @@ class ExplainableBoosting(Model):
     feature can be shown exactly. `feature_importance` reports the importance
     of each term.
 
+    Wraps:
+        - [`interpret.glassbox.ExplainableBoostingClassifier`](https://interpret.ml/docs/python/api/ExplainableBoostingClassifier.html)
+          from InterpretML, to classify.
+        - [`interpret.glassbox.ExplainableBoostingRegressor`](https://interpret.ml/docs/python/api/ExplainableBoostingRegressor.html)
+          from InterpretML, to regress.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {
@@ -1674,7 +1746,15 @@ class ExplainableBoosting(Model):
 
 @dataclasses.dataclass
 class ExtraTrees(Model):
-    """An ensemble of extremely randomized trees."""
+    """An ensemble of extremely randomized trees.
+
+    Wraps:
+        - [`sklearn.ensemble.ExtraTreesClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.ExtraTreesClassifier.html)
+          from scikit-learn, to classify.
+        - [`sklearn.ensemble.ExtraTreesRegressor`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.ExtraTreesRegressor.html)
+          from scikit-learn, to regress.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.ensemble.ExtraTreesClassifier',
@@ -1693,6 +1773,14 @@ class Fixest(Model):
     Set "family" to "poisson" for counts or "probit" for a probit model. The
     coefficients, standard errors, p-values, and confidence intervals are
     stored in the dataset's `tables` as "{name}_coefficients".
+
+    Wraps:
+        - [`pyfixest.feols`](https://py-econometrics.github.io/pyfixest/reference/estimation.api.feols.feols.html)
+          from pyfixest, for the "gaussian" family.
+        - [`pyfixest.fepois`](https://py-econometrics.github.io/pyfixest/reference/estimation.api.fepois.fepois.html)
+          from pyfixest, for the "poisson" family.
+        - [`pyfixest.feglm`](https://py-econometrics.github.io/pyfixest/reference/estimation.api.feglm.feglm.html)
+          from pyfixest, for the "logit" and "probit" families.
 
     """
 
@@ -1729,6 +1817,10 @@ class GEE(Model):
     column of groups (by default, the dataset's first group), "family" as
     for a `glm`, and "covariance" to "exchangeable" to model the correlation
     (by default, "independence").
+
+    Wraps:
+        [`statsmodels.genmod.generalized_estimating_equations.GEE`](https://www.statsmodels.org/stable/generated/statsmodels.genmod.generalized_estimating_equations.GEE.html)
+        from statsmodels.
 
     """
 
@@ -1792,6 +1884,10 @@ class GeneralizedPoisson(_Statsmodels, Model):
     Like `poisson`, for counts that vary more (or less) than a Poisson
     distribution's.
 
+    Wraps:
+        [`statsmodels.discrete.discrete_model.GeneralizedPoisson`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.GeneralizedPoisson.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
@@ -1808,6 +1904,10 @@ class GLM(Model):
     to use another (such as "poisson" for counts). The coefficients, standard
     errors, p-values, and confidence intervals are stored in the dataset's
     `tables` as "{name}_coefficients".
+
+    Wraps:
+        [`statsmodels.genmod.generalized_linear_model.GLM`](https://www.statsmodels.org/stable/generated/statsmodels.genmod.generalized_linear_model.GLM.html)
+        from statsmodels.
 
     """
 
@@ -1839,6 +1939,12 @@ class GradientBoosting(Model):
 
     It is fast on large data and handles missing values itself.
 
+    Wraps:
+        - [`sklearn.ensemble.HistGradientBoostingClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.HistGradientBoostingClassifier.html)
+          from scikit-learn, to classify.
+        - [`sklearn.ensemble.HistGradientBoostingRegressor`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.HistGradientBoostingRegressor.html)
+          from scikit-learn, to regress.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {
@@ -1848,7 +1954,15 @@ class GradientBoosting(Model):
 
 @dataclasses.dataclass
 class KNN(Model):
-    """Predicts from the k nearest training rows (5 by default)."""
+    """Predicts from the k nearest training rows (5 by default).
+
+    Wraps:
+        - [`sklearn.neighbors.KNeighborsClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KNeighborsClassifier.html)
+          from scikit-learn, to classify.
+        - [`sklearn.neighbors.KNeighborsRegressor`](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KNeighborsRegressor.html)
+          from scikit-learn, to regress.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.neighbors.KNeighborsClassifier',
@@ -1857,7 +1971,13 @@ class KNN(Model):
 
 @dataclasses.dataclass
 class Lasso(Model):
-    """Linear regression with a lasso (L1) penalty."""
+    """Linear regression with a lasso (L1) penalty.
+
+    Wraps:
+        [`sklearn.linear_model.Lasso`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Lasso.html)
+        from scikit-learn.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'regress': 'sklearn.linear_model.Lasso'}
@@ -1865,7 +1985,15 @@ class Lasso(Model):
 
 @dataclasses.dataclass
 class Lightgbm(Model):
-    """LightGBM gradient boosting."""
+    """LightGBM gradient boosting.
+
+    Wraps:
+        - [`lightgbm.LGBMClassifier`](https://lightgbm.readthedocs.io/en/stable/pythonapi/lightgbm.LGBMClassifier.html)
+          from lightgbm, to classify.
+        - [`lightgbm.LGBMRegressor`](https://lightgbm.readthedocs.io/en/stable/pythonapi/lightgbm.LGBMRegressor.html)
+          from lightgbm, to regress.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'lightgbm.LGBMClassifier',
@@ -1876,7 +2004,13 @@ class Lightgbm(Model):
 
 @dataclasses.dataclass
 class Linear(Model):
-    """Ordinary least squares regression from scikit-learn."""
+    """Ordinary least squares regression from scikit-learn.
+
+    Wraps:
+        [`sklearn.linear_model.LinearRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html)
+        from scikit-learn.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'regress': 'sklearn.linear_model.LinearRegression'}
@@ -1888,6 +2022,10 @@ class Logit(Model):
 
     scikit-learn adds a ridge (L2) penalty by default. Use `logit_sm` for
     statsmodels' logistic regression, without a penalty and with p-values.
+
+    Wraps:
+        [`sklearn.linear_model.LogisticRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html)
+        from scikit-learn.
 
     """
 
@@ -1905,6 +2043,10 @@ class LogitSM(_Statsmodels, Model):
     so its coefficients have standard errors, p-values, and confidence
     intervals (as does `glm` for a label of two classes).
 
+    Wraps:
+        [`statsmodels.discrete.discrete_model.Logit`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.Logit.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
@@ -1919,6 +2061,10 @@ class Mixedlm(_Statsmodels, Model):
     judge), for rows that are correlated within groups. Set "groups" to the
     column of groups (by default, the dataset's first group). Predictions use
     the fixed effects only, so they suit groups the model has not seen.
+
+    Wraps:
+        [`statsmodels.regression.mixed_linear_model.MixedLM`](https://www.statsmodels.org/stable/generated/statsmodels.regression.mixed_linear_model.MixedLM.html)
+        from statsmodels.
 
     """
 
@@ -1964,6 +2110,10 @@ class Mnlogit(_Statsmodels, Model):
     For a label of any number of classes. Each class after the first has its
     own coefficients, compared with the first class.
 
+    Wraps:
+        [`statsmodels.discrete.discrete_model.MNLogit`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.MNLogit.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
@@ -1972,7 +2122,13 @@ class Mnlogit(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class NaiveBayes(Model):
-    """Gaussian naive Bayes."""
+    """Gaussian naive Bayes.
+
+    Wraps:
+        [`sklearn.naive_bayes.GaussianNB`](https://scikit-learn.org/stable/modules/generated/sklearn.naive_bayes.GaussianNB.html)
+        from scikit-learn.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.naive_bayes.GaussianNB'}
@@ -1985,6 +2141,10 @@ class NegativeBinomial(_Statsmodels, Model):
     Like `poisson`, for counts that vary more than a Poisson distribution's
     (which is common). The extra variance ("alpha") is estimated.
 
+    Wraps:
+        [`statsmodels.discrete.discrete_model.NegativeBinomial`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.NegativeBinomial.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
@@ -1994,7 +2154,15 @@ class NegativeBinomial(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class NeuralNetwork(Model):
-    """A multi-layer perceptron (a simple neural network)."""
+    """A multi-layer perceptron (a simple neural network).
+
+    Wraps:
+        - [`sklearn.neural_network.MLPClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPClassifier.html)
+          from scikit-learn, to classify.
+        - [`sklearn.neural_network.MLPRegressor`](https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPRegressor.html)
+          from scikit-learn, to regress.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.neural_network.MLPClassifier',
@@ -2009,6 +2177,10 @@ class OLS(_Statsmodels, Model):
 
     The coefficients, standard errors, p-values, and confidence intervals are
     stored in the dataset's `tables` as "{name}_coefficients".
+
+    Wraps:
+        [`statsmodels.regression.linear_model.OLS`](https://www.statsmodels.org/stable/generated/statsmodels.regression.linear_model.OLS.html)
+        from statsmodels.
 
     """
 
@@ -2025,6 +2197,10 @@ class OrdinalRegression(_Statsmodels, Model):
     that is an ordered categorical, and otherwise sorted. Set "distribution"
     to "probit" for an ordered probit.
 
+    Wraps:
+        [`statsmodels.miscmodels.ordinal_model.OrderedModel`](https://www.statsmodels.org/stable/generated/statsmodels.miscmodels.ordinal_model.OrderedModel.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
@@ -2038,6 +2214,10 @@ class Poisson(_Statsmodels, Model):
     The label must be whole numbers of 0 or more. amos classifies whole
     numbers with few values, so set "task" to "regress" for such counts.
 
+    Wraps:
+        [`statsmodels.discrete.discrete_model.Poisson`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.Poisson.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
@@ -2047,7 +2227,13 @@ class Poisson(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class Probit(_Statsmodels, Model):
-    """Probit regression of two classes from statsmodels, with inference."""
+    """Probit regression of two classes from statsmodels, with inference.
+
+    Wraps:
+        [`statsmodels.discrete.discrete_model.Probit`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.Probit.html)
+        from statsmodels.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
     kind: ClassVar[str] = 'probit'
@@ -2060,6 +2246,10 @@ class QuantileRegression(_Statsmodels, Model):
     Predicts a quantile of the label ("quantile", by default the median)
     rather than its mean, which outliers sway less.
 
+    Wraps:
+        [`statsmodels.regression.quantile_regression.QuantReg`](https://www.statsmodels.org/stable/generated/statsmodels.regression.quantile_regression.QuantReg.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
@@ -2068,7 +2258,15 @@ class QuantileRegression(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class RandomForest(Model):
-    """A random forest."""
+    """A random forest.
+
+    Wraps:
+        - [`sklearn.ensemble.RandomForestClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)
+          from scikit-learn, to classify.
+        - [`sklearn.ensemble.RandomForestRegressor`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html)
+          from scikit-learn, to regress.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.ensemble.RandomForestClassifier',
@@ -2077,7 +2275,13 @@ class RandomForest(Model):
 
 @dataclasses.dataclass
 class Ridge(Model):
-    """Linear regression with a ridge (L2) penalty."""
+    """Linear regression with a ridge (L2) penalty.
+
+    Wraps:
+        [`sklearn.linear_model.Ridge`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html)
+        from scikit-learn.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'regress': 'sklearn.linear_model.Ridge'}
@@ -2090,6 +2294,10 @@ class RobustRegression(_Statsmodels, Model):
     Gives less weight to rows with large errors (outliers), by "norm"
     (Huber's, by default).
 
+    Wraps:
+        [`statsmodels.robust.robust_linear_model.RLM`](https://www.statsmodels.org/stable/generated/statsmodels.robust.robust_linear_model.RLM.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
@@ -2098,7 +2306,15 @@ class RobustRegression(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class SVM(Model):
-    """A support vector machine (with probabilities for classification)."""
+    """A support vector machine (with probabilities for classification).
+
+    Wraps:
+        - [`sklearn.svm.SVC`](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html)
+          from scikit-learn, to classify.
+        - [`sklearn.svm.SVR`](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVR.html)
+          from scikit-learn, to regress.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.svm.SVC',
@@ -2118,6 +2334,12 @@ class Tabpfn(Model):
     it is used, and runs much faster with a GPU. Check the license of its
     weights before using it.
 
+    Wraps:
+        - [`tabpfn.TabPFNClassifier`](https://github.com/PriorLabs/TabPFN)
+          from TabPFN, to classify.
+        - [`tabpfn.TabPFNRegressor`](https://github.com/PriorLabs/TabPFN)
+          from TabPFN, to regress.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {
@@ -2132,6 +2354,10 @@ class WLS(_Statsmodels, Model):
     Set "weights" to the column with the weight of each row (such as the
     inverse of its variance). The weights are not a feature.
 
+    Wraps:
+        [`statsmodels.regression.linear_model.WLS`](https://www.statsmodels.org/stable/generated/statsmodels.regression.linear_model.WLS.html)
+        from statsmodels.
+
     """
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
@@ -2141,7 +2367,15 @@ class WLS(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class Xgboost(Model):
-    """XGBoost gradient boosting."""
+    """XGBoost gradient boosting.
+
+    Wraps:
+        - [`xgboost.XGBClassifier`](https://xgboost.readthedocs.io/en/stable/python/python_api.html#xgboost.XGBClassifier)
+          from xgboost, to classify.
+        - [`xgboost.XGBRegressor`](https://xgboost.readthedocs.io/en/stable/python/python_api.html#xgboost.XGBRegressor)
+          from xgboost, to regress.
+
+    """
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'xgboost.XGBClassifier',
@@ -2155,6 +2389,10 @@ class ZeroInflatedPoisson(_Statsmodels, Model):
 
     Like `poisson`, for counts with more zeros than a Poisson distribution
     has (such as rows that could not have had any events).
+
+    Wraps:
+        [`statsmodels.discrete.count_model.ZeroInflatedPoisson`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.count_model.ZeroInflatedPoisson.html)
+        from statsmodels.
 
     """
 
@@ -2266,6 +2504,14 @@ def _family(name: str, item: base.Dataset, parameters: Mapping[str, Any]) -> str
 
 def _statsmodels_class(module: Any, name: str) -> type:
     """Returns the class in a statsmodels module named `name` in snake case.
+
+    Wraps:
+        - [`statsmodels.genmod.families`](https://www.statsmodels.org/stable/glm.html#families)
+          from statsmodels, for a "family".
+        - [`statsmodels.genmod.cov_struct`](https://www.statsmodels.org/stable/gee.html#dependence-structures)
+          from statsmodels, for a "covariance".
+        - [`statsmodels.robust.norms`](https://www.statsmodels.org/stable/rlm.html#norms)
+          from statsmodels, for a "norm".
 
     Args:
         module: a statsmodels module (such as `statsmodels.api.families`).

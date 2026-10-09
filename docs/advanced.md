@@ -24,7 +24,7 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Project` | A `chrisjen.Project` that makes your data into a `Dataset`, applies the workflow to a copy of it, and can `export` the results. |
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
-| `Loader`, `Cleaner`, `Munger`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Plot`, `Effect` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, and `Metric` has the genre `GroupMetric` (fairness metrics). |
+| `Loader`, `Cleaner`, `Munger`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Inference`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, `Metric` has the genre `GroupMetric` (fairness metrics), and `Inference` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
 | `Findings` | The default report. |
 
@@ -44,7 +44,7 @@ import sklearn.datasets
 import amos
 
 print(sorted(amos.library["vertex"]["operation"]))
-# ['cleaner', 'describer', 'effect', 'evaluator', 'loader', 'metric', 'model', 'munger', 'plot', 'sampler', 'splitter', 'transformer', 'validator']
+# ['cleaner', 'describer', 'evaluator', 'inference', 'loader', 'metric', 'model', 'munger', 'plot', 'sampler', 'splitter', 'transformer', 'validator']
 print(amos.library.classify("smote"), amos.library.classify("one_hot"))
 # sampler encoder
 print(amos.library.all["random_forest"])
@@ -553,20 +553,60 @@ print(dataset.metrics["coverage"] > 0.8)
 # True
 ```
 
-## Causal effects
+## Causal inferences
 
-A model predicts the label. An *effect* estimates how much a treatment (such
+A model predicts the label. An *inference* measures how much a treatment (such
 as a program or a ruling) changes the label, after accounting for the other
-features. The effects in `amos.effects` use double machine learning, from
-DoubleML: models of the label and of the treatment (named with `amos` model
-names) are fitted to some folds of the rows and applied to the others, so
-flexible models can control for the features without biasing the estimate.
-An effect uses every row, so it needs no split.
+features, or, for a time series, which variables cause which others and when.
+The inferences in `amos.inferences` belong to the critic, since they judge
+what the data can say about causes, and they come from four packages. Each
+package's inferences are a genre of `Inference`:
 
-| Effect | Estimates |
+| Genre | Inferences | Python |
+| --- | --- | --- |
+| `doubleml` | `partially_linear`, `partially_linear_iv`, `partially_logistic`, `partially_linear_panel`, `interactive_regression`, `interactive_iv`, `potential_outcomes`, `quantile_effects`, `difference_in_differences`, `regression_discontinuity`, `sample_selection` | every version |
+| `dowhy` | `regression_adjustment`, `glm_adjustment`, `doubly_robust`, `propensity_matching`, `propensity_stratification`, `propensity_weighting`, `distance_matching`, `instrumental_variable` | 3.13 and later |
+| `causalml` | `s_learner`, `t_learner`, `x_learner`, `dr_learner`, `tmle` | 3.11 and 3.12 |
+| `tigramite` | `pcmci`, `pcmci_plus`, `lpcmci`, `time_series_effect` | every version |
+
+causalml has no version for Python 3.13 and later, and on Python 3.11 and
+3.12 the versions of DoWhy that work with pandas 3 cannot be installed with
+causalml. So the `causal` extra installs DoubleML (with rdrobust, for
+`regression_discontinuity`) and tigramite everywhere, causalml on Python 3.11
+and 3.12, and DoWhy on Python 3.13 and later. (On
+Python 3.11 and 3.12, `pip install dowhy` installs DoWhy if causalml is not
+installed.) The [technique catalog](catalog.md#inferences-critic) describes
+each one. Which to use depends on the design of the study:
+
+| Design | Inferences |
 | --- | --- |
-| `partially_linear` | The effect of a treatment that changes the label by the same amount for every row. |
-| `interactive_regression` | The average effect of a treatment with two values, which may differ from row to row. |
+| A treatment that changes the label by the same amount for every row | `partially_linear`, `regression_adjustment` |
+| A treatment with two values, whose effect may differ from row to row | `interactive_regression`, `doubly_robust`, `propensity_matching`, `propensity_stratification`, `propensity_weighting`, `distance_matching`, `s_learner`, `t_learner`, `x_learner`, `dr_learner`, `tmle` |
+| A label with two classes | `partially_logistic`, `glm_adjustment` (and the treatments of two values above, whose effects are changes in the chance of the second class) |
+| Causes of the treatment that are not among the features, and an "instrument" | `partially_linear_iv`, `interactive_iv`, `instrumental_variable`, `quantile_effects` (with "local_quantile") |
+| A treatment given to the rows at or above a cutoff of a score ("running") | `regression_discontinuity` |
+| A treatment with several levels | `potential_outcomes`, and causalml's learners (with "control") |
+| Effects on the spread of the label, not only its mean | `quantile_effects` |
+| Units (or groups) seen before and after a treatment that some of them got, perhaps in different periods | `difference_in_differences` |
+| Units seen over several periods (a panel) | `partially_linear_panel` |
+| A label seen only for some rows | `sample_selection` |
+| A time series | `pcmci`, `pcmci_plus`, `lpcmci`, `time_series_effect` |
+
+An inference uses every row, so it needs no split. It stores a table under
+its name with a row for each effect (of each treatment, group, quantile, or
+level of the treatment): its estimate ("coefficient"), standard error, test
+statistic, p-value, and 95% confidence interval, which `coefficient_plot`
+can draw. The parameters of most inferences are:
+
+| Parameter | Meaning |
+| --- | --- |
+| `treatment` | The column with the treatment. Required, except by `pcmci`, `pcmci_plus`, and `lpcmci`. |
+| `outcome_model`, `treatment_model` | `amos` models of the label and of the treatment (and of any instrument), for DoubleML and causalml. By default, `random_forest`. |
+| `n_folds` | The number of folds for cross-fitting the models (5 by default). |
+| `instrument`, `time`, `unit`, `selected`, `running` | Columns with other roles in the design, for the inferences that need them. |
+| `simulations`, `refuters` | DoWhy's bootstrap samples (100 by default) and refuters (`placebo_treatment_refuter`, `random_common_cause`, and `data_subset_refuter`), whose results are stored as "{name}_refutations". |
+| `control` | causalml's value of the treatment that the others are compared to. Each row's effect is stored as "{name}_effects". |
+| `max_lag`, `alpha`, `test` | tigramite's longest lag (5 by default), level of significance (0.05 by default), and test of conditional independence ("parcorr", "robust_parcorr", or "cmiknn"). |
 
 ```python
 rng = np.random.default_rng(1)
@@ -575,16 +615,48 @@ program = (rng.random(500) < 1 / (1 + np.exp(-(age - 40) / 5))).astype(int)
 outcome = 2 * program + 0.1 * age + rng.normal(0, 1, 500)
 treated = pd.DataFrame({"age": age, "program": program, "outcome": outcome})
 dataset = amos.Dataset(treated, label = "outcome", seed = 43)
-amos.effects.PartiallyLinear().apply(
+amos.inferences.PartiallyLinear().apply(
     dataset, treatment = "program", outcome_model = "linear",
     treatment_model = "logit")
 effect = dataset.tables["partially_linear"].loc["program"]
 print(effect["ci_lower"] < 2 < effect["ci_upper"])
 # True
+amos.inferences.QuantileEffects().apply(
+    dataset, treatment = "program", outcome_model = "logit",
+    treatment_model = "logit")
+print(list(dataset.tables["quantile_effects"].index))
+# [0.25, 0.5, 0.75]
 ```
 
-The estimates are causal only if every feature that affects both the
-treatment and the label is among the features.
+For a time series, the rows must be in order. tigramite's methods find which
+variables cause which others, and at what lag. Here, filings raise hearings a
+week later, which raise the backlog two weeks after that:
+
+```python
+rng = np.random.default_rng(2)
+weeks = np.zeros((300, 3))
+for week in range(2, 300):
+    weeks[week, 0] = 0.7 * weeks[week - 1, 0] + rng.normal()
+    weeks[week, 1] = (
+        0.5 * weeks[week - 1, 1] + 0.6 * weeks[week - 1, 0] + rng.normal())
+    weeks[week, 2] = (
+        0.4 * weeks[week - 1, 2] + 0.8 * weeks[week - 2, 1] + rng.normal())
+docket = pd.DataFrame(weeks, columns = ["filings", "hearings", "backlog"])
+series = amos.Dataset(docket, label = "backlog", seed = 43)
+amos.inferences.PCMCI().apply(series, max_lag = 3, alpha = 0.01)
+print(series.tables["pcmci"][["cause", "effect", "lag"]].values.tolist())
+# [['filings', 'filings', 1], ['filings', 'hearings', 1], ['hearings', 'hearings', 1], ['hearings', 'backlog', 2], ['backlog', 'backlog', 1]]
+amos.inferences.TimeSeriesEffect().apply(
+    series, treatment = "filings", lag = 3, max_lag = 3, alpha = 0.01)
+effect = series.tables["time_series_effect"].iloc[0]
+print(effect.name, effect["ci_lower"] < 0.6 * 0.8 < effect["ci_upper"])
+# filings (lag 3) True
+```
+
+The estimates are causal only if the assumptions of their designs hold: most
+need every feature that affects both the treatment and the label to be among
+the features, and an instrument must affect the label only through the
+treatment. DoWhy's refuters test some of these assumptions.
 
 ## Survival analysis
 
@@ -635,7 +707,7 @@ into a few families:
 Plots of the data are split or colored by the label's classes (or by the
 dataset's first group, or by the column "by"). Plots of a table, such as
 `coefficient_plot` (of the coefficients of `ols`, `glm`, `fixest`, or `cox`,
-or of an effect), `search_plot`, `fairness_plot`, and `prediction_intervals`,
+or of an inference), `search_plot`, `fairness_plot`, and `prediction_intervals`,
 draw the table that another technique made, and the last two make it if it
 is missing. `learning_curve` and `validation_curve` fit copies of a
 scikit-learn model again, in cross-validation on the training rows.
@@ -965,7 +1037,9 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | `ImportError: ... install it with "pip install amos[...]"` | The technique wraps an optional package that is not installed. |
 | `ValueError: '...' needs a group` | A fairness metric or `fairness` was used without groups. Set "groups" in the "general" section or pass "group". |
 | `KeyError: the fixed_effects column ... is not in the data` | A column named by a model's parameter (such as "fixed_effects", "cluster", or "event") is missing. |
-| `ValueError: '...' needs the name of a "treatment" column` | An effect was used without a "treatment" parameter. |
+| `ValueError: '...' needs the name of a "treatment" column` | An inference was used without a "treatment" parameter. |
+| `ImportError: causalml has no version for Python 3.13 and later ...` | causalml's inferences (such as `x_learner`) need Python 3.11 or 3.12. Use another package's inference, such as DoubleML's `interactive_regression`. |
+| `ImportError: ... The causal extra ... installs DoWhy on Python 3.13 and later ...` | DoWhy's inferences (such as `propensity_matching`) need DoWhy, which the `causal` extra installs on Python 3.13 and later. |
 | `KeyError: no class named ... is in the library` | A name in the settings is not a technique. Check the spelling against the [technique catalog](catalog.md). |
 | `ValueError: '...' needs the name of a "groups" column` | A splitter or validator of groups (such as `group_k_fold`) was used without groups. Set "groups" in the "general" section or pass "groups". |
 | `ValueError: a copy of the model could not predict ...` | A validator's copy of the model could not predict the rows of a fold. A model with fixed effects cannot predict a group it did not learn from, so use a validator that does not keep groups apart (such as `k_fold`). |

@@ -23,6 +23,7 @@ ROOT = pathlib.Path(__file__).parent.parent
 # The packages that do not use their own names when imported.
 IMPORT_NAMES = {
     'DoubleML': 'doubleml',
+    'DoWhy': 'dowhy',
     'InterpretML': 'interpret',
     'MAPIE': 'mapie',
     'Optuna': 'optuna',
@@ -49,7 +50,7 @@ def _readme_packages() -> list[str]:
 def test_every_package_in_the_readme_has_a_test() -> None:
     packages = _readme_packages()
     assert 'scikit-learn' in packages
-    assert len(packages) == 22
+    assert len(packages) == 25
     for package in packages:
         name = IMPORT_NAMES.get(package, package.replace('-', '_'))
         assert callable(globals().get(f'test_{name}')), package
@@ -364,7 +365,7 @@ def test_doubleml(regressed: amos.Dataset) -> None:
     linear_model = importlib.import_module('sklearn.linear_model')
     model_selection = importlib.import_module('sklearn.model_selection')
     data = regressed.data.copy()
-    amos.effects.PartiallyLinear().apply(
+    amos.inferences.PartiallyLinear().apply(
         regressed, treatment = 'x0', outcome_model = 'linear', n_folds = 3)
     controls = ['x1', 'x2', 'x3', 'x4']
     estimator = doubleml.DoubleMLPLR(
@@ -383,6 +384,75 @@ def test_doubleml(regressed: amos.Dataset) -> None:
         estimator.summary.loc['x0', 'coef'])
     assert table.loc['x0', 'standard_error'] == pytest.approx(
         estimator.summary.loc['x0', 'std err'])
+
+
+def test_causalml() -> None:
+    requires('causalml')
+    linear_model = importlib.import_module('sklearn.linear_model')
+    rng = np.random.default_rng(SEED)
+    need = rng.normal(size = 400)
+    treated = (need + rng.normal(size = 400) > 0).astype(int)
+    data = pd.DataFrame({
+        'need': need, 'treated': treated,
+        'outcome': 2 * treated + need + rng.normal(size = 400)})
+    dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
+    amos.inferences.TLearner().apply(
+        dataset, treatment = 'treated', outcome_model = 'linear')
+    # Imported after amos has imported it, which keeps matplotlib's style.
+    meta = importlib.import_module('causalml.inference.meta')
+    learner = meta.BaseTRegressor(
+        learner = linear_model.LinearRegression(), control_name = 0)
+    ate, lower, upper = learner.estimate_ate(
+        data[['need']].to_numpy(), data['treated'].to_numpy(),
+        data['outcome'].to_numpy())
+    table = dataset.tables['t_learner']
+    assert table.loc['1', 'coefficient'] == pytest.approx(ate[0])
+    assert table.loc['1', 'ci_lower'] == pytest.approx(lower[0])
+    assert table.loc['1', 'ci_upper'] == pytest.approx(upper[0])
+
+
+def test_dowhy(regressed: amos.Dataset) -> None:
+    requires('dowhy')
+    dowhy = importlib.import_module('dowhy')
+    data = regressed.data.astype(float)
+    amos.inferences.RegressionAdjustment().apply(regressed, treatment = 'x0')
+    model = dowhy.CausalModel(
+        data = data, treatment = 'x0', outcome = 'target',
+        common_causes = ['x1', 'x2', 'x3', 'x4'])
+    estimand = model.identify_effect(proceed_when_unidentifiable = True)
+    estimate = model.estimate_effect(
+        estimand, method_name = 'backdoor.linear_regression')
+    table = regressed.tables['regression_adjustment']
+    assert table.loc['x0', 'coefficient'] == pytest.approx(estimate.value)
+
+
+def test_tigramite() -> None:
+    requires('tigramite')
+    pcmci = importlib.import_module('tigramite.pcmci')
+    parcorr = importlib.import_module('tigramite.independence_tests.parcorr')
+    frames = importlib.import_module('tigramite.data_processing')
+    rng = np.random.default_rng(SEED)
+    values = np.zeros((300, 2))
+    for row in range(1, 300):
+        values[row, 0] = 0.6 * values[row - 1, 0] + rng.normal()
+        values[row, 1] = (
+            0.5 * values[row - 1, 1] + 0.7 * values[row - 1, 0]
+            + rng.normal())
+    data = pd.DataFrame(values, columns = ['rain', 'floods'])
+    dataset = amos.Dataset(data, label = 'floods', seed = SEED)
+    amos.inferences.PCMCI().apply(dataset, max_lag = 2)
+    method = pcmci.PCMCI(
+        frames.DataFrame(values, var_names = ['rain', 'floods']),
+        cond_ind_test = parcorr.ParCorr(significance = 'analytic'),
+        verbosity = 0)
+    results = method.run_pcmci(
+        tau_min = 1, tau_max = 2, pc_alpha = None, alpha_level = 0.05)
+    table = dataset.tables['pcmci'].set_index(['cause', 'effect', 'lag'])
+    assert table.loc[('rain', 'floods', 1), 'strength'] == pytest.approx(
+        results['val_matrix'][0, 1, 1])
+    assert table.loc[('rain', 'floods', 1), 'p_value'] == pytest.approx(
+        results['p_matrix'][0, 1, 1])
+    assert len(table) == int((results['graph'][:, :, 1:] != '').sum())
 
 
 def test_statsmodels_cox(regressed: amos.Dataset) -> None:

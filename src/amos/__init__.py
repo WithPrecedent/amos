@@ -10,13 +10,13 @@ __all__: list[str] = [
     'Cleaner',
     'Dataset',
     'Describer',
-    'Effect',
     'Encoder',
     'Evaluator',
     'Experiment',
     'Findings',
     'GroupMetric',
     'Imputer',
+    'Inference',
     'Loader',
     'Metric',
     'Mixer',
@@ -41,8 +41,8 @@ from chrisjen import library
 from .base import Dataset, Operation
 from .cleaners import Cleaner
 from .describers import Describer
-from .effects import Effect
 from .evaluators import Evaluator
+from .inferences import Inference
 from .interface import Project
 from .loaders import Loader
 from .metrics import GroupMetric, Metric

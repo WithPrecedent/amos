@@ -50,8 +50,10 @@ _DOWNLOAD_TIMEOUT: float = 60
 _EXTRAS: dict[str, str] = {
     'catboost': 'boosting',
     'category_encoders': 'encoders',
+    'causalml': 'causal',
     'docx': 'word',
     'doubleml': 'causal',
+    'dowhy': 'causal',
     'eli5': 'explain',
     'fairlearn': 'fairness',
     'great_tables': 'tables',
@@ -64,12 +66,14 @@ _EXTRAS: dict[str, str] = {
     'optuna_integration': 'tuning',
     'polars': 'polars',
     'pyfixest': 'statistics',
+    'rdrobust': 'causal',
     'scienceplots': 'plots',
     'seaborn': 'plots',
     'shap': 'explain',
     'skrub': 'encoders',
     'statsmodels': 'statistics',
     'tabpfn': 'tabpfn',
+    'tigramite': 'causal',
     'xgboost': 'boosting'}
 # Dots per inch of the figures that `Project.export` saves. Figures in the
 # default style are one column of a journal wide (3.3 inches), so they need
@@ -102,7 +106,9 @@ _RECORDED_PACKAGES: tuple[str, ...] = (
     'scipy',
     'catboost',
     'category-encoders',
+    'causalml',
     'doubleml',
+    'dowhy',
     'eli5',
     'fairlearn',
     'great-tables',
@@ -115,10 +121,12 @@ _RECORDED_PACKAGES: tuple[str, ...] = (
     'polars',
     'pyfixest',
     'python-docx',
+    'rdrobust',
     'scienceplots',
     'seaborn',
     'shap',
     'skrub',
     'statsmodels',
     'tabpfn',
+    'tigramite',
     'xgboost')

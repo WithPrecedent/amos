@@ -198,7 +198,13 @@ class Validator(base.Operation, abc.ABC):
 
 @dataclasses.dataclass
 class GroupKFold(Validator):
-    """Folds that keep all of the rows of each group in the same fold."""
+    """Folds that keep all of the rows of each group in the same fold.
+
+    Wraps:
+        [`sklearn.model_selection.GroupKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupKFold.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.GroupKFold'
     uses_groups: ClassVar[bool] = True
@@ -206,7 +212,13 @@ class GroupKFold(Validator):
 
 @dataclasses.dataclass
 class GroupShuffleSplit(Validator):
-    """Repeated random splits of the groups (not the rows) into two sets."""
+    """Repeated random splits of the groups (not the rows) into two sets.
+
+    Wraps:
+        [`sklearn.model_selection.GroupShuffleSplit`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupShuffleSplit.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.GroupShuffleSplit'
     uses_groups: ClassVar[bool] = True
@@ -214,14 +226,26 @@ class GroupShuffleSplit(Validator):
 
 @dataclasses.dataclass
 class KFold(Validator):
-    """Divides the rows into folds ("n_splits", 5 by default) at random."""
+    """Divides the rows into folds ("n_splits", 5 by default) at random.
+
+    Wraps:
+        [`sklearn.model_selection.KFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.KFold'
 
 
 @dataclasses.dataclass
 class LeaveOneGroupOut(Validator):
-    """Scores each group with a copy of the model fitted to the other groups."""
+    """Scores each group with a copy of the model fitted to the other groups.
+
+    Wraps:
+        [`sklearn.model_selection.LeaveOneGroupOut`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.LeaveOneGroupOut.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.LeaveOneGroupOut'
     uses_groups: ClassVar[bool] = True
@@ -234,6 +258,10 @@ class LeaveOneRowOut(Validator):
     A fold of one row cannot be scored alone, so the predictions of every
     fold are scored together. The table has the prediction of each row.
 
+    Wraps:
+        [`sklearn.model_selection.LeaveOneOut`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.LeaveOneOut.html)
+        from scikit-learn.
+
     """
 
     contents: str = 'sklearn.model_selection.LeaveOneOut'
@@ -242,14 +270,26 @@ class LeaveOneRowOut(Validator):
 
 @dataclasses.dataclass
 class RepeatedKFold(Validator):
-    """`k_fold` repeated with different random folds ("n_repeats" times)."""
+    """`k_fold` repeated with different random folds ("n_repeats" times).
+
+    Wraps:
+        [`sklearn.model_selection.RepeatedKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.RepeatedKFold.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.RepeatedKFold'
 
 
 @dataclasses.dataclass
 class RepeatedStratifiedKFold(Validator):
-    """`stratified_k_fold` repeated with different random folds."""
+    """`stratified_k_fold` repeated with different random folds.
+
+    Wraps:
+        [`sklearn.model_selection.RepeatedStratifiedKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.RepeatedStratifiedKFold.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.RepeatedStratifiedKFold'
     stratifies: ClassVar[bool] = True
@@ -257,14 +297,26 @@ class RepeatedStratifiedKFold(Validator):
 
 @dataclasses.dataclass
 class ShuffleSplit(Validator):
-    """Repeated random splits of the rows into two sets (Monte Carlo)."""
+    """Repeated random splits of the rows into two sets (Monte Carlo).
+
+    Wraps:
+        [`sklearn.model_selection.ShuffleSplit`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.ShuffleSplit.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.ShuffleSplit'
 
 
 @dataclasses.dataclass
 class StratifiedGroupKFold(Validator):
-    """Folds that keep each group together and the classes in proportion."""
+    """Folds that keep each group together and the classes in proportion.
+
+    Wraps:
+        [`sklearn.model_selection.StratifiedGroupKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedGroupKFold.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.StratifiedGroupKFold'
     uses_groups: ClassVar[bool] = True
@@ -273,7 +325,13 @@ class StratifiedGroupKFold(Validator):
 
 @dataclasses.dataclass
 class StratifiedKFold(Validator):
-    """Folds that keep the share of each class the same in every fold."""
+    """Folds that keep the share of each class the same in every fold.
+
+    Wraps:
+        [`sklearn.model_selection.StratifiedKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedKFold.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.StratifiedKFold'
     stratifies: ClassVar[bool] = True
@@ -281,7 +339,13 @@ class StratifiedKFold(Validator):
 
 @dataclasses.dataclass
 class StratifiedShuffleSplit(Validator):
-    """Repeated random splits into two sets, with the classes in proportion."""
+    """Repeated random splits into two sets, with the classes in proportion.
+
+    Wraps:
+        [`sklearn.model_selection.StratifiedShuffleSplit`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedShuffleSplit.html)
+        from scikit-learn.
+
+    """
 
     contents: str = 'sklearn.model_selection.StratifiedShuffleSplit'
     stratifies: ClassVar[bool] = True
@@ -294,6 +358,10 @@ class TimeSeriesSplit(Validator):
     Use this when the rows are ordered in time (or set "order" to a column,
     such as a date), so that the model is never scored on rows that came
     before the rows it learned from.
+
+    Wraps:
+        [`sklearn.model_selection.TimeSeriesSplit`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html)
+        from scikit-learn.
 
     """
 

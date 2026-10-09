@@ -88,7 +88,13 @@ class Describer(base.Operation, abc.ABC):
 
 @dataclasses.dataclass
 class Correlations(Describer):
-    """Correlations between the numeric columns (including the label)."""
+    """Correlations between the numeric columns (including the label).
+
+    Wraps:
+        [`pandas.DataFrame.corr`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.corr.html)
+        from pandas.
+
+    """
 
     def describe(
         self,
@@ -116,7 +122,13 @@ class Correlations(Describer):
 
 @dataclasses.dataclass
 class Describe(Describer):
-    """The `pandas` description of every column, one row per column."""
+    """The `pandas` description of every column, one row per column.
+
+    Wraps:
+        [`pandas.DataFrame.describe`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.describe.html)
+        from pandas.
+
+    """
 
     def describe(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns `DataFrame.describe` for every column, transposed.
@@ -179,6 +191,10 @@ class KaplanMeier(Describer):
     happened and 0 if the row was censored (by default, every event was
     observed), and "group" to a column to make a curve for each group. It
     wraps statsmodels' `SurvfuncRight`.
+
+    Wraps:
+        [`statsmodels.duration.survfunc.SurvfuncRight`](https://www.statsmodels.org/stable/generated/statsmodels.duration.survfunc.SurvfuncRight.html)
+        from statsmodels.
 
     """
 
@@ -305,6 +321,10 @@ def survival_curves(
     """Returns a fitted Kaplan-Meier estimator for each group.
 
     `kaplan_meier` and `survival_curves` (in the plots) both use this.
+
+    Wraps:
+        [`statsmodels.duration.survfunc.SurvfuncRight`](https://www.statsmodels.org/stable/generated/statsmodels.duration.survfunc.SurvfuncRight.html)
+        from statsmodels.
 
     Args:
         item: the dataset. Its label is the time until the event.

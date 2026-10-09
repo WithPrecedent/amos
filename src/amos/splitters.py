@@ -107,6 +107,10 @@ class GroupSplit(Splitter):
     decided by the same judge, or several observations of one person), so
     that a model is tested on groups it has not seen.
 
+    Wraps:
+        [`sklearn.model_selection.GroupShuffleSplit`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupShuffleSplit.html)
+        from scikit-learn.
+
     """
 
     def divide(
@@ -152,6 +156,10 @@ class Stratified(Splitter):
 
     This is the usual choice for a classification task, especially when one
     class is rare.
+
+    Wraps:
+        [`sklearn.model_selection.train_test_split`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html)
+        from scikit-learn.
 
     """
 
@@ -217,7 +225,13 @@ class TimeSplit(Splitter):
 
 @dataclasses.dataclass
 class TrainTest(Splitter):
-    """Splits the rows at random."""
+    """Splits the rows at random.
+
+    Wraps:
+        [`sklearn.model_selection.train_test_split`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html)
+        from scikit-learn.
+
+    """
 
     def divide(
         self,

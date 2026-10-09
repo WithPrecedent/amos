@@ -103,6 +103,16 @@ class Plot(base.Operation, abc.ABC):
     The figure is stored in the dataset's `figures` under the technique's
     name.
 
+    Wraps:
+        - [`matplotlib.figure.Figure`](https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html)
+          from matplotlib, to draw on.
+        - [`matplotlib.style.use`](https://matplotlib.org/stable/api/style_api.html#matplotlib.style.use)
+          from matplotlib, for the style of the figure.
+        - [SciencePlots](https://github.com/garrettj403/SciencePlots),
+          for its styles (such as "science", "nature", and "bright").
+        - [`matplotlib.pyplot.xkcd`](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.xkcd.html)
+          from matplotlib, for the "xkcd" style.
+
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
             `None`, in which case it is the snake case name of the class.
@@ -220,7 +230,13 @@ class Plot(base.Operation, abc.ABC):
 
 @dataclasses.dataclass
 class ActualVsPredicted(Plot):
-    """The label against the model's predictions (regression)."""
+    """The label against the model's predictions (regression).
+
+    Wraps:
+        [`sklearn.metrics.PredictionErrorDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.PredictionErrorDisplay.html#sklearn.metrics.PredictionErrorDisplay.from_predictions)
+        from scikit-learn.
+
+    """
 
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
         """Draws the actual labels against the predictions.
@@ -241,6 +257,10 @@ class BoxPlots(Plot):
     Draws seaborn's box plot of each numeric feature (or of `columns`), in a
     grid. The boxes are split by the column `by`, or by the classes of the
     label (for classification), or by the dataset's first group.
+
+    Wraps:
+        [`seaborn.boxplot`](https://seaborn.pydata.org/generated/seaborn.boxplot.html)
+        from seaborn.
 
     """
 
@@ -288,6 +308,10 @@ class CalibrationCurve(Plot):
     calibration display). For more than two classes, each class is compared
     with the rest.
 
+    Wraps:
+        [`sklearn.calibration.CalibrationDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.calibration.CalibrationDisplay.html#sklearn.calibration.CalibrationDisplay.from_predictions)
+        from scikit-learn.
+
     """
 
     def draw(
@@ -330,8 +354,8 @@ class CoefficientPlot(Plot):
     """Coefficients with their confidence intervals (a forest plot).
 
     Draws a table of coefficients made by `ols`, `glm`, `fixest`, or `cox`
-    ("{model}_coefficients"), or of effects estimated by `partially_linear`
-    or `interactive_regression`: a dot for each coefficient and a line for
+    ("{model}_coefficients"), or of the effects that an inference (such as
+    `partially_linear`) estimated: a dot for each coefficient and a line for
     its confidence interval, with a dashed line at zero. The table is
     `source`, or the last such table made. The intercept is left out unless
     `intercept` is `True`.
@@ -382,7 +406,13 @@ class CoefficientPlot(Plot):
 
 @dataclasses.dataclass
 class ConfusionHeatmap(Plot):
-    """The confusion matrix as a heatmap (classification)."""
+    """The confusion matrix as a heatmap (classification).
+
+    Wraps:
+        [`seaborn.heatmap`](https://seaborn.pydata.org/generated/seaborn.heatmap.html)
+        from seaborn.
+
+    """
 
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
         """Draws the confusion matrix.
@@ -404,7 +434,13 @@ class ConfusionHeatmap(Plot):
 
 @dataclasses.dataclass
 class CorrelationHeatmap(Plot):
-    """The correlations between the numeric columns as a heatmap."""
+    """The correlations between the numeric columns as a heatmap.
+
+    Wraps:
+        [`seaborn.heatmap`](https://seaborn.pydata.org/generated/seaborn.heatmap.html)
+        from seaborn.
+
+    """
 
     def draw(
         self,
@@ -445,6 +481,10 @@ class CountPlots(Plot):
     `columns`), in a grid, with the `top` most common values of each. The
     bars are split by the column `by`, or by the classes of the label (for
     classification), or by the dataset's first group.
+
+    Wraps:
+        [`seaborn.countplot`](https://seaborn.pydata.org/generated/seaborn.countplot.html)
+        from seaborn.
 
     """
 
@@ -504,6 +544,10 @@ class DetCurve(Plot):
     distribution, which makes the curves of good classifiers nearly straight
     and easy to compare. For more than two classes, each class is compared
     with the rest.
+
+    Wraps:
+        [`sklearn.metrics.DetCurveDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.DetCurveDisplay.html#sklearn.metrics.DetCurveDisplay.from_predictions)
+        from scikit-learn.
 
     """
 
@@ -569,7 +613,13 @@ class FairnessPlot(Plot):
 
 @dataclasses.dataclass
 class Histograms(Plot):
-    """The distribution of each numeric feature, in a grid."""
+    """The distribution of each numeric feature, in a grid.
+
+    Wraps:
+        [`matplotlib.axes.Axes.hist`](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.hist.html)
+        from matplotlib.
+
+    """
 
     def draw(
         self,
@@ -647,6 +697,10 @@ class InfluencePlot(Plot):
     "dffits"), so that rows that sway the results stand out. The most
     influential rows are labeled.
 
+    Wraps:
+        [`statsmodels.graphics.regressionplots.influence_plot`](https://www.statsmodels.org/stable/generated/statsmodels.graphics.regressionplots.influence_plot.html)
+        from statsmodels.
+
     """
 
     scaled: ClassVar[bool] = False
@@ -688,7 +742,15 @@ class InfluencePlot(Plot):
 
 @dataclasses.dataclass
 class LabelPlot(Plot):
-    """The distribution of the label: a bar for each class, or a histogram."""
+    """The distribution of the label: a bar for each class, or a histogram.
+
+    Wraps:
+        - [`seaborn.countplot`](https://seaborn.pydata.org/generated/seaborn.countplot.html)
+          from seaborn, for classes.
+        - [`seaborn.histplot`](https://seaborn.pydata.org/generated/seaborn.histplot.html)
+          from seaborn, for values.
+
+    """
 
     def draw(
         self,
@@ -729,6 +791,10 @@ class LearningCurve(Plot):
     its scores on the rows it learned from and on the rows held out are
     drawn, which shows whether more data would help. The score is `scoring`,
     or accuracy for classification and R² for regression.
+
+    Wraps:
+        [`sklearn.model_selection.LearningCurveDisplay.from_estimator`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.LearningCurveDisplay.html#sklearn.model_selection.LearningCurveDisplay.from_estimator)
+        from scikit-learn.
 
     """
 
@@ -778,6 +844,10 @@ class MissingHeatmap(Plot):
     missing, so that patterns (such as columns that are missing together)
     stand out. Columns without missing values are left out unless `columns`
     names them.
+
+    Wraps:
+        [`seaborn.heatmap`](https://seaborn.pydata.org/generated/seaborn.heatmap.html)
+        from seaborn.
 
     """
 
@@ -836,6 +906,12 @@ class PairPlot(Plot):
     `by`, or the classes of the label (for classification), or the dataset's
     first group. Only the first `limit` features and `rows` rows are drawn,
     since the number of panels grows with the square of the features.
+
+    Wraps:
+        - [`seaborn.scatterplot`](https://seaborn.pydata.org/generated/seaborn.scatterplot.html)
+          from seaborn, off the diagonal.
+        - [`seaborn.histplot`](https://seaborn.pydata.org/generated/seaborn.histplot.html)
+          from seaborn, on the diagonal.
 
     """
 
@@ -906,6 +982,10 @@ class PartialDependence(Plot):
     prediction is the probability of `category` (by default, the last
     class).
 
+    Wraps:
+        [`sklearn.inspection.PartialDependenceDisplay.from_estimator`](https://scikit-learn.org/stable/modules/generated/sklearn.inspection.PartialDependenceDisplay.html#sklearn.inspection.PartialDependenceDisplay.from_estimator)
+        from scikit-learn.
+
     """
 
     size: ClassVar[tuple[float, float]] = (9.6, 3.6)
@@ -971,7 +1051,13 @@ class PartialDependence(Plot):
 
 @dataclasses.dataclass
 class PrecisionRecallCurve(Plot):
-    """Precision against recall at every threshold (classification)."""
+    """Precision against recall at every threshold (classification).
+
+    Wraps:
+        [`sklearn.metrics.PrecisionRecallDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.PrecisionRecallDisplay.html#sklearn.metrics.PrecisionRecallDisplay.from_predictions)
+        from scikit-learn.
+
+    """
 
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
         """Draws the precision-recall curve (for each class if more than two).
@@ -1069,6 +1155,10 @@ class QqPlot(Plot):
     standard errors of a linear regression assume, the dots fall on the
     line.
 
+    Wraps:
+        [`statsmodels.graphics.gofplots.qqplot`](https://www.statsmodels.org/stable/generated/statsmodels.graphics.gofplots.qqplot.html)
+        from statsmodels.
+
     """
 
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
@@ -1108,7 +1198,13 @@ class QqPlot(Plot):
 
 @dataclasses.dataclass
 class ResidualPlot(Plot):
-    """The model's errors against its predictions (regression)."""
+    """The model's errors against its predictions (regression).
+
+    Wraps:
+        [`sklearn.metrics.PredictionErrorDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.PredictionErrorDisplay.html#sklearn.metrics.PredictionErrorDisplay.from_predictions)
+        from scikit-learn.
+
+    """
 
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
         """Draws the residuals against the predictions.
@@ -1124,7 +1220,13 @@ class ResidualPlot(Plot):
 
 @dataclasses.dataclass
 class RocCurve(Plot):
-    """The receiver operating characteristic (ROC) curve (classification)."""
+    """The receiver operating characteristic (ROC) curve (classification).
+
+    Wraps:
+        [`sklearn.metrics.RocCurveDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.RocCurveDisplay.html#sklearn.metrics.RocCurveDisplay.from_predictions)
+        from scikit-learn.
+
+    """
 
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
         """Draws the ROC curve (one for each class if there are more than two).
@@ -1211,6 +1313,10 @@ class ShapBar(Plot):
     `shap_importance` found, if it was applied, or are found as it finds them.
     The features past the `limit` are added together in the last bar.
 
+    Wraps:
+        [`shap.plots.bar`](https://shap.readthedocs.io/en/latest/generated/shap.plots.bar.html)
+        from shap.
+
     """
 
     scaled: ClassVar[bool] = False
@@ -1259,6 +1365,10 @@ class ShapBeeswarm(Plot):
     so it shows both how much a feature matters and in which direction. The
     SHAP values are the ones that `shap_importance` found, if it was applied,
     or are found as it finds them.
+
+    Wraps:
+        [`shap.plots.beeswarm`](https://shap.readthedocs.io/en/latest/generated/shap.plots.beeswarm.html)
+        from shap.
 
     """
 
@@ -1310,6 +1420,10 @@ class ShapDecision(Plot):
     the top. Rows that the model treats alike follow similar paths. The SHAP
     values are the ones that `shap_importance` found, if it was applied, or
     are found as it finds them.
+
+    Wraps:
+        [`shap.plots.decision`](https://shap.readthedocs.io/en/latest/generated/shap.plots.decision.html)
+        from shap.
 
     """
 
@@ -1365,6 +1479,10 @@ class ShapEmbedding(Plot):
     SHAP value of `feature` (by default, the most important). The SHAP values
     are the ones that `shap_importance` found, if it was applied, or are
     found as it finds them.
+
+    Wraps:
+        [`shap.plots.embedding`](https://shap.readthedocs.io/en/latest/generated/shap.plots.embedding.html)
+        from shap.
 
     """
 
@@ -1424,6 +1542,10 @@ class ShapForce(Plot):
     blue), and they meet at the row's output. The SHAP values are the ones
     that `shap_importance` found, if it was applied, or are found as it
     finds them, for the first rows of the test data.
+
+    Wraps:
+        [`shap.plots.force`](https://shap.readthedocs.io/en/latest/generated/shap.plots.force.html)
+        from shap.
 
     """
 
@@ -1488,6 +1610,10 @@ class ShapGroupDifference(Plot):
     group is the rows whose `group` column is `value`. The SHAP values are
     the ones that `shap_importance` found, if it was applied, or are found
     as it finds them.
+
+    Wraps:
+        [`shap.plots.group_difference`](https://shap.readthedocs.io/en/latest/generated/shap.plots.group_difference.html)
+        from shap.
 
     """
 
@@ -1566,6 +1692,10 @@ class ShapHeatmap(Plot):
     that `shap_importance` found, if it was applied, or are found as it finds
     them.
 
+    Wraps:
+        [`shap.plots.heatmap`](https://shap.readthedocs.io/en/latest/generated/shap.plots.heatmap.html)
+        from shap.
+
     """
 
     scaled: ClassVar[bool] = False
@@ -1615,6 +1745,10 @@ class ShapPartialDependence(Plot):
     the outputs of single rows, and the histogram is the distribution of the
     feature. The dashed lines are the average output and the feature's
     average. For a classifier, the output is the probability of `category`.
+
+    Wraps:
+        [`shap.plots.partial_dependence`](https://shap.readthedocs.io/en/latest/generated/shap.plots.partial_dependence.html)
+        from shap.
 
     """
 
@@ -1670,6 +1804,10 @@ class ShapScatter(Plot):
     the feature that seems to interact with `feature` the most, or by
     `interaction`. The SHAP values are the ones that `shap_importance` found,
     if it was applied, or are found as it finds them.
+
+    Wraps:
+        [`shap.plots.scatter`](https://shap.readthedocs.io/en/latest/generated/shap.plots.scatter.html)
+        from shap.
 
     """
 
@@ -1731,6 +1869,10 @@ class ShapViolin(Plot):
     `shap_importance` found, if it was applied, or are found as it finds
     them.
 
+    Wraps:
+        [`shap.plots.violin`](https://shap.readthedocs.io/en/latest/generated/shap.plots.violin.html)
+        from shap.
+
     """
 
     scaled: ClassVar[bool] = False
@@ -1779,6 +1921,10 @@ class ShapWaterfall(Plot):
     first, to reach the model's output for the row. The SHAP values are the
     ones that `shap_importance` found, if it was applied, or are found as it
     finds them, for the first rows of the test data.
+
+    Wraps:
+        [`shap.plots.waterfall`](https://shap.readthedocs.io/en/latest/generated/shap.plots.waterfall.html)
+        from shap.
 
     """
 
@@ -1841,6 +1987,12 @@ class ShapeFunctions(Plot):
     functions are the whole model: its output for a row is the sum of the
     contributions, plus the intercept (and any pairs of features, which are
     not drawn).
+
+    Wraps:
+        - [`interpret.glassbox.ExplainableBoostingClassifier.explain_global`](https://interpret.ml/docs/python/api/ExplainableBoostingClassifier.html)
+          from InterpretML, for classes.
+        - [`interpret.glassbox.ExplainableBoostingRegressor.explain_global`](https://interpret.ml/docs/python/api/ExplainableBoostingRegressor.html)
+          from InterpretML, for values.
 
     """
 
@@ -1914,6 +2066,10 @@ class SurvivalCurves(Plot):
     rows at risk (whose time is at least each tick's) below the curves, as
     papers in medicine usually do.
 
+    Wraps:
+        [`statsmodels.duration.survfunc.SurvfuncRight`](https://www.statsmodels.org/stable/generated/statsmodels.duration.survfunc.SurvfuncRight.html)
+        from statsmodels.
+
     """
 
     def draw(
@@ -1972,6 +2128,10 @@ class TreePlot(Plot):
     `adaboost` model, down to `depth` levels (deep trees are hard to read).
     Each box is a split, with the share of rows in each class (or the mean
     label) shaded.
+
+    Wraps:
+        [`sklearn.tree.plot_tree`](https://scikit-learn.org/stable/modules/generated/sklearn.tree.plot_tree.html)
+        from scikit-learn.
 
     """
 
@@ -2039,6 +2199,10 @@ class ValidationCurve(Plot):
     rows held out are drawn, which shows where it underfits or overfits. The
     score is `scoring`, or accuracy for classification and R² for
     regression.
+
+    Wraps:
+        [`sklearn.model_selection.ValidationCurveDisplay.from_estimator`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.ValidationCurveDisplay.html#sklearn.model_selection.ValidationCurveDisplay.from_estimator)
+        from scikit-learn.
 
     """
 
@@ -2150,7 +2314,7 @@ def _coefficients(item: base.Dataset, source: str | None) -> pd.DataFrame:
     if source is None and not names:
         message = (
             'there is no table of coefficients: apply "ols", "glm", "fixest", '
-            '"cox", or an effect first')
+            '"cox", or an inference first')
         raise ValueError(message)
     return item.tables[source or names[-1]]
 
@@ -2531,6 +2695,10 @@ def _predictor(
 def _prediction_error(item: base.Dataset, figure: Any, kind: str) -> None:
     """Draws scikit-learn's prediction error display.
 
+    Wraps:
+        [`sklearn.metrics.PredictionErrorDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.PredictionErrorDisplay.html#sklearn.metrics.PredictionErrorDisplay.from_predictions)
+        from scikit-learn.
+
     Args:
         item: the dataset with a fitted regression model.
         figure: the figure to draw on.
@@ -2754,6 +2922,14 @@ def _styled(
     The styles are applied over the current settings of `matplotlib`, which
     are put back afterwards. SciencePlots, which adds its styles to those of
     `matplotlib`, is only imported if a style is not one of `matplotlib`'s.
+
+    Wraps:
+        - [`matplotlib.style.use`](https://matplotlib.org/stable/api/style_api.html#matplotlib.style.use)
+          from matplotlib.
+        - [SciencePlots](https://github.com/garrettj403/SciencePlots),
+          for its styles (such as "science", "nature", and "bright").
+        - [`matplotlib.pyplot.xkcd`](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.xkcd.html)
+          from matplotlib, for the "xkcd" style.
 
     Args:
         style: names of `matplotlib` or SciencePlots styles, applied in order,

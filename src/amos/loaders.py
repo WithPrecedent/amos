@@ -255,6 +255,11 @@ class Download(Loader):
     is only downloaded again if it is missing or "refresh" is true. Keeping
     the file lets others check the exact data that a project used.
 
+    Wraps:
+        [`nagata.FileManager`](https://github.com/WithPrecedent/nagata)
+        from nagata, which reads each format with pandas (such as
+        `pandas.read_csv`).
+
     """
 
     def load(
@@ -299,7 +304,14 @@ class Download(Loader):
 
 @dataclasses.dataclass
 class LoadFile(Loader):
-    """Loads a data file in any format that the clerk knows."""
+    """Loads a data file in any format that the clerk knows.
+
+    Wraps:
+        [`nagata.FileManager`](https://github.com/WithPrecedent/nagata)
+        from nagata, which reads each format with pandas (such as
+        `pandas.read_csv`).
+
+    """
 
     def load(self, source: Any, **kwargs: Any) -> Any:
         """Loads the file at `source`.
@@ -325,6 +337,10 @@ class Openml(Loader):
     scikit-learn saves each dataset in an "openml" folder in the clerk's input
     folder, so it is only downloaded once. The dataset's default target is the
     label unless "label" is set.
+
+    Wraps:
+        [`sklearn.datasets.fetch_openml`](https://scikit-learn.org/stable/modules/generated/sklearn.datasets.fetch_openml.html)
+        from scikit-learn.
 
     """
 

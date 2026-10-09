@@ -42,7 +42,7 @@ Most contributions to `amos` are new techniques. To add one:
 
 1. Find the module of its genre (`loaders`, `cleaners`, `mungers`,
    `describers`, `splitters`, `transformers`, `samplers`, `models`,
-   `validators`, `effects`, `metrics`, `evaluators`, or `plots`) and copy a
+   `validators`, `metrics`, `evaluators`, `inferences`, or `plots`) and copy a
    similar technique. Every class is a `dataclasses.dataclass`.
 2. Wrap tools from other packages by their import paths (in `contents` or
    `tools`), not by importing them at the top of a module. They are imported
@@ -53,7 +53,19 @@ Most contributions to `amos` are new techniques. To add one:
    tables of the technique catalog in `docs/catalog.md` are made from these
    lines: write them again with `uv run python
    docs/scripts/technique_catalog.py`. A unit test checks that the catalog
-   is up to date.
+   is up to date. If the technique (or a function) uses a tool from another
+   package, end the description with a "Wraps:" section that names the tool
+   by its import path, links to its documentation, and names its package:
+
+   ```
+   Wraps:
+       [`sklearn.preprocessing.StandardScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html)
+       from scikit-learn.
+   ```
+
+   List several tools as a list, each with what it is used for (such as "to
+   classify"). A unit test checks that each tool in `contents` or `tools` is
+   linked this way.
 4. Make sure the technique learns only from the training rows, records what
    it did in the dataset's `history`, and uses the dataset's `seed` for
    anything random.

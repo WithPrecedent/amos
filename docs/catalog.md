@@ -216,13 +216,6 @@ imported when a technique that needs them is used (see the extras in the
 | `stratified_shuffle_split` | `sklearn.model_selection.StratifiedShuffleSplit` | Repeated random splits into two sets, with the classes in proportion. |
 | `time_series_split` | `sklearn.model_selection.TimeSeriesSplit` | Scores later rows with copies of the model fitted to earlier rows. |
 
-## Effects (analyst)
-
-| Name | Description |
-| --- | --- |
-| `interactive_regression` | The average effect of a treatment that has two values (such as 0 and 1). |
-| `partially_linear` | The effect of a treatment that adds to the label in the same way for all. |
-
 ## Metrics (critic)
 
 | Name | Tool | Task | Better | Description |
@@ -267,6 +260,39 @@ imported when a technique that needs them is used (see the extras in the
 | `permutation_importance` | How much the model's score drops when each feature is shuffled. |
 | `scorecard` | The results of every branch of an analysis, ready to publish. |
 | `shap_importance` | The mean absolute SHAP value of each feature. |
+
+## Inferences (critic)
+
+| Name | Tool | Description |
+| --- | --- | --- |
+| `difference_in_differences` | `doubleml.did.DoubleMLDIDMulti` | DoubleML's difference-in-differences: a treatment's effect over time. |
+| `distance_matching` | `dowhy.causal_estimators.distance_matching_estimator.DistanceMatchingEstimator` | DoWhy's matching of treated rows with the most similar untreated rows. |
+| `doubly_robust` | `dowhy.causal_estimators.doubly_robust_estimator.DoublyRobustEstimator` | DoWhy's doubly robust estimator (augmented inverse propensity weighting). |
+| `dr_learner` | `causalml.inference.meta.BaseDRRegressor` | causalml's doubly robust learner of the effect of a treatment. |
+| `glm_adjustment` | `dowhy.causal_estimators.generalized_linear_model_estimator.GeneralizedLinearModelEstimator` | DoWhy's generalized linear model of the label, adjusted for the features. |
+| `instrumental_variable` | `dowhy.causal_estimators.instrumental_variable_estimator.InstrumentalVariableEstimator` | DoWhy's estimate of an effect through an instrument. |
+| `interactive_iv` | `doubleml.DoubleMLIIVM` | DoubleML's effect for those whom an instrument moves to take a treatment. |
+| `interactive_regression` | `doubleml.DoubleMLIRM` | DoubleML's average effect of a treatment with two values. |
+| `lpcmci` | `tigramite.lpcmci.LPCMCI` | tigramite's LPCMCI: causal discovery in time series with hidden causes. |
+| `partially_linear` | `doubleml.DoubleMLPLR` | DoubleML's effect of a treatment that adds the same amount for every row. |
+| `partially_linear_iv` | `doubleml.DoubleMLPLIV` | DoubleML's partially linear model of a treatment with an instrument. |
+| `partially_linear_panel` | `doubleml.DoubleMLPLPR` | DoubleML's partially linear model of a panel: units seen over time. |
+| `partially_logistic` | `doubleml.DoubleMLLPLR` | DoubleML's partially linear model of a label with two classes. |
+| `pcmci` | `tigramite.pcmci.PCMCI` | tigramite's PCMCI: which variables cause which others at later times. |
+| `pcmci_plus` | `tigramite.pcmci.PCMCI` | tigramite's PCMCI+: causes at later times and at the same time. |
+| `potential_outcomes` | `doubleml.DoubleMLAPOS` | DoubleML's effects of each level of a treatment, compared to one of them. |
+| `propensity_matching` | `dowhy.causal_estimators.propensity_score_matching_estimator.PropensityScoreMatchingEstimator` | DoWhy's matching of treated and untreated rows by propensity score. |
+| `propensity_stratification` | `dowhy.causal_estimators.propensity_score_stratification_estimator.PropensityScoreStratificationEstimator` | DoWhy's comparison of the treated and untreated in strata of propensity. |
+| `propensity_weighting` | `dowhy.causal_estimators.propensity_score_weighting_estimator.PropensityScoreWeightingEstimator` | DoWhy's inverse propensity weighting. |
+| `quantile_effects` | `doubleml.DoubleMLQTE` | DoubleML's effects of a treatment on quantiles of the label. |
+| `regression_adjustment` | `dowhy.causal_estimators.linear_regression_estimator.LinearRegressionEstimator` | DoWhy's linear regression of the label, which adjusts for the features. |
+| `regression_discontinuity` | `doubleml.rdd.RDFlex` | DoubleML's regression discontinuity: the effect at a cutoff. |
+| `s_learner` | `causalml.inference.meta.BaseSRegressor` | causalml's S-learner: one model of the label, with the treatment in it. |
+| `sample_selection` | `doubleml.DoubleMLSSM` | DoubleML's effect of a treatment when the label is only sometimes seen. |
+| `t_learner` | `causalml.inference.meta.BaseTRegressor` | causalml's T-learner: one model of the label for each group. |
+| `time_series_effect` | `tigramite.models.LinearMediation` | tigramite's causal effect of one series (the treatment) on the label. |
+| `tmle` | `causalml.inference.meta.TMLELearner` | causalml's targeted maximum likelihood estimation of an average effect. |
+| `x_learner` | `causalml.inference.meta.BaseXRegressor` | causalml's X-learner, which suits a treatment that few rows have. |
 
 ## Plots (artist)
 

@@ -294,7 +294,13 @@ class CombineFlags(Munger):
 
 @dataclasses.dataclass
 class ConvertTypes(Munger):
-    """Changes the data types of columns."""
+    """Changes the data types of columns.
+
+    Wraps:
+        [`pandas.DataFrame.astype`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.astype.html)
+        from pandas.
+
+    """
 
     def munge(
         self,
@@ -319,7 +325,13 @@ class ConvertTypes(Munger):
 
 @dataclasses.dataclass
 class CountPatterns(Munger):
-    """Counts the matches of patterns in text."""
+    """Counts the matches of patterns in text.
+
+    Wraps:
+        [`pandas.Series.str.count`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.count.html)
+        from pandas.
+
+    """
 
     def munge(
         self,
@@ -363,7 +375,13 @@ class CountPatterns(Munger):
 
 @dataclasses.dataclass
 class DeriveColumns(Munger):
-    """Makes columns from expressions of other columns, such as "a / b"."""
+    """Makes columns from expressions of other columns, such as "a / b".
+
+    Wraps:
+        [`pandas.DataFrame.eval`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.eval.html)
+        from pandas.
+
+    """
 
     def munge(
         self,
@@ -405,7 +423,13 @@ class DeriveColumns(Munger):
 
 @dataclasses.dataclass
 class ExtractAll(Munger):
-    """Keeps every match of a pattern in text."""
+    """Keeps every match of a pattern in text.
+
+    Wraps:
+        [`pandas.Series.str.findall`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.findall.html)
+        from pandas.
+
+    """
 
     def munge(
         self,
@@ -463,6 +487,10 @@ class ExtractPattern(Munger):
     A pattern with named groups makes a column for each group. For example,
     "(?P<volume>\d+) F\.3d (?P<page>\d+)" makes "volume" and "page"
     columns from citations such as "512 F.3d 1093".
+
+    Wraps:
+        [`pandas.Series.str.extract`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.extract.html)
+        from pandas.
 
     """
 
@@ -529,6 +557,10 @@ class FlagPatterns(Munger):
 
     For example, {"reversed": "revers|vacat"} makes a "reversed" column that
     is true for each row whose text mentions a reversal or vacatur.
+
+    Wraps:
+        [`pandas.Series.str.contains`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.contains.html)
+        from pandas.
 
     """
 
@@ -791,6 +823,10 @@ class ParseDates(Munger):
     Text that is not a date becomes a missing value, rather than an error (as
     it would with `convert_types`).
 
+    Wraps:
+        [`pandas.to_datetime`](https://pandas.pydata.org/docs/reference/api/pandas.to_datetime.html)
+        from pandas.
+
     """
 
     def munge(
@@ -839,6 +875,10 @@ class ParseNumbers(Munger):
     The first number in the text is kept, so "$1,234.50" becomes 1234.5,
     "12%" becomes 12, and "about 3 years" becomes 3. Text without a number
     becomes a missing value.
+
+    Wraps:
+        [`pandas.to_numeric`](https://pandas.pydata.org/docs/reference/api/pandas.to_numeric.html)
+        from pandas.
 
     """
 
@@ -899,6 +939,10 @@ class ReplaceText(Munger):
 
     For example, {"\s*\(.*?\)": ""} removes everything in parentheses.
 
+    Wraps:
+        [`pandas.Series.str.replace`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.replace.html)
+        from pandas.
+
     """
 
     def munge(
@@ -952,6 +996,10 @@ class SplitText(Munger):
     caption such as "Smith v. Jones" into "Smith" and "Jones". The text is
     split at the first matches, so the last column has the rest of the text.
     The original column is kept.
+
+    Wraps:
+        [`pandas.Series.str.split`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.split.html)
+        from pandas.
 
     """
 
@@ -1017,7 +1065,13 @@ class SplitText(Munger):
 
 @dataclasses.dataclass
 class StripText(Munger):
-    """Trims spaces from text, and optionally makes it lowercase."""
+    """Trims spaces from text, and optionally makes it lowercase.
+
+    Wraps:
+        [`pandas.Series.str.strip`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.strip.html)
+        from pandas.
+
+    """
 
     def munge(
         self,

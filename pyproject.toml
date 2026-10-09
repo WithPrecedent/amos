@@ -46,7 +46,15 @@ dependencies = [
 # imports its package only when it is used, so the extras can be installed in
 # any combination.
 boosting = ["catboost>=1.2", "lightgbm>=4.0", "xgboost>=2.0"]
-causal = ["doubleml>=0.9"]
+# causalml has no wheels past Python 3.12, and on Python 3.11 and 3.12 the
+# versions of DoWhy that work with pandas 3 need an older scipy than
+# causalml does, so causalml is installed before Python 3.13 and DoWhy after.
+causal = [
+    "causalml>=0.17; python_version < '3.13'",
+    "doubleml>=0.11",
+    "dowhy>=0.14; python_version >= '3.13'",
+    "rdrobust>=2.1",
+    "tigramite>=5.2"]
 encoders = ["category-encoders>=2.6", "skrub>=0.5"]
 explain = ["eli5>=0.16", "interpret-core>=0.6", "shap>=0.45"]
 fairness = ["fairlearn>=0.12"]
@@ -92,7 +100,9 @@ dev = [
 tests = [
     "catboost>=1.2",
     "category-encoders>=2.6",
-    "doubleml>=0.9",
+    "causalml>=0.17; python_version < '3.13'",
+    "doubleml>=0.11",
+    "dowhy>=0.14; python_version >= '3.13'",
     "eli5>=0.16",
     "fairlearn>=0.12",
     "great-tables>=0.15",
@@ -107,11 +117,13 @@ tests = [
     "pyarrow>=15",
     "pyfixest>=0.30",
     "python-docx>=1.1",
+    "rdrobust>=2.1",
     "scienceplots>=2.1",
     "seaborn>=0.13",
     "shap>=0.45",
     "skrub>=0.5",
     "statsmodels>=0.14",
+    "tigramite>=5.2",
     "xgboost>=2.0",
     "coverage",
     "pytest",

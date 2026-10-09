@@ -221,8 +221,8 @@ def test_logit_is_scikit_learn_and_logit_sm_is_statsmodels() -> None:
         dataset.tables['logit_sm_coefficients']['p_value'], results.pvalues)
     models.Logit().apply(dataset)
     assert type(dataset.model).__name__ == 'LogisticRegression'
-    # Effects find the same models by name, as the right kind.
-    learner = amos.effects._learner('logit_sm', 'classify', SEED)
+    # Inferences find the same models by name, as the right kind.
+    learner = amos.inferences._learner('logit_sm', 'classify', SEED)
     assert (learner.kind, learner.output) == ('logit', 'binary')
 
 

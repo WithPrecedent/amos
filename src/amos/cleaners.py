@@ -88,7 +88,13 @@ class Cleaner(base.Operation, abc.ABC):
 
 @dataclasses.dataclass
 class DropColumns(Cleaner):
-    """Removes columns."""
+    """Removes columns.
+
+    Wraps:
+        [`pandas.DataFrame.drop`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.drop.html)
+        from pandas.
+
+    """
 
     def clean(
         self,
@@ -134,7 +140,13 @@ class DropConstant(Cleaner):
 
 @dataclasses.dataclass
 class DropDuplicates(Cleaner):
-    """Removes rows that duplicate an earlier row."""
+    """Removes rows that duplicate an earlier row.
+
+    Wraps:
+        [`pandas.DataFrame.drop_duplicates`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.drop_duplicates.html)
+        from pandas.
+
+    """
 
     def clean(
         self,
@@ -161,7 +173,13 @@ class DropDuplicates(Cleaner):
 
 @dataclasses.dataclass
 class DropMissing(Cleaner):
-    """Removes rows with missing values."""
+    """Removes rows with missing values.
+
+    Wraps:
+        [`pandas.DataFrame.dropna`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.dropna.html)
+        from pandas.
+
+    """
 
     def clean(
         self,
@@ -188,7 +206,13 @@ class DropMissing(Cleaner):
 
 @dataclasses.dataclass
 class FilterRows(Cleaner):
-    """Keeps the rows that match a query."""
+    """Keeps the rows that match a query.
+
+    Wraps:
+        [`pandas.DataFrame.query`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html)
+        from pandas.
+
+    """
 
     def clean(
         self,
@@ -262,7 +286,13 @@ class KeepColumns(Cleaner):
 
 @dataclasses.dataclass
 class RenameColumns(Cleaner):
-    """Renames columns, including the label and groups of the dataset."""
+    """Renames columns, including the label and groups of the dataset.
+
+    Wraps:
+        [`pandas.DataFrame.rename`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.rename.html)
+        from pandas.
+
+    """
 
     def clean(
         self,

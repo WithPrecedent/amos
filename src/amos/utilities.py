@@ -203,6 +203,18 @@ def search_space(
     between them (on a log scale, in an Optuna search, if the range covers
     two or more orders of magnitude). Any other list is a set of candidates.
 
+    Wraps:
+        - [`scipy.stats.randint`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.randint.html)
+          from SciPy, for a random search of whole numbers.
+        - [`scipy.stats.uniform`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.uniform.html)
+          from SciPy, for a random search of other numbers.
+        - [`optuna.distributions.IntDistribution`](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.distributions.IntDistribution.html)
+          from Optuna, for an Optuna search of whole numbers.
+        - [`optuna.distributions.FloatDistribution`](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.distributions.FloatDistribution.html)
+          from Optuna, for an Optuna search of other numbers.
+        - [`optuna.distributions.CategoricalDistribution`](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.distributions.CategoricalDistribution.html)
+          from Optuna, for an Optuna search of candidates.
+
     Args:
         parameters: parameters for a tool.
         search: "grid", "random", or "optuna".
@@ -264,6 +276,12 @@ def select_columns(
 def _distribution(low: float, high: float) -> Any:
     """Returns a `scipy` distribution between `low` and `high`.
 
+    Wraps:
+        - [`scipy.stats.randint`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.randint.html)
+          from SciPy, for whole numbers.
+        - [`scipy.stats.uniform`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.uniform.html)
+          from SciPy, for other numbers.
+
     Args:
         low: lowest value.
         high: highest value.
@@ -282,6 +300,14 @@ def _distribution(low: float, high: float) -> Any:
 
 def _optuna_distribution(value: list[Any]) -> Any:
     """Returns an Optuna distribution for the values of a parameter.
+
+    Wraps:
+        - [`optuna.distributions.IntDistribution`](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.distributions.IntDistribution.html)
+          from Optuna, for a range of whole numbers.
+        - [`optuna.distributions.FloatDistribution`](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.distributions.FloatDistribution.html)
+          from Optuna, for a range of other numbers.
+        - [`optuna.distributions.CategoricalDistribution`](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.distributions.CategoricalDistribution.html)
+          from Optuna, for candidates.
 
     Args:
         value: a list of two numbers (a range) or of candidates.
