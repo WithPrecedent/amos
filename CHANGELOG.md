@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.2.4
+
+* Renamed scikit-learn's logistic regression from `sk_logit` to `logit`
+  (`amos.models.Logit`), and statsmodels' logistic regression from `logit`
+  to `logit_sm` (`amos.models.LogitSM`), whose table of coefficients is now
+  "logit_sm_coefficients". Settings that name `sk_logit` must use `logit`,
+  and settings that name `logit` for statsmodels' model must use
+  `logit_sm`.
+* Added mungers, a new genre for the wrangler. A munger changes what is in
+  columns, or makes new columns from them, without adding or removing rows,
+  a whole column at a time with the vectorized methods of pandas.
+  `auto_categorize`, `convert_types`, and `strip_text` moved to the mungers
+  from the cleaners (in Python, they are now in `amos.mungers`; their names
+  in settings are unchanged). The new mungers are `flag_patterns`,
+  `count_patterns`, `map_patterns`, `extract_pattern`, `extract_all`,
+  `split_text`, `replace_text`, `normalize_text`, `parse_numbers`,
+  `parse_dates`, `parse_booleans`, `map_values`, `coalesce`,
+  `combine_flags`, and `derive_columns`. A munger records the columns that
+  it changed and created in the dataset's history.
+* Figures share one style. By default, it is SciencePlots' "science" and
+  "nature" styles (one column of Nature, 3.3 inches wide, with 7-point
+  text) and its "bright" color cycle, which people with color blindness
+  can tell apart. Every plot takes "style" (which can be "xkcd"), "colors",
+  and "latex" (off unless asked for, although "science" turns LaTeX on).
+  The defaults are `options._PLOT_STYLE` and `options._PLOT_COLORS`, and
+  SciencePlots is in the `plots` extra.
+* A plot's usual size is scaled to the width of its style. The SHAP plots
+  and `influence_plot`, whose packages fix the sizes of their text, keep
+  their usual sizes, and the style's text is enlarged to match.
+* `Project.export` saves figures at 300 dots per inch
+  (`options._FIGURE_DPI`).
+* `shap_bar` and `shap_waterfall` use the first two colors of the style's
+  cycle, `shap_waterfall` writes each value beside its arrow, and both no
+  longer fail with styles that show minor ticks. The plots that
+  scikit-learn and statsmodels draw (`actual_vs_predicted`,
+  `residual_plot`, `qq_plot`, and `partial_dependence`) use the colors of
+  the style's cycle, and axes of categories and heatmaps have no minor
+  ticks.
+* The README's study adds xgboost and draws a confusion heatmap and a SHAP
+  waterfall. The advanced user guide has new sections on munging data and
+  the styles of figures.
+
 ## 0.2.3
 
 * Renamed scikit-learn's logistic regression from `logit` to `sk_logit`, and
