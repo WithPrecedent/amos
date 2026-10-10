@@ -1,0 +1,9 @@
+/* More space at the bottom of the page. */
+.md-main__inner {
+  margin-bottom: 1.5rem;
+}
+
+/* Centers table cells that span rows (such as the stages in the README). */
+.md-typeset table:not([class]) td[rowspan] {
+  vertical-align: middle;
+}
