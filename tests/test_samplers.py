@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import pytest
 from conftest import SEED, make_numeric, requires
@@ -38,6 +40,21 @@ def test_samplers_change_only_the_training_rows(
     assert record['tool'].startswith('imblearn.')
     assert record['before'] == before.to_dict()
     assert len(dataset.train.intersection(dataset.test)) == 0
+
+
+def test_samplers_record_classes_that_can_be_exported() -> None:
+    requires('imblearn')
+    dataset = _imbalanced()
+    # The classes of `pandas` booleans that allow missing values are `numpy`
+    # values, which a json file cannot have as keys.
+    dataset.data['target'] = dataset.data['target'].astype('boolean')
+    amos.samplers.RandomUnder().apply(dataset)
+    record = dataset.history[-1]
+    for counts in (record['before'], record['after']):
+        assert {type(label) for label in counts} == {bool}
+        assert {type(count) for count in counts.values()} == {int}
+        assert set(json.loads(json.dumps(counts))) == {'false', 'true'}
+    assert record['after'][False] == record['after'][True]
 
 
 def test_samplers_are_reproducible() -> None:

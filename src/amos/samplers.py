@@ -64,7 +64,7 @@ class Sampler(base.Operation, abc.ABC):
             The resampled dataset.
 
         """
-        before = item.y_train.value_counts().to_dict()
+        before = _class_counts(item.y_train)
         tool = self._make_tool(item, kwargs)
         x, y = tool.fit_resample(item.x_train, item.y_train)
         origins = getattr(tool, 'sample_indices_', None)
@@ -78,7 +78,7 @@ class Sampler(base.Operation, abc.ABC):
                 tool if self.contents is None else self.contents),
             parameters = utilities.parameters_of(tool),
             before = before,
-            after = item.y_train.value_counts().to_dict())
+            after = _class_counts(item.y_train))
         return item
 
 
@@ -200,6 +200,25 @@ class TomekLinks(Sampler):
 
 
 """ Private Functions """
+
+
+def _class_counts(labels: pd.Series) -> dict[Any, int]:
+    """Returns the number of rows of each class, as plain Python values.
+
+    The classes of some labels are `numpy` values (such as those of `pandas`
+    booleans that allow missing values), which a json file cannot have as
+    keys, so a history that recorded them could not be exported.
+
+    Args:
+        labels: the labels of the rows to count.
+
+    Returns:
+        The number of rows of each class, from the most common to the least.
+
+    """
+    return {
+        (label.item() if isinstance(label, np.generic) else label): int(count)
+        for label, count in labels.value_counts().items()}
 
 
 def _leading_copies(

@@ -12,11 +12,12 @@ import dataclasses
 import importlib
 import json
 import pathlib
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from typing import Any, cast
 
 import chrisjen
 import nagata
+import numpy as np
 import pandas as pd
 
 from . import base, evaluators, loaders, options, utilities
@@ -276,12 +277,12 @@ class Project(chrisjen.Project):
 
         Args:
             item: object to save. Anything that json cannot store is saved as
-                its `str`.
+                its `str`, including the keys of a `dict` (see `_storable`).
             folder: folder to save it in.
             name: file name, with its extension.
 
         """
-        text = json.dumps(item, indent = 2, default = str)
+        text = json.dumps(_storable(item), indent = 2, default = str)
         self._save_text(text, folder, name)
 
     def _save_table(
@@ -454,3 +455,34 @@ def _predictions(item: base.Dataset) -> pd.DataFrame:
         for column in item.probabilities.columns:
             table[f'probability_{column}'] = item.probabilities[column]
     return table
+
+
+def _storable(item: Any) -> Any:
+    """Returns `item` with keys that a json file can store.
+
+    json saves a value that it does not know as its `str` (see
+    `Project._save_json`), but it refuses a key that is not text, a number, a
+    boolean, or `None`. A history can have such keys: a technique may record
+    something for each class of the label, for example, and the classes of
+    some labels are `numpy` values.
+
+    Args:
+        item: the object to save.
+
+    Returns:
+        `item`, with every key of every `dict` in it (at any depth) that json
+            cannot store replaced: by the plain Python value of a `numpy`
+            value, and otherwise by its `str`.
+
+    """
+    if isinstance(item, Mapping):
+        stored = {}
+        for key, value in item.items():
+            name = key.item() if isinstance(key, np.generic) else key
+            if not isinstance(name, str | int | float | bool | None):
+                name = str(name)
+            stored[name] = _storable(value)
+        return stored
+    if isinstance(item, list | tuple):
+        return [_storable(value) for value in item]
+    return item

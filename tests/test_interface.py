@@ -8,6 +8,7 @@ import os
 import pathlib
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import pytest
 from conftest import SEED, make_numeric, requires
@@ -171,6 +172,19 @@ def test_export_saves_everything(tmp_path: pathlib.Path) -> None:
     image = importlib.import_module('PIL.Image')
     with image.open(folder / 'figures/confusion_heatmap.png') as figure:
         assert round(figure.info['dpi'][0]) == amos.options._FIGURE_DPI
+
+
+def test_export_saves_a_history_with_keys_that_json_cannot_store() -> None:
+    project = amos.Project.create(
+        _settings(), item = make_numeric(), id = 'run')
+    # json refuses keys that are `numpy` values or tuples.
+    project.result.record(
+        'note', counts = {np.bool_(True): 1, (1, 2): 2, 3: [{np.int64(4): 5}]})
+    folder = project.export()
+    history = json.loads((folder / 'history.json').read_text('utf-8'))
+    assert history[-1] == {
+        'technique': 'note',
+        'counts': {'true': 1, '(1, 2)': 2, '3': [{'4': 5}]}}
 
 
 def test_export_after_each_apply_if_the_settings_say_so(

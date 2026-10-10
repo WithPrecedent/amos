@@ -24,7 +24,7 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Project` | A `chrisjen.Project` that makes your data into a `Dataset`, applies the workflow to a copy of it, and can `export` the results. |
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
-| `Loader`, `Cleaner`, `Munger`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, `Metric` has the genre `GroupMetric` (fairness metrics), and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
+| `Loader`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, `Metric` has the genre `GroupMetric` (fairness metrics), and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
 | `Findings` | The default report. |
 
@@ -44,7 +44,7 @@ import sklearn.datasets
 import amos
 
 print(sorted(amos.library["vertex"]["operation"]))
-# ['cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'metric', 'model', 'munger', 'plot', 'sampler', 'splitter', 'transformer', 'validator']
+# ['cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'metric', 'model', 'munger', 'plot', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
 print(amos.library.classify("smote"), amos.library.classify("one_hot"))
 # sampler encoder
 print(amos.library.all["random_forest"])
@@ -316,6 +316,253 @@ amos.mungers.ParseNumbers().apply(citations, columns = ["volume", "page"])
 print(citations.data["volume"].tolist(), citations.data["page"].tolist())
 # [512.0, 98.0, nan] [1093.0, 12.0, nan]
 ```
+
+## Merging data
+
+Research often needs data from sources that are not organized the same way:
+one table has a row for each case, and another has a row for each court, or
+for each court that each judge has served on. A *merger* matches each row of
+the data to a row of another table and adds that row's columns. The mergers
+differ in how they match rows (the [technique
+catalog](catalog.md#mergers-wrangler) lists them):
+
+| Merger | A row of the data gets | Its parameters |
+| --- | --- | --- |
+| `merge_keys` | The columns of the row with the same keys (such as its court). | `on`, `other_on`, `ignorecase`, and `duplicates` |
+| `merge_nearest` | The columns of the row with the nearest date or number (such as the last rating of its court before it was decided). | `column`, `other_column`, `direction`, `tolerance`, and keys, if any |
+| `merge_ranges` | The columns of the row whose range has its date or number in it (such as the president in office in its year). | `column`, `start`, `end`, `duplicates`, and keys, if any |
+| `merge_summary` | Summaries of every row with the same keys (such as the number of judges of its court and the share of them who are women). | `how`, `count`, and the keys |
+
+A merger never adds, removes, or reorders rows. The data keeps the unit that
+it studies, its label, its groups, and its index, so a merger cannot quietly
+multiply or lose your observations. A row without a match gets missing
+values. So start from the table whose rows are what you study (which is the
+table with the label), and merge the others into it. If the other table
+describes something else (judges, when the rows of the data are cases),
+reshape the data first (see [reshaping data](#reshaping-data)).
+
+Every merger takes these parameters:
+
+| Parameter | Meaning |
+| --- | --- |
+| `source` | The other table: the path of a data file, which is found and loaded as a [loader](#loading-data) would (a relative path is looked for in the current folder and then in the clerk's input folder). In Python, it can also be a `DataFrame`, a `Dataset`, or anything else that `Dataset.create` accepts. |
+| `reader` | Parameters for loading the file, such as `file_format`, `member`, or `sep`. |
+| `columns` | The columns of the other table to add. By default, they are every column whose name the data does not already have (other than the keys of the other table, which repeat those of the data). |
+| `prefix` | Text to put before the names of the added columns, such as "judge_". |
+| `indicator` | The name of a column to make that says whether each row was matched. |
+
+`on` names the key columns of the data, and `other_on` those of the other
+table, if they have other names there. A key must be the same kind of data
+(numbers, dates, or text) in both tables. Set `ignorecase` to match text
+keys without regard to capital letters or the spaces around them. A missing
+key matches nothing. A row can match only one row, so `merge_keys` and
+`merge_ranges` stop if a row matches several, unless `duplicates` says to use
+the "first" or "last" of them (`merge_summary` summarizes them instead).
+
+The history records how many rows were matched, which is worth checking (and
+reporting) every time:
+
+<!-- file: data/courts.csv -->
+```csv
+court,circuit,judgeships
+First Circuit,1,6
+Ninth Circuit,9,29
+Second Circuit,2,13
+```
+
+```python
+rulings = pd.DataFrame({
+    "case": ["a1", "a2", "a3", "a4"],
+    "court": ["First Circuit", "ninth circuit", "First Circuit", "Tax Court"],
+    "year": [2001, 2015, 2019, 2010],
+    "reversed": [True, False, True, False],
+})
+merging = {
+    "general": {"label": "reversed"},
+    "files": {"input_folder": "data"},
+    "rulings_project": {"rulings_workers": "wrangler"},
+    "wrangler": {"techniques": "merge_keys"},
+    "merge_keys_parameters": {
+        "source": "courts.csv",
+        "on": "court",
+        "ignorecase": True,
+        "indicator": "court_found",
+    },
+}
+merged = amos.Project.create(merging, item = rulings).result
+print(merged.data["circuit"].tolist(), merged.data["court_found"].tolist())
+# [1.0, 9.0, 1.0, nan] [True, True, True, False]
+print(merged.history[0])
+# {'technique': 'merge_keys', 'source': 'courts.csv', 'rows': 4, 'matched': 3, 'created': ['circuit', 'judgeships', 'court_found']}
+```
+
+`merge_ranges` and `merge_nearest` match rows in time. A range has a `start`
+and an `end` (both are in the range), and a missing one means that the range
+has no limit on that side, as with a term that is still going on.
+`merge_nearest` looks "before" a row's date or number unless `direction` says
+"after" or "nearest", so that nothing is used that was not yet known, and no
+farther than `tolerance`, if it is set:
+
+```python
+terms = pd.DataFrame({
+    "president": ["Clinton", "Bush", "Obama", "Trump"],
+    "began": [1993, 2001, 2009, 2017],
+    "ended": [2000, 2008, 2016, 2020],
+})
+amos.mergers.MergeRanges().apply(
+    merged, source = terms, column = "year", start = "began", end = "ended",
+    columns = "president")
+print(merged.data["president"].tolist())
+# ['Bush', 'Obama', 'Trump', 'Obama']
+```
+
+`merge_summary` is for a table with several rows for each row of the data. It
+summarizes them as [`group_rows`](#reshaping-data) does: by default, with the
+mean of each column of numbers and booleans (the mean of a boolean is the
+share that are true). `count` names a column for the number of rows:
+
+<!-- file: data/judges.csv -->
+```csv
+name,court,began,ended,party,woman
+Lynch,First Circuit,1995,,-1,True
+Selya,First Circuit,1986,2021,1,False
+Boudin,First Circuit,1992,2021,1,False
+Barron,First Circuit,2014,,-1,False
+Kozinski,Ninth Circuit,1985,2017,1,False
+Reinhardt,Ninth Circuit,1980,2018,-1,False
+```
+
+```python
+amos.mergers.MergeSummary().apply(
+    merged, source = "data/judges.csv", on = "court", ignorecase = True,
+    count = "judges", prefix = "bench_")
+print(merged.data["bench_judges"].tolist(), merged.data["bench_woman"].tolist())
+# [4.0, 2.0, 4.0, nan] [0.25, 0.0, 0.25, nan]
+```
+
+## Reshaping data
+
+*Shapers* change what a row is: they rearrange the same data so that each
+row stands for something else. Each has an opposite (the [technique
+catalog](catalog.md#shapers-wrangler) lists them):
+
+| Shaper | What it does | Its parameters |
+| --- | --- | --- |
+| `wide_to_long` | Stacks columns into rows: a row for each state, with a column for each year, becomes a row for each state in each year. | `columns` (with `name` and `value`), or `stubs` (with `name` and `separator`) |
+| `long_to_wide` | Spreads the rows of each group into columns, which is the opposite. | `names`, `values` or `stubs`, `ids`, and `separator` |
+| `lists_to_rows` | Makes a row for each item of a list: a row for each case becomes a row for each judge on each case. | `column`, `separator`, `name`, and `position` |
+| `group_rows` | Makes one row for each group of rows, with summaries of its columns, which is the opposite. | `by`, `how`, and `count` |
+
+The rows of reshaped data are not the rows that it began with, so:
+
+* The rows get new index labels (0, 1, 2, and so on). When rows are repeated,
+  an index with a name is kept as a column of that name.
+* A shaper must come before the data is split, so shapers belong in the
+  wrangler.
+* The label and groups must still be columns afterward. If they are not, set
+  the shaper's "label" and "groups" (and "task") parameters to those of the
+  reshaped data, as for a loader.
+
+`wide_to_long` stacks the `columns` that it is given into a `value` column,
+with a `name` column that says which column each value came from. With
+`stubs`, it stacks sets of columns that begin with the same names, as panel
+data often has: each stub becomes a column, and `name` has the rest of each
+name. `long_to_wide` does the opposite, with one column of `values` (whose
+new columns are named for the `names` alone) or one or more `stubs`:
+
+```python
+states = pd.DataFrame({
+    "state": ["Kansas", "Missouri"],
+    "income_2019": [51, 48],
+    "income_2020": [52, 49],
+    "tax_2019": [0.05, 0.04],
+    "tax_2020": [0.05, 0.05],
+})
+long = amos.shapers.WideToLong().apply(
+    states, stubs = ["income", "tax"], name = "year")
+print(long.data.to_dict("list"))
+# {'state': ['Kansas', 'Kansas', 'Missouri', 'Missouri'], 'year': [2019, 2020, 2019, 2020], 'income': [51, 52, 48, 49], 'tax': [0.05, 0.05, 0.04, 0.05]}
+amos.shapers.LongToWide().apply(long, names = "year", stubs = ["income", "tax"])
+print(list(long.data.columns))
+# ['state', 'income_2019', 'income_2020', 'tax_2019', 'tax_2020']
+```
+
+`group_rows` summarizes the columns of each group with the summaries in its
+"how": "mean", "median", "sum", "min", "max", "std", "count", "nunique",
+"first", "last", "any", "all", or "list". Without one, a column that is the
+same throughout each group keeps its value (so a case's year stays its year),
+the mean is taken of other numbers and booleans, and the first value is
+taken of anything else. A `dict` gives columns their own summaries.
+
+Together, shapers and mergers join tables whose rows are different things.
+Opinions name the judges of each case in one cell, and the table of judges
+above has a row for each court that each judge has served on. To study the
+panels, this project makes a row for each judge on each case, adds what is
+known about the judge of that name who was serving on the court that year,
+and groups the rows into cases again:
+
+<!-- file: panels.toml -->
+```toml
+[general]
+label = "reversed"
+
+[files]
+input_folder = "data"
+
+[panels_project]
+panels_workers = "wrangler"
+
+[wrangler]
+techniques = "lists_to_rows, merge_ranges, group_rows"
+
+[lists_to_rows_parameters]
+column = "panel"
+separator = ";"
+name = "judge"
+
+[merge_ranges_parameters]
+source = "judges.csv"
+column = "year"
+start = "began"
+end = "ended"
+on = ["judge", "court"]
+other_on = ["name", "court"]
+ignorecase = true
+columns = ["party", "woman"]
+prefix = "panel_"
+indicator = "found"
+
+[group_rows_parameters]
+by = "case"
+count = "judges"
+
+[group_rows_parameters.how]
+judge = "list"
+found = "sum"
+```
+
+```python
+argued = pd.DataFrame({
+    "case": ["a1", "a2", "a3"],
+    "court": ["First Circuit", "Ninth Circuit", "First Circuit"],
+    "year": [2001, 2015, 2019],
+    "panel": ["LYNCH; SELYA; BOUDIN", "KOZINSKI; REINHARDT", "LYNCH; BARRON; SOUTER"],
+    "reversed": [True, False, True],
+})
+panels = amos.Project.create("panels.toml", item = argued).result
+print(panels.data["judges"].tolist(), panels.data["found"].tolist())
+# [3, 2, 3] [3, 2, 2]
+print(panels.data["panel_party"].round(2).tolist(), panels.data["panel_woman"].tolist())
+# [0.33, 0.0, -1.0] [0.3333333333333333, 0.0, 0.5]
+print(panels.data["reversed"].tolist(), panels.label, panels.task)
+# [True, False, True] reversed classify
+print(panels.history[1])
+# {'technique': 'merge_ranges', 'source': 'judges.csv', 'rows': 8, 'matched': 7, 'created': ['panel_party', 'panel_woman', 'found']}
+```
+
+Justice Souter sat with the First Circuit after he retired, so no row of the
+table of judges matches him, and the means of the third panel leave him out.
+The "found" column says so, which is why an `indicator` is worth keeping.
 
 ## How techniques work
 
@@ -789,6 +1036,8 @@ be named in settings right away.
 | `Loader` | `load(self, source, **kwargs)` | The data: a `DataFrame` or anything that `Dataset.create` accepts. `self.read(path, **kwargs)` loads a file with the clerk. |
 | `Cleaner` | `clean(self, data, **kwargs)` | The cleaned `DataFrame`. |
 | `Munger` | `munge(self, data, **kwargs)` | The `DataFrame` with changed or new columns, and the same rows. |
+| `Merger` | `match(self, data, other, **kwargs)` | For each row of the data, the position of the row of the other table that matches it, or -1 for none. The merger adds the columns of those rows. `prepare(self, other, **kwargs)` can change the other table first. |
+| `Shaper` | `shape(self, data, **kwargs)` | The reshaped `DataFrame`. |
 | `Describer` | `describe(self, item, **kwargs)` | A table, stored in `tables`. |
 | `Splitter` | `divide(self, item, test_size, **kwargs)` | The training and test index labels. |
 | `Evaluator` | `evaluate(self, item, **kwargs)` | A table, stored in `tables`. |
@@ -1028,6 +1277,12 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | `ValueError: '...' has nothing to load` | A loader has no "source". Set it in the `{loader}_parameters` section. |
 | `ValueError: the pattern '...' is not valid: ...` | A munger's pattern is not a valid regular expression. A character with a special meaning (such as "(") needs a backslash to stand for itself. |
 | `TypeError: '...' uses text, but '...' is not text` | A munger that searches text was given a column of numbers, dates, or booleans. |
+| `ValueError: '...' has nothing to merge` | A merger has no "source". Set it in the `{merger}_parameters` section. |
+| `ValueError: ... rows of the other table have the same [...] as another of its rows` | A row of the data can match only one row of the other table. Set "duplicates" to "first" or "last" to use one of them, or summarize them with `merge_summary`. |
+| `TypeError: '...' cannot match '...', which is numbers in the data, with '...', which is text in the other table` | A key is not the same kind of data in both tables. Change the column of the data with a munger (such as `parse_numbers`, `parse_dates`, or `convert_types`). |
+| `ValueError: '...' would add columns named [...], which the data already has` | A merger was told to add a column whose name is taken. Set its "prefix". |
+| `ValueError: '...' changes the rows of the data, so it must come before the data is split` | A shaper came after a splitter. Reshape the data in the wrangler. |
+| `KeyError: the reshaped data has no columns [...], which are the label or groups` | A shaper left the data without its label or a group. Set the shaper's "label" or "groups" to those of the reshaped data. |
 | `ValueError: the dataset has no label` | A technique needs a label. Set "label" in the "general" section or pass it to `Dataset`. |
 | `ValueError: the data has not been split` | A technique asked for the test rows before a splitter was applied. |
 | `ValueError: '...' cannot use the dates or text in [...]` | A model was given text or dates. Encode them (with an encoder such as `one_hot`) or remove them (with `drop_columns`) first. |

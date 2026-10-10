@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.2.6
+
+* Added mergers, a new genre for the wrangler, for data from tables that
+  are not organized the same way. A merger matches each row of the data to
+  a row of another table (its "source": a data file, which is loaded with
+  the project's clerk, or a table) and adds that row's columns.
+  `merge_keys` matches the row with the same keys, `merge_nearest` the row
+  with the nearest date or number, and `merge_ranges` the row whose range
+  has a date or number in it. `merge_summary` adds summaries of every row
+  with the same keys. A merger never adds, removes, or reorders rows, and
+  records how many rows it matched in the dataset's history. Every merger
+  takes "columns", "prefix", and "indicator".
+* Added shapers, a new genre for the wrangler, which change what a row is.
+  `wide_to_long` stacks columns into rows and `long_to_wide` spreads rows
+  into columns, with "stubs" for sets of columns such as "income_2019" and
+  "income_2020". `lists_to_rows` makes a row for each item of a list (such
+  as each judge of a case), and `group_rows` makes one row for each group
+  of rows, with summaries of its columns. A shaper comes before the data is
+  split, and takes "label", "task", and "groups" for the reshaped data.
+* In Python, the genres are `amos.Merger` (whose subclasses write `match`)
+  and `amos.Shaper` (whose subclasses write `shape`), in `amos.mergers` and
+  `amos.shapers`. The advanced user guide has new sections on merging and
+  reshaping data.
+* Fixed `Project.export` failing ("keys must be str, int, float, bool or
+  None") when the dataset's history had keys that a json file cannot
+  store. A sampler recorded the number of rows of each class by `numpy`
+  values when the label was `pandas` booleans that allow missing values
+  (the "boolean" type). Samplers now record the classes as plain Python
+  values, and `export` saves any other such key as its plain value or its
+  `str`, as it already saved values.
+
 ## 0.2.5
 
 * Renamed effects to inferers and moved them from the analyst to the

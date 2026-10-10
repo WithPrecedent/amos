@@ -55,6 +55,24 @@ imported when a technique that needs them is used (see the extras in the
 | `split_text` | Splits text into columns where a pattern matches. |
 | `strip_text` | Trims spaces from text, and optionally makes it lowercase. |
 
+## Mergers (wrangler)
+
+| Name | Description |
+| --- | --- |
+| `merge_keys` | Adds columns from another table's row that has the same keys. |
+| `merge_nearest` | Adds columns from another table's row with the nearest date or number. |
+| `merge_ranges` | Adds columns from another table's row whose range has a date or number. |
+| `merge_summary` | Adds summaries of the rows of another table that have the same keys. |
+
+## Shapers (wrangler)
+
+| Name | Description |
+| --- | --- |
+| `group_rows` | Makes one row for each group of rows, with summaries of its columns. |
+| `lists_to_rows` | Makes a row for each item of a list, such as each judge of a case. |
+| `long_to_wide` | Spreads the rows of each group into columns, such as one for each year. |
+| `wide_to_long` | Stacks columns into rows, such as a row for each year. |
+
 ## Describers (explorer)
 
 | Name | Description |

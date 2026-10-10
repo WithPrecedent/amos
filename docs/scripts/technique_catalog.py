@@ -27,6 +27,8 @@ GENRES: tuple[tuple[str, str], ...] = (
     ('loader', 'Loaders (wrangler)'),
     ('cleaner', 'Cleaners (wrangler)'),
     ('munger', 'Mungers (wrangler)'),
+    ('merger', 'Mergers (wrangler)'),
+    ('shaper', 'Shapers (wrangler)'),
     ('describer', 'Describers (explorer)'),
     ('splitter', 'Splitters (analyst)'),
     ('imputer', 'Imputers (analyst)'),

@@ -2,11 +2,13 @@
 
 These are techniques of the "wrangler" stage of a project. Each one removes
 (or keeps) rows or columns, or renames columns. Techniques that change what is
-in the columns are mungers (see the `mungers` module). Cleaners learn nothing
-from the data that could leak from the test rows into the training rows (they
-do not, for example, fill missing values with an average), so they are safe
-to use before the data is split. To fill missing values, use an imputer from
-the `transformers` module after splitting.
+in the columns are mungers (see the `mungers` module), those that add the
+columns of another table are mergers (see the `mergers` module), and those
+that rearrange the rows and columns are shapers (see the `shapers` module).
+Cleaners learn nothing from the data that could leak from the test rows into
+the training rows (they do not, for example, fill missing values with an
+average), so they are safe to use before the data is split. To fill missing
+values, use an imputer from the `transformers` module after splitting.
 
 Contents:
     Cleaner: base class for techniques that clean data.
