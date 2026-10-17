@@ -7,9 +7,9 @@ authors = [{name = "Corey Rayburn Yung", email = "coreyrayburnyung@gmail.com"}]
 license = {text = "Apache Software License 2.0"}
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.2.7"
+version = "0.3.0"
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
@@ -141,7 +141,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/amos"]
 
-
 [tool.coverage.report]
 skip_empty = true
 show_missing = true
@@ -155,8 +154,6 @@ tests = ["tests", "*/tests"]
 [tool.coverage.run]
 branch = true
 source = ["amos", "tests"]
-
-
 
 [tool.mypy]
 files = ['src']
@@ -179,7 +176,6 @@ module = [
     "nagata.*",
     "wonka.*"]
 follow_untyped_imports = true
-
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

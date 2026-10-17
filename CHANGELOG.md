@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.3.0
+
+* Fixed the `stratified` and `train_test` splitters failing ("only integer
+  scalar arrays can be converted to a scalar index") when the index of the
+  data was text and pyarrow was installed. `pandas` stores text with
+  pyarrow when it is installed, and scikit-learn cannot select rows from an
+  index that is stored that way. The splitters now give scikit-learn the
+  positions of the rows to divide, as `group_split` already did, and look
+  up their index labels afterward. Every split has the same rows as before.
+* Added a `CITATION.cff` file and a citation section to the README
+* Changed the development status to Beta
+* Made the README badges larger
+
 ## 0.2.7
 
 * Updated to the `snickerdoodle` 0.4.0 template

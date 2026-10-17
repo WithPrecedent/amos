@@ -22,6 +22,7 @@ import dataclasses
 import importlib
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from . import base, options
@@ -180,12 +181,16 @@ class Stratified(Splitter):
 
         """
         model_selection = importlib.import_module('sklearn.model_selection')
+        # The positions of the rows are split, rather than their index labels,
+        # because scikit-learn cannot select from an index of text that is
+        # stored by pyarrow.
+        positions = np.arange(len(item.data))
         train, test = model_selection.train_test_split(
-            item.data.index,
+            positions,
             test_size = test_size,
             random_state = item.seed,
             stratify = item.y)
-        return pd.Index(train), pd.Index(test)
+        return item.data.index[train], item.data.index[test]
 
 
 @dataclasses.dataclass
@@ -254,9 +259,11 @@ class TrainTest(Splitter):
 
         """
         model_selection = importlib.import_module('sklearn.model_selection')
+        # The positions of the rows are split, as in `Stratified`.
+        positions = np.arange(len(item.data))
         train, test = model_selection.train_test_split(
-            item.data.index,
+            positions,
             test_size = test_size,
             random_state = item.seed,
             shuffle = shuffle)
-        return pd.Index(train), pd.Index(test)
+        return item.data.index[train], item.data.index[test]

@@ -2,12 +2,12 @@
 
 | | |
 | --- | --- |
-| Version | [![PyPI Latest Release](https://img.shields.io/pypi/v/amos.svg?style=flat-square&color=cornflowerblue&label=PyPI&logo=PyPI&logoColor=yellow)](https://pypi.org/project/amos/) [![GitHub Latest Release](https://img.shields.io/github/v/tag/WithPrecedent/amos?style=flat-square&color=forestgreen&label=GitHub&logo=github)](https://github.com/WithPrecedent/amos/releases) |
-| Status | [![Build Status](https://img.shields.io/github/actions/workflow/status/WithPrecedent/amos/ci.yml?branch=main&style=flat-square&color=cadetblue&label=Tests&logo=pytest)](https://github.com/WithPrecedent/amos/actions/workflows/ci.yml?query=branch%3Amain) [![Development Status](https://img.shields.io/badge/Development-Active-seagreen?style=flat-square&logo=git)](https://www.repostatus.org/#active) [![Project Stability](https://img.shields.io/pypi/status/amos?style=flat-square&logo=pypi&label=Stability&logoColor=yellow)](https://pypi.org/project/amos/) |
-| Documentation | [![Hosted By](https://img.shields.io/badge/Hosted_by-Github_Pages-blue?style=flat-square&color=forestgreen&logo=github)](https://WithPrecedent.github.io/amos) |
-| Tools | [![Documentation](https://img.shields.io/badge/MkDocs-magenta?style=flat-square&color=deepskyblue&logo=markdown&labelColor=gray)](https://squidfunk.github.io/mkdocs-material/) [![Linter](https://img.shields.io/endpoint?style=flat-square&url=https://raw.githubusercontent.com/charliermarsh/Ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/Ruff) [![Dependency Manager](https://img.shields.io/badge/uv-mediumpurple?style=flat-square&logo=uv&labelColor=gray)](https://docs.astral.sh/uv/) [![Pre-commit](https://img.shields.io/badge/pre--commit-darkolivegreen?style=flat-square&logo=pre-commit&logoColor=white&labelColor=gray)](https://github.com/TezRomacH/python-package-template/blob/master/.pre-commit-config.yaml) [![CI](https://img.shields.io/badge/GitHub_Actions-forestgreen?style=flat-square&logo=githubactions&labelColor=gray&logoColor=white)](https://github.com/features/actions) [![Editor Settings](https://img.shields.io/badge/Editor_Config-paleturquoise?style=flat-square&logo=editorconfig&labelColor=gray)](https://editorconfig.org/) [![Repository Template](https://img.shields.io/badge/snickerdoodle-bisque?style=flat-square&logo=cookiecutter&labelColor=gray)](https://www.github.com/WithPrecedent/snickerdoodle) [![Dependency Maintainer](https://img.shields.io/badge/dependabot-forestgreen?style=flat-square&logo=dependabot&logoColor=white&labelColor=gray)](https://github.com/dependabot) |
-| Compatibility | [![Compatible Python Versions](https://img.shields.io/pypi/pyversions/amos?style=flat-square&color=cornflowerblue&label=Python&logo=python&logoColor=yellow)](https://pypi.python.org/pypi/amos/) [![Linux](https://img.shields.io/badge/Linux-lightseagreen?style=flat-square&logo=linux&labelColor=gray&logoColor=white)](https://www.linux.org/) [![MacOS](https://img.shields.io/badge/MacOS-antiquewhite?style=flat-square&logo=apple&labelColor=gray)](https://www.apple.com/macos/)  [![Windows](https://img.shields.io/badge/Windows-blue?style=flat-square)](https://www.microsoft.com/en-us/windows?r=1) |
-| Stats | [![PyPI Download Rate (per month)](https://img.shields.io/pypi/dm/amos?style=flat-square&color=cornflowerblue&label=Downloads%20💾&logo=pypi&logoColor=yellow)](https://pypi.org/project/amos) [![GitHub Stars](https://img.shields.io/github/stars/WithPrecedent/amos?style=flat-square&color=forestgreen&label=Stars%20⭐&logo=github)](https://github.com/WithPrecedent/amos/stargazers) [![GitHub Contributors](https://img.shields.io/github/contributors/WithPrecedent/amos?style=flat-square&color=forestgreen&label=Contributors%20🙋&logo=github)](https://github.com/WithPrecedent/amos/graphs/contributors) [![GitHub Issues](https://img.shields.io/github/issues/WithPrecedent/amos?style=flat-square&color=forestgreen&label=Issues%20📘&logo=github)](https://github.com/WithPrecedent/amos/graphs/contributors) [![GitHub Forks](https://img.shields.io/github/forks/WithPrecedent/amos?style=flat-square&color=forestgreen&label=Forks%20🍴&logo=github)](https://github.com/WithPrecedent/amos/forks) |
+| Version | [![PyPI Latest Release](https://img.shields.io/pypi/v/amos.svg?style=for-the-badge&color=cornflowerblue&label=PyPI&logo=PyPI&logoColor=yellow)](https://pypi.org/project/amos/) [![GitHub Latest Release](https://img.shields.io/github/v/tag/WithPrecedent/amos?style=for-the-badge&color=forestgreen&label=GitHub&logo=github)](https://github.com/WithPrecedent/amos/releases) |
+| Status | [![Build Status](https://img.shields.io/github/actions/workflow/status/WithPrecedent/amos/ci.yml?branch=main&style=for-the-badge&color=cadetblue&label=Tests&logo=pytest)](https://github.com/WithPrecedent/amos/actions/workflows/ci.yml?query=branch%3Amain) [![Development Status](https://img.shields.io/badge/Development-Active-seagreen?style=for-the-badge&logo=git)](https://www.repostatus.org/#active) [![Project Stability](https://img.shields.io/pypi/status/amos?style=for-the-badge&logo=pypi&label=Stability&logoColor=yellow)](https://pypi.org/project/amos/) |
+| Documentation | [![Hosted By](https://img.shields.io/badge/Hosted_by-Github_Pages-blue?style=for-the-badge&color=forestgreen&logo=github)](https://WithPrecedent.github.io/amos) |
+| Tools | [![Documentation](https://img.shields.io/badge/MkDocs-magenta?style=for-the-badge&color=deepskyblue&logo=markdown&labelColor=gray)](https://squidfunk.github.io/mkdocs-material/) [![Linter](https://img.shields.io/endpoint?style=for-the-badge&url=https://raw.githubusercontent.com/charliermarsh/Ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/Ruff) [![Dependency Manager](https://img.shields.io/badge/uv-mediumpurple?style=for-the-badge&logo=uv&labelColor=gray)](https://docs.astral.sh/uv/) [![Pre-commit](https://img.shields.io/badge/pre--commit-darkolivegreen?style=for-the-badge&logo=pre-commit&logoColor=white&labelColor=gray)](https://github.com/TezRomacH/python-package-template/blob/master/.pre-commit-config.yaml) [![CI](https://img.shields.io/badge/GitHub_Actions-forestgreen?style=for-the-badge&logo=githubactions&labelColor=gray&logoColor=white)](https://github.com/features/actions) [![Editor Settings](https://img.shields.io/badge/Editor_Config-paleturquoise?style=for-the-badge&logo=editorconfig&labelColor=gray)](https://editorconfig.org/) [![Repository Template](https://img.shields.io/badge/snickerdoodle-bisque?style=for-the-badge&logo=cookiecutter&labelColor=gray)](https://www.github.com/WithPrecedent/snickerdoodle) [![Dependency Maintainer](https://img.shields.io/badge/dependabot-forestgreen?style=for-the-badge&logo=dependabot&logoColor=white&labelColor=gray)](https://github.com/dependabot) |
+| Compatibility | [![Compatible Python Versions](https://img.shields.io/pypi/pyversions/amos?style=for-the-badge&color=cornflowerblue&label=Python&logo=python&logoColor=yellow)](https://pypi.python.org/pypi/amos/) [![Linux](https://img.shields.io/badge/Linux-lightseagreen?style=for-the-badge&logo=linux&labelColor=gray&logoColor=white)](https://www.linux.org/) [![MacOS](https://img.shields.io/badge/MacOS-antiquewhite?style=for-the-badge&logo=apple&labelColor=gray)](https://www.apple.com/macos/)  [![Windows](https://img.shields.io/badge/Windows-blue?style=for-the-badge)](https://www.microsoft.com/en-us/windows?r=1) |
+| Stats | [![PyPI Download Rate (per month)](https://img.shields.io/pypi/dm/amos?style=for-the-badge&color=cornflowerblue&label=Downloads%20💾&logo=pypi&logoColor=yellow)](https://pypi.org/project/amos) [![GitHub Stars](https://img.shields.io/github/stars/WithPrecedent/amos?style=for-the-badge&color=forestgreen&label=Stars%20⭐&logo=github)](https://github.com/WithPrecedent/amos/stargazers) [![GitHub Contributors](https://img.shields.io/github/contributors/WithPrecedent/amos?style=for-the-badge&color=forestgreen&label=Contributors%20🙋&logo=github)](https://github.com/WithPrecedent/amos/graphs/contributors) [![GitHub Issues](https://img.shields.io/github/issues/WithPrecedent/amos?style=for-the-badge&color=forestgreen&label=Issues%20📘&logo=github)](https://github.com/WithPrecedent/amos/graphs/contributors) [![GitHub Forks](https://img.shields.io/github/forks/WithPrecedent/amos?style=for-the-badge&color=forestgreen&label=Forks%20🍴&logo=github)](https://github.com/WithPrecedent/amos/forks) |
 | | |
 
 
@@ -17,7 +17,7 @@
 <img src="https://media.giphy.com/media/rSi5EIResK2kW2B1NB/giphy.gif" height="300"/>
 </p>
 
-**A**utomated **M**odeling for **O**pen **S**cholarship.
+**A**utomated **M**odeling for **O**pen **S**cholarship. \
 Like the Rocinante's
 mechanic in *The Expanse*, `amos` handles the dirty jobs of a data science
 project: cleaning, describing, splitting, preprocessing, modeling, evaluating,
@@ -295,15 +295,6 @@ downloads one first, with the project's file manager, and then the project
 needs no `item`. See [loading
 data](https://WithPrecedent.github.io/amos/advanced/#loading-data).
 
-Data rarely comes in one table of the right shape. Mergers (such as
-`merge_keys`) add the columns of other tables to the rows that they match,
-without ever adding or losing a row, and shapers (such as `wide_to_long`)
-change what each row stands for. See [merging
-data](https://WithPrecedent.github.io/amos/advanced/#merging-data) and
-[reshaping
-data](https://WithPrecedent.github.io/amos/advanced/#reshaping-data).
-
-
 #### Compare every branch
 
 The critic's `scorecard` compares every branch of the analysis: each
@@ -370,6 +361,23 @@ Conduct](https://www.github.com/WithPrecedent/amos/blob/main/CODE_OF_CONDUCT.md)
   with more structure for large, long-running projects.
 * [MLflow](https://mlflow.org) and [DVC](https://dvc.org): track experiments,
   data, and models over time. They work well alongside `amos`.
+
+## Citation
+
+If you use `amos` in your research, please cite it. GitHub's "Cite this
+repository" button reads the same information from
+[`CITATION.cff`](https://www.github.com/WithPrecedent/amos/blob/main/CITATION.cff).
+
+```bibtex
+@software{yung_amos,
+  author  = {Yung, Corey Rayburn},
+  title   = {amos: Automated Modeling for Open Scholarship},
+  version = {0.3.0},
+  year    = {2026},
+  url     = {https://github.com/WithPrecedent/amos},
+  license = {Apache-2.0}
+}
+```
 
 ## License
 

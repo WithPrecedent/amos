@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use amos in your research, please cite it as below."
+type: software
+title: "amos: Automated Modeling for Open Scholarship"
+abstract: >-
+  A Python package that builds and runs reproducible data science workflows
+  (cleaning, describing, splitting, preprocessing, modeling, evaluating, and
+  drawing) from a plain settings file, designed for academic research.
+authors:
+  - given-names: Corey Rayburn
+    family-names: Yung
+    email: coreyrayburnyung@gmail.com
+    orcid: "https://orcid.org/0000-0001-6524-9956"
+version: 0.3.0
+date-released: 2026-10-17
+license: Apache-2.0
+repository-code: "https://github.com/WithPrecedent/amos"
+url: "https://WithPrecedent.github.io/amos"
+keywords:
+  - data science
+  - machine learning
+  - open science
+  - reproducibility
+  - research
+  - statistics
+  - workflow
