@@ -274,7 +274,7 @@ class ColumnWise:
 
     def get_params(
         self,
-        deep: bool = True) -> dict[str, Any]:  # noqa: ARG002, FBT002
+        deep: bool = True) -> dict[str, Any]:  # noqa: ARG002
         """Returns the parameters, as scikit-learn expects.
 
         Args:

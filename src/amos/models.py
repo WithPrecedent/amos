@@ -501,7 +501,7 @@ class LabelCoded:
         self.estimator.fit(x, codes)
         return self
 
-    def get_params(self, deep: bool = True) -> dict[str, Any]:  # noqa: FBT002
+    def get_params(self, deep: bool = True) -> dict[str, Any]:
         """Returns the parameters, as scikit-learn expects.
 
         Args:
@@ -835,7 +835,7 @@ class Statsmodel:
 
     def get_params(
         self,
-        deep: bool = True) -> dict[str, Any]:  # noqa: ARG002, FBT002
+        deep: bool = True) -> dict[str, Any]:  # noqa: ARG002
         """Returns the parameters, as scikit-learn expects.
 
         Args:
@@ -1229,7 +1229,7 @@ class FixedEffects:
 
     def get_params(
         self,
-        deep: bool = True) -> dict[str, Any]:  # noqa: ARG002, FBT002
+        deep: bool = True) -> dict[str, Any]:  # noqa: ARG002
         """Returns the parameters, as scikit-learn expects.
 
         Args:
@@ -1448,7 +1448,7 @@ class ProportionalHazards:
 
     def get_params(
         self,
-        deep: bool = True) -> dict[str, Any]:  # noqa: ARG002, FBT002
+        deep: bool = True) -> dict[str, Any]:  # noqa: ARG002
         """Returns the parameters, as scikit-learn expects.
 
         Args:
