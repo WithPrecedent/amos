@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.2.7
+
+* Updated to the `snickerdoodle` 0.4.0 template
+* Made `ruff` prefer single quotes
+* Made `ruff` ignore boolean default positional arguments (`FBT002`)
+* Excluded `uv.lock` from the large file check
+
 ## 0.2.6
 
 * Added mergers, a new genre for the wrangler, for data from tables that
