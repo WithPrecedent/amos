@@ -4,6 +4,8 @@ repos:
   rev: "v6.0.0"
   hooks:
   - id: check-added-large-files
+    # The lock file lists every package and its hashes.
+    exclude: ^uv\.lock$
   - id: check-ast
   - id: check-json
   - id: check-toml
