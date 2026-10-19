@@ -330,8 +330,10 @@ class Project(chrisjen.Project):
     def _validate_item(self, item: Any) -> base.Dataset:
         """Returns `item` as a `Dataset`.
 
-        A relative path to a data file is looked for in the clerk's input
-        folder if it is not found in the current folder.
+        A path to a data file is read as `load_file` reads it, with the
+        project's clerk: a relative path is looked for in the current folder
+        and then in the clerk's input folder, and the file may be in any
+        format that the clerk knows.
 
         Args:
             item: the data, or anything that `Dataset.create` accepts. If it
@@ -339,7 +341,9 @@ class Project(chrisjen.Project):
                 data into an empty `Dataset`.
 
         Raises:
-            ValueError: if `item` is `None` and the workflow has no loader.
+            FileNotFoundError: if `item` is a path and there is no file there.
+            ValueError: if `item` is `None` and the workflow has no loader, or
+                if it is a path to a file whose format is not known.
 
         Returns:
             A `Dataset`, with the "label", "task", "seed", and "groups" from
@@ -362,10 +366,7 @@ class Project(chrisjen.Project):
             # dataset cannot have.
             return base.Dataset(seed = general.get('seed'), use_gpu = use_gpu)
         if isinstance(item, str | pathlib.Path):
-            path = pathlib.Path(item)
-            if not path.exists():
-                path = pathlib.Path(self.clerk.input_folder) / path
-            item = path
+            item = loaders.LoadFile(clerk = self.clerk).read(item)
         return base.Dataset.create(
             item,
             label = general.get('label'),

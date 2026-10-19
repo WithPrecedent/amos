@@ -113,6 +113,27 @@ def test_a_settings_file_and_a_data_file(tmp_path: pathlib.Path) -> None:
     assert pathlib.Path(project.clerk.output_folder).name == 'results'
 
 
+@pytest.mark.parametrize('name', ['cases.tab', 'cases.csv.gz'])
+def test_a_data_file_is_read_as_load_file_reads_it(name: str) -> None:
+    # Only nagata's formats read ".tab" and compressed files.
+    pathlib.Path('data').mkdir()
+    make_numeric().to_csv(
+        pathlib.Path('data') / name,
+        index = False,
+        sep = '	' if name.endswith('.tab') else ',')
+    project = amos.Project.create(
+        _settings(files = {'input_folder': 'data'}),
+        item = name,
+        automatic = False)
+    assert project.item.data.shape == make_numeric().shape
+    assert project.item.label == 'target'
+    with pytest.raises(FileNotFoundError, match = 'no file'):
+        amos.Project.create(_settings(), item = 'missing.csv')
+    pathlib.Path('cases.unknown').write_text('a', encoding = 'utf-8')
+    with pytest.raises(ValueError, match = 'load_file'):
+        amos.Project.create(_settings(), item = 'cases.unknown')
+
+
 def test_the_general_section_sets_the_task() -> None:
     settings = _settings()
     settings['general']['task'] = 'regress'

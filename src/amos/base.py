@@ -31,20 +31,6 @@ from . import options, utilities
 
 # Parameters of a technique, as `chrisjen` stores them.
 GenericDict: TypeAlias = MutableMapping[Hashable, Any]
-# Functions that load each kind of file, by its extension, for
-# `Dataset.create`.
-_READERS: dict[str, Callable[..., pd.DataFrame]] = {
-    '.csv': pd.read_csv,
-    '.dta': pd.read_stata,
-    '.feather': pd.read_feather,
-    '.json': pd.read_json,
-    '.parquet': pd.read_parquet,
-    '.pickle': pd.read_pickle,
-    '.pkl': pd.read_pickle,
-    '.sav': pd.read_spss,
-    '.tsv': lambda path: pd.read_csv(path, sep = '\t'),
-    '.xls': pd.read_excel,
-    '.xlsx': pd.read_excel}
 # Tasks that a `Dataset` can have.
 _TASKS: tuple[str, ...] = ('classify', 'regress')
 
@@ -171,9 +157,9 @@ class Dataset:
         Args:
             item: a `Dataset`, a `pandas.DataFrame` or `Series`, a Polars
                 `DataFrame` or `LazyFrame`, a `numpy` array, a `dict` of
-                columns, the path to a data file (csv, tsv, Excel, parquet,
-                feather, json, Stata, SPSS, or pickle), or an object with a
-                `frame` attribute (such as a scikit-learn dataset loaded with
+                columns, the path to a data file in any format that `nagata`
+                knows (see `loaders.LoadFile`), or an object with a `frame`
+                attribute (such as a scikit-learn dataset loaded with
                 `as_frame = True`).
             label: name of the label column. Defaults to `None`. If `item` has
                 a `target` (as a scikit-learn dataset does), its name is used.
@@ -186,7 +172,10 @@ class Dataset:
                 Defaults to `None`, which is `False` for a new `Dataset`.
 
         Raises:
+            FileNotFoundError: if `item` is a path and there is no file there.
             TypeError: if `item` cannot be made into a `Dataset`.
+            ValueError: if `item` is a path to a file whose format is not
+                known.
 
         Returns:
             A `Dataset`. If `item` is already a `Dataset`, it is returned
@@ -211,8 +200,12 @@ class Dataset:
                 item.use_gpu = _validate_use_gpu(use_gpu)
             return item
         if isinstance(item, str | pathlib.Path):
-            data = _read(pathlib.Path(item))
-        elif type(item).__module__.startswith('polars'):
+            # `loaders` imports this module, so it is imported here. The file
+            # is read as `load_file` reads it, with a clerk for the current
+            # folder.
+            from . import loaders  # noqa: PLC0415
+            item = loaders.LoadFile().read(item)
+        if type(item).__module__.startswith('polars'):
             # Polars is optional, so its frames are recognized by their module.
             # A `LazyFrame` is collected first.
             frame = item.collect() if hasattr(item, 'collect') else item
@@ -893,29 +886,3 @@ def _kind_of(column: pd.Series) -> str:
         or isinstance(dtype, pd.PeriodDtype)):
         return 'dates'
     return 'categoricals'
-
-
-def _read(path: pathlib.Path) -> pd.DataFrame:
-    """Loads the data file at `path`.
-
-    Args:
-        path: path to a data file.
-
-    Raises:
-        FileNotFoundError: if there is no file at `path`.
-        ValueError: if the type of file is not supported.
-
-    Returns:
-        The data.
-
-    """
-    if not path.is_file():
-        message = f'there is no data file at {path}'
-        raise FileNotFoundError(message)
-    reader = _READERS.get(path.suffix.lower())
-    if reader is None:
-        message = (
-            f'{path.suffix!r} files are not supported: use one of '
-            f'{sorted(_READERS)}')
-        raise ValueError(message)
-    return reader(path)

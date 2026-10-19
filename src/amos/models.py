@@ -896,7 +896,8 @@ class Statsmodel:
         labels = None
         if self.kind == 'binomial_bayes_mixedglm':
             means = self._params()
-            deviations = pd.Series(np.asarray(results.fe_sd), index = means.index)
+            deviations = pd.Series(
+                np.asarray(results.fe_sd), index = means.index)
             # Variational Bayes gives each coefficient a normal posterior.
             table = pd.DataFrame({
                 'coefficient': means,
@@ -1050,7 +1051,8 @@ class Statsmodel:
             self.classes_ = np.unique(target)
         if output == 'binary':
             if len(self.classes_) != 2:  # noqa: PLR2004
-                message = f'a {self._title} model needs a label with two classes'
+                message = (
+                    f'a {self._title} model needs a label with two classes')
                 raise ValueError(message)
             return np.asarray(target == self.classes_[1], dtype = float)
         if output == 'classes':
@@ -1118,7 +1120,9 @@ class Statsmodel:
             case 'binomial_bayes_mixedglm':
                 # Each group has a random intercept: one variance component,
                 # with a column of 0s and 1s for each group.
-                groups = pd.get_dummies(self._column(x, 'groups'), dtype = float)
+                groups = pd.get_dummies(
+                    self._column(x, 'groups'),
+                    dtype = float)
                 return api.BinomialBayesMixedGLM(
                     endog,
                     exog,

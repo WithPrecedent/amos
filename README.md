@@ -256,10 +256,65 @@ section. The study uses optional packages (imbalanced-learn for `smote`,
 xgboost, shap for `shap_waterfall`, and matplotlib, seaborn, and SciencePlots
 for the figures), which `pip install amos[all]` installs.
 
+This is the workflow that `amos` builds from those settings. The workers run
+in order, and the analyst tries every path through its steps:
+
+```mermaid
+flowchart TB
+    data[("breast cancer data")] --> wrangler
+
+    subgraph wrangler ["wrangler"]
+        direction LR
+        drop_duplicates --> drop_constant
+    end
+
+    subgraph explorer ["explorer"]
+        direction LR
+        summarize --> missing_values --> label_balance
+    end
+
+    subgraph analyst ["analyst: an experiment of 12 combinations"]
+        direction LR
+        subgraph split ["split"]
+            stratified
+        end
+        subgraph scale ["scale"]
+            standard
+            min_max
+        end
+        subgraph sample ["sample"]
+            none
+            smote
+        end
+        subgraph model ["model"]
+            logit
+            random_forest
+            xgboost
+        end
+        split --> scale --> sample --> model
+    end
+
+    subgraph critic ["critic"]
+        direction LR
+        scorecard --> confusion --> permutation_importance
+    end
+
+    subgraph artist ["artist"]
+        direction LR
+        roc_curve --> importance_plot --> confusion_heatmap --> shap_waterfall
+    end
+
+    wrangler --> explorer --> analyst
+    analyst -- "the combination with the best roc_auc" --> critic
+    critic --> artist
+```
+
 #### Run it
 
-Pass the settings and the data (a `pandas.DataFrame`, a path to a data file,
-or a scikit-learn dataset) to `Project.create`:
+Pass the settings and the data (a `pandas.DataFrame`, a path to a data file
+in any format that [nagata](https://github.com/WithPrecedent/nagata) reads,
+such as csv, Excel, parquet, Stata, SAS, or SPSS, or a scikit-learn dataset)
+to `Project.create`:
 
 ```python
 import sklearn.datasets

@@ -142,10 +142,12 @@ text with an encoder such as `one_hot` or `tfidf`) or remove them before the
 model step.
 
 `Dataset.create` makes a dataset from a `DataFrame`, a Polars `DataFrame` or
-`LazyFrame`, a `numpy` array, a `dict` of columns, the path to a data file
-(csv, tsv, Excel, parquet, feather, json, Stata, SPSS, or pickle), or a
-scikit-learn dataset loaded with `as_frame = True`. A `Project` does this for
-you.
+`LazyFrame`, a `numpy` array, a `dict` of columns, the path to a data file, or
+a scikit-learn dataset loaded with `as_frame = True`. A `Project` does this for
+you. A data file is read just as `load_file` reads it (see "Loading data"
+below), so it may be in any format that `nagata` knows. A project reads it
+with its `clerk`, so a relative path is looked for in the current folder and
+then in the clerk's input folder.
 
 ## Loading data
 
@@ -198,8 +200,10 @@ print(project.result.history[0])
 ```
 
 `load_file` and `download` load a file in any format that the clerk knows
-(such as csv, tsv, Excel, parquet, feather, json, Stata, SAS, and SPSS), which
-they find from the file's extension. `pandas` opens a compressed file (such
+(such as csv, tsv, Excel, parquet, feather, json, json lines, fixed-width,
+HDF, ORC, XML, Stata, SAS, and SPSS), which they find from the file's
+extension. A path passed as a project's `item`, or to `Dataset.create`, is
+read the same way. `pandas` opens a compressed file (such
 as "cases.csv.gz") itself. Set `file_format` (such as "csv") for a file whose
 name does not say what it is, and `member` to load one file from a zip
 archive, which is extracted to a folder named for the archive. Other
@@ -218,6 +222,33 @@ clean_techniques = drop_duplicates
 
 [download_parameters]
 source = https://example.com/data/cases.csv.gz
+```
+
+To read another kind of file, add a format to `nagata`. Every subclass of
+`nagata.base.FileFormat` that is not abstract adds itself to `nagata`'s
+formats when it is defined, named for the class in snake case without
+"file_format_" (so `FileFormatPsv` is "psv"). It is then read by `load_file`,
+`download`, the mergers, and a project's `item` alike:
+
+```python
+import dataclasses
+
+import nagata
+
+@dataclasses.dataclass
+class FileFormatPsv(nagata.FileFormatCSV):
+    """Pipe-separated values."""
+
+    extensions = ("psv",)
+
+    def load(self, path, **kwargs):
+        kwargs.setdefault("sep", "|")
+        return super().load(path, **kwargs)
+
+pd.DataFrame({"court": ["state", "federal"], "appeals": [2, 1]}).to_csv(
+    "appeals.psv", sep = "|", index = False)
+print(amos.Dataset.create("appeals.psv"))
+# Dataset(rows=2, columns=2)
 ```
 
 To write a loader for another source, see "Writing your own techniques"

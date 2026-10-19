@@ -73,7 +73,7 @@ import io
 import logging
 import sys
 import warnings
-from collections.abc import Hashable, Iterator, Sequence
+from collections.abc import Generator, Hashable, Sequence
 from typing import Any, ClassVar
 
 import chrisjen
@@ -2658,7 +2658,7 @@ def _propensity(
 
 
 @contextlib.contextmanager
-def _quiet() -> Iterator[None]:
+def _quiet() -> Generator[None, None, None]:
     """Keeps the inferers' packages from printing, logging, and warning.
 
     causalml prints a message when it is imported, and the packages log
@@ -2794,7 +2794,7 @@ def _require_values(values: pd.Series, count: int, technique: str) -> None:
 
 
 @contextlib.contextmanager
-def _seeded(seed: int | None) -> Iterator[None]:
+def _seeded(seed: int | None) -> Generator[None, None, None]:
     """Seeds `numpy`'s global random numbers in the context.
 
     DoubleML (for inner folds), DoWhy (for bootstrapping), and causalml draw

@@ -472,9 +472,10 @@ def _format_of(path: pathlib.Path, clerk: nagata.FileManager) -> str:
     name = clerk.extensions.get(extensions[-1]) if extensions else None
     if name is None:
         message = (
-            f'the format of {path.name!r} is not known from its name: set '
-            f'"file_format" (such as "csv"), or "member" for a file in a zip '
-            f'archive'
+            f'the format of {path.name!r} is not known from its name, which '
+            f'should end in one of {sorted(clerk.extensions)}: or load it '
+            f'with a loader (such as load_file) and set "file_format" (such '
+            f'as "csv"), or "member" for a file in a zip archive'
         )
         raise ValueError(message)
     return name

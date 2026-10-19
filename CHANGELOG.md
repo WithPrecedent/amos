@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* A path to a data file passed as a project's `item`, or to
+  `Dataset.create`, is now read with `nagata`'s formats, just as `load_file`
+  reads it, so it may be in any format that `nagata` knows (such as json
+  lines, fixed-width, HDF, ORC, XML, or SAS) or compressed (such as
+  "cases.csv.gz"). A project reads it with its `clerk`. Before, it was read
+  with `amos`'s own list of 11 `pandas` readers. A format added to `nagata`
+  (a subclass of `nagata.base.FileFormat`) is now read by an item too.
+* The error for a file whose format is not known from its name now lists the
+  extensions that `nagata` knows.
+
 ## 0.3.1
 
 * Added the `use_gpu` setting to the "general" section, which fits the

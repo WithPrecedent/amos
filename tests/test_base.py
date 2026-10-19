@@ -40,14 +40,16 @@ def test_create_from_a_scikit_learn_dataset_uses_its_target() -> None:
     assert dataset.data.shape == (569, 31)
 
 
-@pytest.mark.parametrize('suffix', ['.csv', '.tsv', '.json', '.pkl'])
+# ".tab" and ".csv.gz" are read by nagata's formats, as `load_file` reads them.
+@pytest.mark.parametrize(
+    'suffix', ['.csv', '.tsv', '.tab', '.csv.gz', '.json', '.pkl'])
 def test_create_from_a_file(tmp_path: pathlib.Path, suffix: str) -> None:
     data = pd.DataFrame({'a': [1, 2, 3], 'b': [4.0, 5.0, 6.0]})
     path = tmp_path / f'data{suffix}'
-    if suffix == '.csv':
+    if suffix in {'.csv', '.csv.gz'}:
         data.to_csv(path, index = False)
-    elif suffix == '.tsv':
-        data.to_csv(path, index = False, sep = '\t')
+    elif suffix in {'.tsv', '.tab'}:
+        data.to_csv(path, index = False, sep = '	')
     elif suffix == '.json':
         data.to_json(path)
     else:
@@ -63,7 +65,7 @@ def test_create_raises_for_a_missing_or_unknown_file(
         amos.Dataset.create(tmp_path / 'missing.csv')
     unknown = tmp_path / 'data.unknown'
     unknown.write_text('a', encoding = 'utf-8')
-    with pytest.raises(ValueError, match = 'not supported'):
+    with pytest.raises(ValueError, match = r"not known from its name.*'csv'"):
         amos.Dataset.create(unknown)
 
 

@@ -65,7 +65,7 @@ import dataclasses
 import importlib
 import math
 import re
-from collections.abc import Callable, Hashable, Iterator, Sequence
+from collections.abc import Callable, Generator, Hashable, Sequence
 from typing import Any, ClassVar
 
 import numpy as np
@@ -2724,7 +2724,7 @@ def _prediction_error(item: base.Dataset, figure: Any, kind: str) -> None:
 
 
 @contextlib.contextmanager
-def _pyplot(figure: Any, seed: int | None) -> Iterator[Any]:
+def _pyplot(figure: Any, seed: int | None) -> Generator[Any, None, None]:
     """Lends `figure` to `matplotlib.pyplot` while shap draws on it.
 
     shap draws with `matplotlib.pyplot`, which only draws on figures that it
@@ -2916,7 +2916,7 @@ def _styled(
     style: str | Sequence[str] | None,
     colors: str | None,
     *,
-    latex: bool) -> Iterator[Any]:
+    latex: bool) -> Generator[Any, None, None]:
     """Applies a style to the figures made and drawn in the context.
 
     The styles are applied over the current settings of `matplotlib`, which

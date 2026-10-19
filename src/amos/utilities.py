@@ -24,7 +24,7 @@ import inspect
 import logging
 import platform
 import sys
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 import chrisjen.utilities
@@ -233,7 +233,7 @@ def parameters_of(tool: Any) -> dict[str, Any]:
 
 
 @contextlib.contextmanager
-def preserved_logging() -> Iterator[None]:
+def preserved_logging() -> Generator[None, None, None]:
     """Restores the root logger after code that changes it.
 
     Some packages (such as pyfixest) configure the root logger when they run,
