@@ -1,7 +1,8 @@
 """Writes the tables of the technique catalog in `docs/catalog.md`.
 
 Each technique is listed under its genre with the tool that it wraps and the
-first line of its docstring. The introduction of the page (everything before
+first line of its docstring. Its name links to its class in the API
+reference. The introduction of the page (everything before
 its first section) is written by hand and kept as it is. Run the script again
 whenever a technique is added or its docstring changes:
 
@@ -71,7 +72,7 @@ def tables() -> str:
                 classify = _tool(kind.tools.get('classify'))
                 regress = _tool(kind.tools.get('regress'))
                 out.write(
-                    f'| `{name}` | {classify} | {regress} | '
+                    f'| {_name(name, kind)} | {classify} | {regress} | '
                     f'{_description(kind)} |\n')
         elif genre == 'metric':
             out.write('| Name | Tool | Task | Better | Description |\n')
@@ -79,20 +80,20 @@ def tables() -> str:
             for name, kind in kinds:
                 better = 'higher' if kind.greater_is_better else 'lower'
                 out.write(
-                    f'| `{name}` | {_tool(kind.contents)} | '
+                    f'| {_name(name, kind)} | {_tool(kind.contents)} | '
                     f'{", ".join(kind.tasks)} | {better} | '
                     f'{_description(kind)} |\n')
         elif all(getattr(k, 'contents', None) is None for _, k in kinds):
             out.write('| Name | Description |\n')
             out.write('| --- | --- |\n')
             for name, kind in kinds:
-                out.write(f'| `{name}` | {_description(kind)} |\n')
+                out.write(f'| {_name(name, kind)} | {_description(kind)} |\n')
         else:
             out.write('| Name | Tool | Description |\n')
             out.write('| --- | --- | --- |\n')
             for name, kind in kinds:
                 out.write(
-                    f'| `{name}` | {_tool(kind.contents)} | '
+                    f'| {_name(name, kind)} | {_tool(kind.contents)} | '
                     f'{_description(kind)} |\n')
         out.write('\n')
     return out.getvalue().rstrip('\n') + '\n'
@@ -113,6 +114,21 @@ def _description(kind: type) -> str:
     """
     docstring = inspect.getdoc(kind) or ''
     return docstring.splitlines()[0].rstrip('.') + '.'
+
+
+def _name(name: str, kind: type) -> str:
+    """Returns the name of a technique, linked to its API reference.
+
+    Args:
+        name: name of the technique in the library.
+        kind: the technique.
+
+    Returns:
+        The name as code, linked (by mkdocs-autorefs) to the class's section
+            in the API reference.
+
+    """
+    return f'[`{name}`][{kind.__module__}.{kind.__qualname__}]'
 
 
 def _techniques(genre: str) -> list[tuple[str, type]]:
@@ -144,18 +160,21 @@ def _techniques(genre: str) -> list[tuple[str, type]]:
 def _tool(tool: Any) -> str:
     """Returns the import path of a wrapped tool, as code.
 
+    The path may break onto a new line after each period (and nowhere else),
+    so long paths do not make their table too wide.
+
     Args:
         tool: an import path, a class, or `None`.
 
     Returns:
-        The import path in backticks, or an empty string for `None`.
+        The import path in HTML `code` tags, or an empty string for `None`.
 
     """
     if tool is None:
         return ''
-    if isinstance(tool, str):
-        return f'`{tool}`'
-    return f'`{tool.__module__}.{tool.__qualname__}`'
+    if not isinstance(tool, str):
+        tool = f'{tool.__module__}.{tool.__qualname__}'
+    return f'<code>{tool.replace(".", ".<wbr>")}</code>'
 
 
 if __name__ == '__main__':
