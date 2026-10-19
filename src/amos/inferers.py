@@ -91,6 +91,9 @@ _COLUMNS: tuple[str, ...] = (
 _COMPARISONS: frozenset[str] = frozenset({'never_treated', 'not_yet_treated'})
 # Packages whose messages (printed or logged) the inferers keep quiet.
 _LOGGERS: tuple[str, ...] = ('causalml', 'dowhy', 'tigramite')
+# The number of made-up rows that a learner is fitted to on the GPU, to check
+# that it can be before an inferer fits it.
+_PROBE_ROWS: int = 64
 # DoubleML's scores of `quantile_effects`, by the names that it takes.
 _QUANTILE_SCORES: dict[str, str] = {
     'cvar': 'CVaR', 'local_quantile': 'LPQ', 'quantile': 'PQ'}
@@ -125,6 +128,12 @@ class Inferer(base.Operation, abc.ABC):
     | `treatment_model` | Name of an `amos` model for the treatment, and for any instrument or selection (by default, the outcome model). DoubleML and causalml. |
     | `n_folds` | Number of folds for cross-fitting (5 by default). DoubleML and causalml. |
 
+    If the dataset's `use_gpu` is `True` and an NVIDIA GPU is found, the
+    models of DoubleML and causalml that can be fitted on a GPU (`catboost`,
+    `lightgbm`, `tabpfn`, and `xgboost`) are fitted on the first one. Each is
+    first fitted to a few rows on the GPU, and if that fails, it warns and
+    the inferer fits it on the CPU.
+
     The techniques of each package are a genre within this one: `Doubleml`,
     `Dowhy`, `Causalml`, and `Tigramite`, which write `implement`. To add a
     technique of one of those packages, subclass its genre; to add one of
@@ -151,12 +160,65 @@ class _Learners:
         treatment: name of the model of the treatment (and of any instrument
             or selection).
         seed: seed for the models.
+        on_gpu: names of the models that are fitted on the GPU. Defaults to
+            an empty `frozenset`, which fits every model on the CPU.
 
     """
 
     outcome: str
     treatment: str
     seed: int | None
+    on_gpu: frozenset[str] = frozenset()
+
+    @classmethod
+    def create(
+        cls,
+        item: base.Dataset,
+        outcome: str,
+        treatment: str,
+        inferer: str) -> _Learners:
+        """Returns the learners of an inferer, on the GPU if they can be.
+
+        A model is fitted on the GPU if the dataset's `use_gpu` is `True`,
+        the model can be fitted on a GPU (see `Model._device_parameters`), an
+        NVIDIA GPU is found, and the model is fitted on it to a few rows
+        without an error (see `_fits_on_gpu`).
+
+        Args:
+            item: the dataset.
+            outcome: name of the model of the label.
+            treatment: name of the model of the treatment.
+            inferer: name of the inferer, for warnings.
+
+        Returns:
+            The learners. If no GPU is found, it warns that the models are
+                fitted on the CPU.
+
+        """
+        capable = []
+        if item.use_gpu:
+            capable = [
+                n for n in dict.fromkeys([outcome, treatment])
+                if _technique(n)._device_parameters(gpu = True) is not None]
+        if not capable:
+            return cls(outcome, treatment, item.seed)
+        if not utilities.gpus():
+            warnings.warn(
+                'use_gpu is true, but no NVIDIA GPU was found, so models are '
+                'fitted on the CPU',
+                stacklevel = 3)
+            return cls(outcome, treatment, item.seed)
+        # Whether a package can use the GPU does not depend on the task, so
+        # each model is checked once, with the task that its role usually
+        # has (the outcome's, if one model has both roles), so that tabpfn,
+        # for example, does not download the weights of a model it will not
+        # use.
+        tasks = {treatment: 'classify', outcome: 'regress'}
+        on_gpu = set()
+        for name in capable:
+            if _fits_on_gpu(name, tasks[name], item.seed, inferer):
+                on_gpu.add(name)
+        return cls(outcome, treatment, item.seed, frozenset(on_gpu))
 
     def of_outcome(self, task: str) -> Any:
         """Returns an unfitted model of the label.
@@ -168,7 +230,8 @@ class _Learners:
             The model.
 
         """
-        return _learner(self.outcome, task, self.seed)
+        return _learner(
+            self.outcome, task, self.seed, gpu = self.outcome in self.on_gpu)
 
     def of_treatment(self, task: str) -> Any:
         """Returns an unfitted model of the treatment.
@@ -180,7 +243,9 @@ class _Learners:
             The model.
 
         """
-        return _learner(self.treatment, task, self.seed)
+        return _learner(
+            self.treatment, task, self.seed,
+            gpu = self.treatment in self.on_gpu)
 
 
 @dataclasses.dataclass(frozen = True)
@@ -316,8 +381,8 @@ class Causalml(Inferer, abc.ABC):
             )
             raise ValueError(message)
         groups = [level for level in levels if level != control]
-        learners = _Learners(
-            outcome_model, treatment_model or outcome_model, item.seed)
+        learners = _Learners.create(
+            item, outcome_model, treatment_model or outcome_model, self.name)
         setup = _Setup(
             item, frame, label, treatment, controls, learners, n_folds,
             {**kwargs, 'control': control})
@@ -645,8 +710,8 @@ class Doubleml(Inferer, abc.ABC):
             raise ValueError(message)
         frame, label, controls = _prepare(
             item, [treatment, *named.values()], self.name)
-        learners = _Learners(
-            outcome_model, treatment_model or outcome_model, item.seed)
+        learners = _Learners.create(
+            item, outcome_model, treatment_model or outcome_model, self.name)
         setup = _Setup(
             item, frame, label, treatment, controls, learners, n_folds, kwargs)
         setup = dataclasses.replace(setup, frame = self._adjust(setup))
@@ -2185,6 +2250,50 @@ def _estimates(
         index = pd.Index(list(index), name = name))
 
 
+def _fits_on_gpu(name: str, task: str, seed: int | None, inferer: str) -> bool:
+    """Returns whether a learner can be fitted on the GPU, by fitting it.
+
+    Args:
+        name: name of an `amos` model that can be fitted on a GPU.
+        task: the task to check it with, "classify" or "regress" (or the
+            other one, if the model cannot do it).
+        seed: seed for the model.
+        inferer: name of the inferer, for the warning.
+
+    Returns:
+        Whether the learner was fitted on the GPU and made predictions. If
+            not, it warns that the inferer fits it on the CPU.
+
+    """
+    technique = _technique(name)
+    if technique.contents is None and task not in technique.tools:
+        task = 'regress' if task == 'classify' else 'classify'
+    rows = np.arange(_PROBE_ROWS)
+    x = np.column_stack([rows / _PROBE_ROWS, rows % 2])
+    y = rows % 2 if task == 'classify' else rows / _PROBE_ROWS
+    # DoubleML and causalml fit the learners themselves, many times over, so
+    # unlike a model (see `Model.implement`), a learner that fails on the GPU
+    # cannot be fitted again on the CPU partway through an inferer. Instead,
+    # it is fitted once to a few made-up rows before the inferer starts (and
+    # makes predictions, which is when tabpfn first runs on the GPU), and
+    # anything that stops it means that the inferer fits it on the CPU. That
+    # catches what usually keeps a package off the GPU (being built without
+    # GPU support, or a GPU too old for it), but not running out of memory on
+    # the full data, whose error is raised.
+    try:
+        with _quiet():
+            learner = _learner(name, task, seed, gpu = True)
+            learner.fit(x, y)
+            learner.predict(x)
+    except Exception as error:  # noqa: BLE001
+        warnings.warn(
+            f'{name!r} could not be fitted on the GPU, so {inferer!r} fits it '
+            f'on the CPU instead: {error}',
+            stacklevel = 4)
+        return False
+    return True
+
+
 def _folds(
     rows: int,
     n_folds: int,
@@ -2322,26 +2431,31 @@ def _independence_test(name: str, seed: int | None) -> Any:
     return tool(significance = 'analytic')
 
 
-def _learner(name: str, task: str, seed: int | None) -> Any:
+def _learner(
+    name: str,
+    task: str,
+    seed: int | None,
+    *,
+    gpu: bool = False) -> Any:
     """Returns an unfitted model, chosen by the name of an `amos` model.
 
     Args:
         name: name of an `amos` model (such as "random_forest").
         task: "classify" or "regress".
         seed: seed for the model, if it takes one.
+        gpu: whether to build the model for the GPU, if it can be fitted on
+            one. Defaults to `False`, which builds it for the CPU.
 
     Raises:
         TypeError: if `name` is not the name of a model.
         ValueError: if the model cannot do `task`.
 
     Returns:
-        The model, built with the `amos` model's default parameters.
+        The model, built with the `amos` model's default parameters and the
+            parameters of its device (see `Model._device_parameters`).
 
     """
-    technique = chrisjen.library.borrow(name, genre = 'model')()
-    if not isinstance(technique, models.Model):
-        message = f'{name!r} is not a model'
-        raise TypeError(message)
+    technique = _technique(name)
     tool = technique.contents or technique.tools.get(task)
     if tool is None:
         message = f'the model {name!r} cannot {task}'
@@ -2352,7 +2466,12 @@ def _learner(name: str, task: str, seed: int | None) -> Any:
     parameters = technique._prepare(
         base.Dataset(task = task),
         {**technique._keywords(), 'random_state': seed})
-    return built(**utilities.accepted_parameters(built, parameters))
+    # As in `Operation._make_tool`, the device's parameters are passed even if
+    # the tool only takes them through `**kwargs` (as lightgbm's models do),
+    # and the model's own parameters take precedence.
+    device = technique._device_parameters(gpu = gpu) or {}
+    return built(**{
+        **device, **utilities.accepted_parameters(built, parameters)})
 
 
 def _levels(values: pd.Series) -> list[Any]:
@@ -2748,3 +2867,23 @@ def _task(values: pd.Series) -> str:
     """
     two = values.nunique(dropna = True) == 2  # noqa: PLR2004
     return 'classify' if two else 'regress'
+
+
+def _technique(name: str) -> models.Model:
+    """Returns the `amos` model named `name`, with its default parameters.
+
+    Args:
+        name: name of an `amos` model (such as "random_forest").
+
+    Raises:
+        TypeError: if `name` is not the name of a model.
+
+    Returns:
+        The model.
+
+    """
+    technique = chrisjen.library.borrow(name, genre = 'model')()
+    if not isinstance(technique, models.Model):
+        message = f'{name!r} is not a model'
+        raise TypeError(message)
+    return technique

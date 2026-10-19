@@ -176,7 +176,8 @@ class Loader(base.Operation, abc.ABC):
             label = label,
             task = task,
             seed = item.seed,
-            groups = groups)
+            groups = groups,
+            use_gpu = item.use_gpu)
         loaded.history = item.history
         rows, columns = loaded.data.shape
         loaded.record(

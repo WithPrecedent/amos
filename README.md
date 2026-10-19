@@ -151,6 +151,12 @@ of a class name as the default key for accessing it from the stored technique li
 is built on [`chrisjen`](https://github.com/WithPrecedent/chrisjen), `numpy`,
 `pandas`, and `scikit-learn`, which are installed automatically.
 
+On a computer with an NVIDIA GPU, set `use_gpu = true` in the "general"
+section of the settings, and the `xgboost`, `catboost`, `lightgbm`, and
+`tabpfn` models are fitted on the GPU (and on the CPU if there is none). It
+is false by default. See [fitting models on a
+GPU](https://WithPrecedent.github.io/amos/advanced/#fitting-models-on-a-gpu).
+
 ### Installation
 
 To install `amos`, use `pip`:

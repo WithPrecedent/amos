@@ -66,6 +66,7 @@ sections. Every other section is read by `chrisjen`.
 | | `task` | "classify" or "regress", if it should not be inferred from the label. |
 | | `seed` | Seed for every random process (passed as `random_state`). |
 | | `groups` | Columns that identify groups of rows (see "Groups and fairness" below). |
+| | `use_gpu` | Whether to fit the models that can use a GPU (`xgboost`, `catboost`, `lightgbm`, and `tabpfn`) on an NVIDIA GPU. Defaults to false (see "Fitting models on a GPU" below). |
 | `files` | `root_folder` | Folder for the project's files. Defaults to the current folder. |
 | | `input_folder` | Folder (in the root folder) where data files named by a relative path are looked for, and where loaders save downloads. |
 | | `output_folder` | Folder (in the root folder) in which `export` makes a folder for each run. |
@@ -105,6 +106,7 @@ A `Dataset` has these attributes:
 | `task` | "classify" or "regress". |
 | `seed` | Seed for every random process. |
 | `groups` | Columns that identify groups of rows. They stay in the data but are not features. |
+| `use_gpu` | Whether the models that can use a GPU are fitted on one. |
 | `train`, `test` | Index labels of the training and test rows. `test` is `None` until the data is split. |
 | `synthetic` | Index labels of the training rows that a sampler made up (synthetic rows and extra copies of a row). |
 | `model` | The fitted model. |
@@ -650,6 +652,78 @@ amos.models.RandomForest().apply(
     n_iter = 3, cv = 3)
 print(list(dataset.tables["random_forest_search"].columns[:2]))
 # ['param_max_depth', 'param_n_estimators']
+```
+
+### Fitting models on a GPU
+
+Four models can be fitted on an NVIDIA GPU, which can be much faster for
+large data. To use one, set `use_gpu` in the "general" section of the
+settings:
+
+```ini
+[general]
+label = target
+seed = 43
+use_gpu = true
+```
+
+`use_gpu` is false unless the settings set it to true, so a project is
+fitted on the CPU unless it asks for a GPU. (Without settings, pass
+`use_gpu = True` to `Dataset` or `Dataset.create`.) With it:
+
+| Model | On the GPU | Notes |
+| --- | --- | --- |
+| `xgboost` | `device = "cuda"` | xgboost's packages for Linux and Windows include GPU support. |
+| `catboost` | `task_type = "GPU"` | catboost's packages for Linux and Windows include GPU support. Its results on a GPU can vary slightly from one run to the next. |
+| `lightgbm` | `device_type = "gpu"` | lightgbm uses OpenCL, which its packages for Linux include (NVIDIA's driver provides the OpenCL runtime). Its packages for Windows and macOS do not, so it is fitted on the CPU there. |
+| `tabpfn` | `device = "cuda"` | Needs a build of PyTorch for your GPU (see below). TabPFN is only practical on a CPU for about 1,000 rows or fewer. |
+
+The same goes for the models that DoubleML's and causalml's inferers fit
+(named by `outcome_model` and `treatment_model`, see "Causal inference"
+below). Every other model (and every other technique) runs on the CPU, as it
+does without `use_gpu`. When `use_gpu` is true:
+
+* `amos` asks NVIDIA's driver which GPUs there are, so no other package is
+  needed. If there is none, it warns and fits every model on the CPU, so
+  the same settings work on a computer without a GPU.
+* A model is fitted on the first GPU. To use another, set the
+  `CUDA_VISIBLE_DEVICES` environment variable (such as
+  `CUDA_VISIBLE_DEVICES=1`) before starting Python.
+* If a model cannot be fitted on the GPU (because its package was built
+  without GPU support, the GPU is too old for it, or the GPU runs out of
+  memory, for example), it warns and is fitted on the CPU instead.
+* An inferer's models are fitted by DoubleML or causalml, which cannot
+  switch to the CPU partway through. So before the inferer starts, each one
+  that can use the GPU is fitted to a few made-up rows on it, and if that
+  fails, it warns and the inferer fits that model on the CPU. This catches a
+  package without GPU support or a GPU too old for it, but not a GPU that
+  runs out of memory on the full data, which raises an error (set `use_gpu`
+  to false to fit them on the CPU).
+* A model's own parameters take precedence. To keep one model on the CPU,
+  set its device in its section, such as `device = cpu` in
+  `[xgboost_parameters]`. (An inferer builds its models with their default
+  parameters, so to keep them on the CPU, name a model that does not use a
+  GPU or set `use_gpu` to false.)
+* The history records the device of each model with its parameters (but
+  not of an inferer's models, which warn if they are fitted on the CPU
+  instead), and `export` records the GPUs (their names, compute capabilities, memory, and
+  CUDA version) in "environment.json".
+
+A model fitted on a GPU can give slightly different results from the same
+model fitted on a CPU, because the GPU adds numbers in a different order. A
+result is reproducible on the same kind of device, which is why the device
+and the GPU are recorded.
+
+Older GPUs need care. CUDA 13 does not support GPUs older than NVIDIA's
+Turing generation (compute capability 7.5), such as the GeForce 10 series
+and the TITAN Xp (compute capability 6.1). For those, use the regular
+`xgboost` package (not `xgboost-cu13`), which supports compute capability
+5.0 and later, and, for TabPFN, a build of PyTorch for CUDA 12.6: PyTorch's
+builds for CUDA 12.8 and later leave out these GPUs (and PyTorch plans to
+stop making builds for CUDA 12.6 after version 2.14).
+
+```sh
+pip install torch --index-url https://download.pytorch.org/whl/cu126
 ```
 
 ### Statistical inference
@@ -1260,7 +1334,7 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | --- | --- |
 | report.txt | The text of the report. |
 | settings.json | The settings of the project. |
-| environment.json | The versions of Python and of the packages used. |
+| environment.json | The versions of Python and of the packages used, and the GPUs, if `use_gpu` is true. |
 | history.json | Each technique applied, with its tool and parameters. |
 | metrics.csv | The model's metrics. |
 | predictions.csv | The labels, predictions, and probabilities of the predicted rows. |

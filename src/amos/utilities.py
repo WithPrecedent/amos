@@ -4,6 +4,7 @@ Contents:
     accepted_parameters: limits parameters to those that a tool accepts.
     describe_tool: returns a name for a tool that can be stored in a record.
     environment: describes the software used to run a project.
+    gpus: describes the NVIDIA GPUs that models can be fitted on.
     import_tool: imports a tool from its import path, with a helpful error.
     parameters_of: returns the parameters of a built tool.
     preserved_logging: restores the root logger after code that changes it.
@@ -16,6 +17,8 @@ Contents:
 from __future__ import annotations
 
 import contextlib
+import ctypes
+import functools
 import importlib.metadata
 import inspect
 import logging
@@ -31,6 +34,12 @@ from . import options
 if TYPE_CHECKING:
     import pandas as pd
 
+# Names of NVIDIA's CUDA driver library on Linux and on Windows.
+_CUDA_DRIVERS: tuple[str, ...] = ('libcuda.so.1', 'libcuda.so', 'nvcuda.dll')
+# Numbers that the CUDA driver uses for the major and minor parts of a GPU's
+# compute capability (`CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR` and
+# `_MINOR` in "cuda.h").
+_COMPUTE_CAPABILITY: tuple[int, int] = (75, 76)
 # The kinds of hyperparameter search that models support.
 _SEARCHES: frozenset[str] = frozenset({'grid', 'optuna', 'random'})
 
@@ -92,15 +101,20 @@ def describe_tool(tool: Any) -> str | None:
     return f'{module}.{name}' if module else name
 
 
-def environment() -> dict[str, Any]:
-    """Describes the software used to run a project.
+def environment(*, gpu: bool = False) -> dict[str, Any]:
+    """Describes the software (and any GPUs) used to run a project.
 
     Recording this alongside a project's results lets others reproduce them
     with the same versions of Python and of the packages that did the work.
 
+    Args:
+        gpu: whether to also describe the GPUs that models could be fitted on
+            (see `gpus`). Defaults to `False`.
+
     Returns:
         A `dict` with the Python version, the platform, and the version of each
-            installed package in `options._RECORDED_PACKAGES`.
+            installed package in `options._RECORDED_PACKAGES`, and, if `gpu`
+            is `True`, "gpus".
 
     """
     packages = {}
@@ -109,10 +123,64 @@ def environment() -> dict[str, Any]:
             packages[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
             continue
-    return {
+    described: dict[str, Any] = {
         'python': sys.version.split()[0],
         'platform': platform.platform(),
         'packages': packages}
+    if gpu:
+        described['gpus'] = [dict(found) for found in gpus()]
+    return described
+
+
+@functools.cache
+def gpus() -> tuple[dict[str, Any], ...]:
+    """Describes the NVIDIA GPUs that models can be fitted on.
+
+    The GPUs are found by asking NVIDIA's CUDA driver directly, so no other
+    package is needed. Like the packages that fit models, it leaves out any
+    GPU hidden by the "CUDA_VISIBLE_DEVICES" environment variable and lists
+    the others in the order that they number them. The answer is kept, so the
+    driver is only asked once.
+
+    Returns:
+        For each GPU, its "name", its "compute_capability" (such as "6.1"),
+            its "memory" in GiB, and the newest version of "cuda" that the
+            driver supports. Empty if there is no NVIDIA driver or GPU.
+
+    """
+    driver = _cuda_driver()
+    if driver is None or driver.cuInit(0) != 0:
+        return ()
+    count = ctypes.c_int()
+    version = ctypes.c_int()
+    if (
+        driver.cuDeviceGetCount(ctypes.byref(count)) != 0
+        or driver.cuDriverGetVersion(ctypes.byref(version)) != 0):
+        return ()
+    # The driver reports CUDA 12.4, for example, as 12040.
+    cuda = f'{version.value // 1000}.{version.value % 1000 // 10}'
+    found = []
+    for number in range(count.value):
+        device = ctypes.c_int()
+        name = ctypes.create_string_buffer(256)
+        major, minor = ctypes.c_int(), ctypes.c_int()
+        memory = ctypes.c_size_t()
+        answers = (
+            driver.cuDeviceGet(ctypes.byref(device), number),
+            driver.cuDeviceGetName(name, len(name), device),
+            driver.cuDeviceGetAttribute(
+                ctypes.byref(major), _COMPUTE_CAPABILITY[0], device),
+            driver.cuDeviceGetAttribute(
+                ctypes.byref(minor), _COMPUTE_CAPABILITY[1], device),
+            driver.cuDeviceTotalMem_v2(ctypes.byref(memory), device))
+        if any(answer != 0 for answer in answers):
+            continue
+        found.append({
+            'name': name.value.decode(errors = 'replace'),
+            'compute_capability': f'{major.value}.{minor.value}',
+            'memory': round(memory.value / 2**30, 1),
+            'cuda': cuda})
+    return tuple(found)
 
 
 def import_tool(tool: str | Callable[..., Any]) -> Any:
@@ -271,6 +339,22 @@ def select_columns(
 
 
 """ Private Functions """
+
+
+def _cuda_driver() -> Any:
+    """Returns NVIDIA's CUDA driver library, if it is installed.
+
+    Returns:
+        The library, loaded with `ctypes`, or `None` if it cannot be loaded
+            (as on a computer without an NVIDIA GPU, or on macOS).
+
+    """
+    for name in _CUDA_DRIVERS:
+        try:
+            return ctypes.CDLL(name)
+        except OSError:
+            continue
+    return None
 
 
 def _distribution(low: float, high: float) -> Any:

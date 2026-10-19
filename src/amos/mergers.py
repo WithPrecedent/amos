@@ -47,6 +47,7 @@ import pathlib
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
+import camina
 import nagata
 import numpy as np
 import pandas as pd
@@ -220,7 +221,7 @@ class Merger(base.Operation, abc.ABC):
             self.match(data, other, **kwargs), data, other, self.name)
         if columns is None:
             # The keys of the other table repeat those of the data.
-            keys = base._listify(kwargs.get('other_on'))
+            keys = camina.listify(kwargs.get('other_on'))
             columns = [
                 c for c in other.columns
                 if c not in data.columns and c not in keys]
@@ -979,8 +980,8 @@ def _names(
         The names of the keys of the data and of the other table.
 
     """
-    mine = base._listify(on)
-    theirs = base._listify(other_on) or mine
+    mine = camina.listify(on)
+    theirs = camina.listify(other_on) or mine
     if not mine:
         message = (
             f'{technique!r} needs the key columns that say which rows '

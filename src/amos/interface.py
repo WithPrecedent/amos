@@ -41,7 +41,8 @@ class Project(chrisjen.Project):
     * The item is made into a `Dataset`. Pass a `pandas.DataFrame`, a path to
       a data file, or anything else that `Dataset.create` accepts. The
       "general" section of the settings can set the dataset's "label",
-      "task", "seed", and "groups".
+      "task", "seed", "groups", and "use_gpu" (which is `False` unless the
+      settings set it to true).
     * A workflow with a loader (see the `loaders` module) loads its own data
       with the project's `clerk`, so it needs no item.
     * Each call to `apply` works on a copy of the item, so applying a project
@@ -159,7 +160,7 @@ class Project(chrisjen.Project):
         | --- | --- |
         | report.txt | The text of the report. |
         | settings.json | The settings of the project. |
-        | environment.json | Versions of Python and the packages used. |
+        | environment.json | Versions of Python and the packages used, and the GPUs (if "use_gpu" is true). |
         | history.json | Each technique applied, with its parameters. |
         | metrics.csv | The model's metrics. |
         | predictions.csv | The labels, predictions, and probabilities. |
@@ -199,7 +200,10 @@ class Project(chrisjen.Project):
         report = '' if self.report is None else self.report.contents
         self._save_text(report or '', folder, 'report.txt')
         self._save_json(dict(self.idea), folder, 'settings.json')
-        self._save_json(utilities.environment(), folder, 'environment.json')
+        self._save_json(
+            utilities.environment(gpu = result.use_gpu),
+            folder,
+            'environment.json')
         self._save_json(result.history, folder, 'history.json')
         if result.metrics:
             metrics = pd.Series(result.metrics, name = 'value').to_frame()
@@ -339,10 +343,14 @@ class Project(chrisjen.Project):
 
         Returns:
             A `Dataset`, with the "label", "task", "seed", and "groups" from
-                the "general" section of the settings if it did not have them.
+                the "general" section of the settings if it did not have them,
+                and the "use_gpu" of the settings. If the settings do not set
+                "use_gpu", a `Dataset` keeps its own (which is `False` unless
+                it was made with `use_gpu = True`), and other data is `False`.
 
         """
         general = self.idea.get('general', {})
+        use_gpu = general.get('use_gpu')
         if item is None:
             if not self._has_loader():
                 message = (
@@ -352,7 +360,7 @@ class Project(chrisjen.Project):
                 raise ValueError(message)
             # The loader applies the label, task, and groups, which an empty
             # dataset cannot have.
-            return base.Dataset(seed = general.get('seed'))
+            return base.Dataset(seed = general.get('seed'), use_gpu = use_gpu)
         if isinstance(item, str | pathlib.Path):
             path = pathlib.Path(item)
             if not path.exists():
@@ -363,7 +371,8 @@ class Project(chrisjen.Project):
             label = general.get('label'),
             task = general.get('task'),
             seed = general.get('seed'),
-            groups = general.get('groups'))
+            groups = general.get('groups'),
+            use_gpu = use_gpu)
 
 
 """ Private Functions """

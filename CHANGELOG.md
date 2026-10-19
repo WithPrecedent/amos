@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* Added the `use_gpu` setting to the "general" section, which fits the
+  models that can use a GPU (`xgboost`, `catboost`, `lightgbm`, and
+  `tabpfn`) on an NVIDIA GPU. It is false unless the settings set it to
+  true, and it is kept in the new `Dataset.use_gpu`. `amos` finds GPUs by
+  asking NVIDIA's driver, so it needs no other package. If there is no GPU,
+  or a model cannot be fitted on it, the model warns and is fitted on the
+  CPU. `export` records the GPUs in "environment.json".
+* DoubleML's and causalml's inferers fit their `outcome_model` and
+  `treatment_model` on the GPU too when `use_gpu` is true. Those packages
+  fit the models themselves, so each model that can use a GPU is first
+  fitted to a few rows on it, and if that fails, it warns and the inferer
+  fits that model on the CPU.
+* `tabpfn` is now fitted on the CPU unless `use_gpu` is true, as a model or
+  as an inferer's model. Before, it used a GPU whenever PyTorch found one.
+* Models now record their device in their history's parameters (such as
+  xgboost's "device" or catboost's "task_type").
+
 ## 0.3.0
 
 * Fixed the `stratified` and `train_test` splitters failing ("only integer

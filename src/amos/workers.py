@@ -176,6 +176,7 @@ def _outcome(item: base.Dataset) -> base.Dataset:
         groups = item.groups,
         task = item.task,
         seed = item.seed,
+        use_gpu = item.use_gpu,
         train = item.train,
         test = item.test,
         predictions = item.predictions,

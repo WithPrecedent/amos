@@ -83,6 +83,9 @@ class Dataset:
             compare predictions across them, `fixest` can use them as fixed
             effects or clusters, and `group_split` can keep each group in one
             set. Defaults to an empty `list`.
+        use_gpu: whether models that can be fitted on a GPU (such as
+            `xgboost`) use one, if an NVIDIA GPU is found. If it is `False`,
+            every model is fitted on the CPU. Defaults to `False`.
         train: index labels of the rows in the training set. Defaults to
             `None`, which means that every row is used for training.
         test: index labels of the rows in the test set. Defaults to `None`,
@@ -118,6 +121,7 @@ class Dataset:
     task: str | None = None
     seed: int | None = None
     groups: list[str] = dataclasses.field(default_factory = list)
+    use_gpu: bool = False
     train: pd.Index | None = None
     test: pd.Index | None = None
     synthetic: pd.Index = dataclasses.field(
@@ -136,13 +140,14 @@ class Dataset:
     """ Initialization Methods """
 
     def __post_init__(self) -> None:
-        """Validates `data`, `label`, `groups`, and `task`."""
+        """Validates `data`, `label`, `groups`, `use_gpu`, and `task`."""
         if not isinstance(self.data, pd.DataFrame):
             self.data = pd.DataFrame(self.data)
         if self.label is not None and self.label not in self.data.columns:
             message = f'the label {self.label!r} is not a column of the data'
             raise KeyError(message)
         self.groups = _validate_groups(self.groups, self.data, self.label)
+        self.use_gpu = _validate_use_gpu(self.use_gpu)
         if self.task is None and self.label is not None:
             self.task = self.infer_task()
         elif self.task is not None and self.task not in _TASKS:
@@ -159,7 +164,8 @@ class Dataset:
         label: str | None = None,
         task: str | None = None,
         seed: int | None = None,
-        groups: Sequence[str] | str | None = None) -> Dataset:
+        groups: Sequence[str] | str | None = None,
+        use_gpu: bool | None = None) -> Dataset:
         """Returns a `Dataset` made from `item`.
 
         Args:
@@ -176,6 +182,8 @@ class Dataset:
             seed: seed for every random process. Defaults to `None`.
             groups: names of the columns that identify groups of rows.
                 Defaults to `None`.
+            use_gpu: whether models that can be fitted on a GPU use one.
+                Defaults to `None`, which is `False` for a new `Dataset`.
 
         Raises:
             TypeError: if `item` cannot be made into a `Dataset`.
@@ -183,7 +191,7 @@ class Dataset:
         Returns:
             A `Dataset`. If `item` is already a `Dataset`, it is returned
                 with any of `label`, `task`, `seed`, and `groups` that it
-                lacks.
+                lacks, and with `use_gpu` if it is passed.
 
         """
         if isinstance(item, Dataset):
@@ -199,6 +207,8 @@ class Dataset:
                 item.seed = seed
             if not item.groups and groups:
                 item.groups = _validate_groups(groups, item.data, item.label)
+            if use_gpu is not None:
+                item.use_gpu = _validate_use_gpu(use_gpu)
             return item
         if isinstance(item, str | pathlib.Path):
             data = _read(pathlib.Path(item))
@@ -228,7 +238,8 @@ class Dataset:
             label = label,
             task = task,
             seed = seed,
-            groups = _listify(groups))
+            groups = camina.listify(groups),
+            use_gpu = _validate_use_gpu(use_gpu))
 
     """ Properties """
 
@@ -572,6 +583,8 @@ class Dataset:
             parts.append(f'task={self.task!r}')
         if self.groups:
             parts.append(f'groups={self.groups!r}')
+        if self.use_gpu:
+            parts.append('use_gpu=True')
         if self.is_split:
             parts.append(f'train={len(self._train_rows())}')
             parts.append(f'test={len(self._test_rows())}')
@@ -621,9 +634,10 @@ class Operation(chrisjen.Technique, abc.ABC):
     `Operation` is a genre: its abstract subclasses (`Loader`, `Cleaner`,
     `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`,
     `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Inferer`, and
-    `Plot`) are genres within it. To add a technique, subclass the genre that fits and write the
-    method it requires, or set `contents` to the tool to wrap. To add a new
-    kind of technique, subclass `Operation` and write `implement`.
+    `Plot`) are genres within it. To add a technique, subclass the genre that
+    fits and write the method it requires, or set `contents` to the tool to
+    wrap. To add a new kind of technique, subclass `Operation` and write
+    `implement`.
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -684,7 +698,8 @@ class Operation(chrisjen.Technique, abc.ABC):
         self,
         item: Dataset,
         parameters: Mapping[str, Any],
-        tool: str | Callable[..., Any] | None = None) -> Any:
+        tool: str | Callable[..., Any] | None = None,
+        known: Mapping[str, Any] | None = None) -> Any:
         """Returns the wrapped tool, built with the parameters it accepts.
 
         Parameters are first passed to `_prepare`, which subclasses use to add
@@ -697,6 +712,11 @@ class Operation(chrisjen.Technique, abc.ABC):
                 passed to it.
             tool: the tool (a class or other callable, or its import path).
                 Defaults to `None`, in which case `contents` is used.
+            known: parameters that the tool is known to accept, such as those
+                that choose its device, which are passed to it unless
+                `parameters` sets them. Unlike `parameters`, they are passed
+                even if the tool only accepts them through `**kwargs` (as
+                lightgbm's models do). Defaults to `None`.
 
         Raises:
             NotImplementedError: if there is no tool.
@@ -720,7 +740,7 @@ class Operation(chrisjen.Technique, abc.ABC):
             and 'random_state' not in accepted
             and utilities.accepted_parameters(built, {'random_state': None})):
             accepted['random_state'] = item.seed
-        return built(**accepted)
+        return built(**{**(known or {}), **accepted})
 
     def _keywords(self) -> dict[str, Any]:
         """Returns `parameters` as keyword arguments.
@@ -766,23 +786,6 @@ class Operation(chrisjen.Technique, abc.ABC):
 """ Private Functions """
 
 
-def _listify(item: Sequence[str] | str | None) -> list[str]:
-    """Returns column names as a `list`.
-
-    Args:
-        item: a name, a sequence of names, or `None`.
-
-    Returns:
-        The names (an empty `list` for `None`).
-
-    """
-    if item is None:
-        return []
-    if isinstance(item, str):
-        return [item]
-    return list(item)
-
-
 def _made_up(
     origins: Sequence[int] | np.ndarray | None,
     made_up: np.ndarray,
@@ -813,6 +816,31 @@ def _made_up(
     return flags
 
 
+def _validate_use_gpu(value: Any) -> bool:
+    """Returns the "use_gpu" setting as a `bool`, checking it.
+
+    Args:
+        value: `True`, `False`, or `None` (which means `False`). The text
+            "true" or "false" (in any case), as a settings `dict` might hold
+            it, is also accepted.
+
+    Raises:
+        TypeError: if `value` is anything else.
+
+    Returns:
+        Whether models that can be fitted on a GPU use one.
+
+    """
+    if value is None:
+        return False
+    if isinstance(value, bool | np.bool_):
+        return bool(value)
+    if isinstance(value, str) and value.strip().lower() in {'true', 'false'}:
+        return value.strip().lower() == 'true'
+    message = f'use_gpu must be true or false, not {value!r}'
+    raise TypeError(message)
+
+
 def _validate_groups(
     groups: Sequence[str] | str | None,
     data: pd.DataFrame,
@@ -832,7 +860,7 @@ def _validate_groups(
         The names of the group columns.
 
     """
-    names = _listify(groups)
+    names: list[str] = camina.listify(groups)
     missing = [g for g in names if g not in data.columns]
     if missing:
         message = f'the groups {missing} are not columns of the data'
@@ -888,7 +916,6 @@ def _read(path: pathlib.Path) -> pd.DataFrame:
     if reader is None:
         message = (
             f'{path.suffix!r} files are not supported: use one of '
-            f'{sorted(_READERS)}'
-        )
+            f'{sorted(_READERS)}')
         raise ValueError(message)
     return reader(path)

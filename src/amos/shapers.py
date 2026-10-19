@@ -39,6 +39,7 @@ import dataclasses
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
+import camina
 import numpy as np
 import pandas as pd
 
@@ -140,7 +141,7 @@ class Shaper(base.Operation, abc.ABC):
             message = f'task must be one of {base._TASKS}, not {task!r}'
             raise ValueError(message)
         label = label or item.label
-        named = item.groups if groups is None else base._listify(groups)
+        named = item.groups if groups is None else camina.listify(groups)
         before = item.data.shape
         shaped = self.shape(item.data.copy(), **kwargs)
         lost = [
@@ -415,7 +416,7 @@ class LongToWide(Shaper):
             )
             raise ValueError(message)
         spread = utilities.select_columns(
-            data, base._listify(values if stubs is None else stubs))
+            data, camina.listify(values if stubs is None else stubs))
         utilities.select_columns(data, [names])
         used = [names, *spread]
         keys = (
@@ -542,7 +543,7 @@ class WideToLong(Shaper):
             stacked = utilities.select_columns(data, columns)
             sources[value] = {str(c): c for c in stacked}
         else:
-            for stub in base._listify(stubs):
+            for stub in camina.listify(stubs):
                 start = f'{stub}{separator}'
                 found = {
                     str(c)[len(start):]: c for c in data.columns

@@ -36,6 +36,7 @@ import importlib
 from collections.abc import Sequence
 from typing import Any, ClassVar
 
+import camina
 import chrisjen
 import numpy as np
 import pandas as pd
@@ -445,7 +446,7 @@ def _columns(model: Any, item: base.Dataset) -> list[Any]:
     get_params = getattr(model, 'get_params', None)
     parameters = get_params(deep = False) if callable(get_params) else {}
     for parameter in _column_parameters():
-        for name in base._listify(parameters.get(parameter)):
+        for name in camina.listify(parameters.get(parameter)):
             if name in item.data.columns and name not in columns:
                 columns.append(name)
     return columns

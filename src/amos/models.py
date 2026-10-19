@@ -15,6 +15,14 @@ of any parameter that is given as a list, using cross-validation on the
 training rows ("cv" folds, 5 by default, and "n_iter" draws for a random or
 Optuna search).
 
+If "use_gpu" is true in the "general" section of the settings (see
+`Dataset.use_gpu`) and an NVIDIA GPU is found, the models that can be fitted
+on a GPU (`catboost`, `lightgbm`, `tabpfn`, and `xgboost`) are fitted on the
+first one. If a model cannot use the GPU (because its package was built
+without GPU support, for example), it warns and is fitted on the CPU instead.
+Every other model is fitted on the CPU, as every model is when "use_gpu" is
+false (the default).
+
 Contents:
     Model: base class for techniques that fit models.
     LabelCoded: lets a classifier that needs classes numbered 0 to n - 1 use
@@ -37,10 +45,13 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import functools
 import importlib
+import warnings
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, ClassVar
 
+import camina
 import numpy as np
 import pandas as pd
 
@@ -99,6 +110,11 @@ class Model(base.Operation, abc.ABC):
     ```py
     amos.Model(name = "bayes_ridge", contents = "sklearn.linear_model.BayesianRidge")
     ```
+
+    A model that can be fitted on a GPU overrides `_device_parameters` to
+    return the parameters that put its tool on the GPU or the CPU. It is
+    fitted on a GPU if the dataset's `use_gpu` is `True` and an NVIDIA GPU is
+    found (see `utilities.gpus`).
 
     Wraps:
         - [`sklearn.model_selection.GridSearchCV`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html)
@@ -166,30 +182,38 @@ class Model(base.Operation, abc.ABC):
         fixed, space = (
             (kwargs, {}) if search is None
             else utilities.search_space(kwargs, search))
-        estimator = self._make_tool(item, fixed, tool = tool)
         space = utilities.accepted_parameters(tool, space)
-        if (
-            task == 'classify'
-            and self.numbered_classes
-            and not _is_numbered(item.classes)):
-            estimator = LabelCoded(estimator = estimator)
-            space = {f'estimator__{k}': v for k, v in space.items()}
         columns = [c for c in item.features if c not in extras] + extras
         y = item.y_train
         x = item.data.loc[y.index, columns]
-        if space:
-            estimator = self._search(
-                item,
-                estimator,
-                x,
-                y,
-                space = space,
-                search = search,
-                cv = cv,
-                n_iter = n_iter,
-                scoring = scoring)
-        else:
-            estimator.fit(x, y)
+        fit = functools.partial(
+            self._fit,
+            item,
+            tool,
+            x,
+            y,
+            task = task,
+            fixed = fixed,
+            space = space,
+            search = search,
+            cv = cv,
+            n_iter = n_iter,
+            scoring = scoring)
+        gpu = self._uses_gpu(item)
+        try:
+            estimator = fit(gpu = gpu)
+        # Anything that stops a model from using the GPU (such as a package
+        # built without GPU support, a GPU that is too old for it, or too
+        # little memory) means fitting it on the CPU instead. An error that
+        # has nothing to do with the GPU is raised again by the CPU's fit.
+        except Exception as error:
+            if not gpu:
+                raise
+            warnings.warn(
+                f'{self.name!r} could not be fitted on the GPU, so it was '
+                f'fitted on the CPU instead: {error}',
+                stacklevel = 2)
+            estimator = fit(gpu = False)
         item.model = estimator
         self._predict(item, estimator, task, columns)
         if hasattr(estimator, 'coefficients'):
@@ -285,6 +309,24 @@ class Model(base.Operation, abc.ABC):
         """
         return self.contents if self.contents is not None else self.tools[task]
 
+    def _device_parameters(
+        self,
+        *,
+        gpu: bool) -> dict[str, Any] | None:  # noqa: ARG002
+        """Returns the parameters that fit the model on a GPU or the CPU.
+
+        Models that can be fitted on a GPU override this.
+
+        Args:
+            gpu: whether to fit the model on the first GPU (or on the CPU).
+
+        Returns:
+            The parameters for the tool, or `None` if the model can only be
+                fitted on the CPU.
+
+        """
+        return None
+
     def _extra_columns(
         self,
         item: base.Dataset,
@@ -304,7 +346,7 @@ class Model(base.Operation, abc.ABC):
         """
         names: list[str] = []
         for parameter in self.column_parameters:
-            for name in base._listify(parameters.get(parameter)):
+            for name in camina.listify(parameters.get(parameter)):
                 if name not in item.data.columns:
                     message = (
                         f'the {parameter} column {name!r} is not in the data')
@@ -312,6 +354,64 @@ class Model(base.Operation, abc.ABC):
                 if name not in names:
                     names.append(name)
         return names
+
+    def _fit(
+        self,
+        item: base.Dataset,
+        tool: Any,
+        x: pd.DataFrame,
+        y: pd.Series,
+        *,
+        task: str,
+        fixed: dict[str, Any],
+        space: dict[str, Any],
+        gpu: bool,
+        search: str | None,
+        cv: int,
+        n_iter: int,
+        scoring: str | None) -> Any:
+        """Builds the model and fits it (or searches for the best one).
+
+        Args:
+            item: the dataset being modeled.
+            tool: the model class.
+            x: the training rows of the columns the model uses.
+            y: the training labels.
+            task: "classify" or "regress".
+            fixed: the parameters that are not searched.
+            space: the parameters to search, which may be empty.
+            gpu: whether to fit the model on the GPU.
+            search: "grid", "random", "optuna", or `None`.
+            cv: number of cross-validation folds for a search.
+            n_iter: number of combinations to try in a random or Optuna
+                search.
+            scoring: scikit-learn scorer for a search, or `None`.
+
+        Returns:
+            The fitted model.
+
+        """
+        estimator = self._make_tool(
+            item, fixed, tool = tool, known = self._device_parameters(gpu = gpu))
+        if (
+            task == 'classify'
+            and self.numbered_classes
+            and not _is_numbered(item.classes)):
+            estimator = LabelCoded(estimator = estimator)
+            space = {f'estimator__{k}': v for k, v in space.items()}
+        if space:
+            return self._search(
+                item,
+                estimator,
+                x,
+                y,
+                space = space,
+                search = search,
+                cv = cv,
+                n_iter = n_iter,
+                scoring = scoring)
+        estimator.fit(x, y)
+        return estimator
 
     def _predict(
         self,
@@ -456,6 +556,28 @@ class Model(base.Operation, abc.ABC):
         item.tables[f'{self.name}_search'] = results.sort_values(
             'rank_test_score')
         return searcher.best_estimator_
+
+    def _uses_gpu(self, item: base.Dataset) -> bool:
+        """Returns whether to fit the model on a GPU.
+
+        Args:
+            item: the dataset being modeled.
+
+        Returns:
+            Whether the dataset's `use_gpu` is `True`, the model can be fitted
+                on a GPU, and an NVIDIA GPU is found. If no GPU is found, it
+                warns that the model is fitted on the CPU.
+
+        """
+        if not item.use_gpu or self._device_parameters(gpu = True) is None:
+            return False
+        if not utilities.gpus():
+            warnings.warn(
+                'use_gpu is true, but no NVIDIA GPU was found, so models are '
+                'fitted on the CPU',
+                stacklevel = 3)
+            return False
+        return True
 
 
 # `eq` is `False` so that wrappers are compared by identity, as scikit-learn
@@ -1195,7 +1317,7 @@ class FixedEffects:
 
         """
         pyfixest = utilities.import_tool('pyfixest')
-        extras = [*self._effects(), *base._listify(self.cluster)]
+        extras = [*self._effects(), *camina.listify(self.cluster)]
         self.feature_names_in_ = np.asarray(
             [c for c in x.columns if c not in extras])
         target = np.asarray(y)
@@ -1300,7 +1422,8 @@ class FixedEffects:
 
     def _effects(self) -> list[str]:
         """Returns the names of the fixed effect columns."""
-        return base._listify(self.fixed_effects)
+        effects: list[str] = camina.listify(self.fixed_effects)
+        return effects
 
     def _frame(self, x: pd.DataFrame) -> pd.DataFrame:
         """Returns `x` with names that pyfixest's formulas accept.
@@ -1630,7 +1753,8 @@ class Catboost(Model):
     """CatBoost gradient boosting, which uses categorical features directly.
 
     Categorical features (the `pandas` "category" type) are passed to it as
-    categories, so they need no encoder.
+    categories, so they need no encoder. With "use_gpu", it is fitted on the
+    GPU, where catboost's results can vary slightly from one run to the next.
 
     Wraps:
         - [`catboost.CatBoostClassifier`](https://catboost.ai/docs/en/concepts/python-reference_catboostclassifier)
@@ -1648,6 +1772,20 @@ class Catboost(Model):
             'verbose': 0,
             # Otherwise, catboost writes files to the current folder.
             'allow_writing_files': False})
+
+    def _device_parameters(self, *, gpu: bool) -> dict[str, Any] | None:
+        """Returns the parameters that fit catboost on a GPU or the CPU.
+
+        Args:
+            gpu: whether to fit the model on the first GPU (or on the CPU).
+
+        Returns:
+            The "task_type" and, for a GPU, the "devices" to use.
+
+        """
+        if gpu:
+            return {'task_type': 'GPU', 'devices': '0'}
+        return {'task_type': 'CPU'}
 
     def _prepare(
         self,
@@ -1987,6 +2125,10 @@ class Lasso(Model):
 class Lightgbm(Model):
     """LightGBM gradient boosting.
 
+    With "use_gpu", it is fitted on the GPU with OpenCL, which lightgbm's
+    packages for Linux support (its packages for Windows and macOS do not, so
+    it is fitted on the CPU there).
+
     Wraps:
         - [`lightgbm.LGBMClassifier`](https://lightgbm.readthedocs.io/en/stable/pythonapi/lightgbm.LGBMClassifier.html)
           from lightgbm, to classify.
@@ -2000,6 +2142,19 @@ class Lightgbm(Model):
         'regress': 'lightgbm.LGBMRegressor'}
     parameters: base.GenericDict = dataclasses.field(
         default_factory = lambda: {'verbose': -1})
+
+    def _device_parameters(self, *, gpu: bool) -> dict[str, Any] | None:
+        """Returns the parameters that fit lightgbm on a GPU or the CPU.
+
+        Args:
+            gpu: whether to fit the model on the GPU (or on the CPU).
+
+        Returns:
+            The "device_type": "gpu" (lightgbm's OpenCL version, which its
+                packages include) or "cpu".
+
+        """
+        return {'device_type': 'gpu' if gpu else 'cpu'}
 
 
 @dataclasses.dataclass
@@ -2331,8 +2486,9 @@ class Tabpfn(Model):
     tables, so it is not trained on your data in the usual way. It works best
     with up to about 10,000 rows and 500 features. It needs PyTorch (install
     it with "pip install amos[tabpfn]"), downloads its weights the first time
-    it is used, and runs much faster with a GPU. Check the license of its
-    weights before using it.
+    it is used, and runs much faster with a GPU, which it uses if "use_gpu"
+    is true. On a CPU, it is only practical for about 1,000 rows or fewer.
+    Check the license of its weights before using it.
 
     Wraps:
         - [`tabpfn.TabPFNClassifier`](https://github.com/PriorLabs/TabPFN)
@@ -2345,6 +2501,18 @@ class Tabpfn(Model):
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'tabpfn.TabPFNClassifier',
         'regress': 'tabpfn.TabPFNRegressor'}
+
+    def _device_parameters(self, *, gpu: bool) -> dict[str, Any] | None:
+        """Returns the parameters that fit TabPFN on a GPU or the CPU.
+
+        Args:
+            gpu: whether to fit the model on the first GPU (or on the CPU).
+
+        Returns:
+            The "device": "cuda" or "cpu".
+
+        """
+        return {'device': 'cuda' if gpu else 'cpu'}
 
 
 @dataclasses.dataclass
@@ -2369,6 +2537,8 @@ class WLS(_Statsmodels, Model):
 class Xgboost(Model):
     """XGBoost gradient boosting.
 
+    With "use_gpu", it is fitted on the GPU.
+
     Wraps:
         - [`xgboost.XGBClassifier`](https://xgboost.readthedocs.io/en/stable/python/python_api.html#xgboost.XGBClassifier)
           from xgboost, to classify.
@@ -2381,6 +2551,18 @@ class Xgboost(Model):
         'classify': 'xgboost.XGBClassifier',
         'regress': 'xgboost.XGBRegressor'}
     numbered_classes: ClassVar[bool] = True
+
+    def _device_parameters(self, *, gpu: bool) -> dict[str, Any] | None:
+        """Returns the parameters that fit xgboost on a GPU or the CPU.
+
+        Args:
+            gpu: whether to fit the model on the first GPU (or on the CPU).
+
+        Returns:
+            The "device": "cuda" or "cpu".
+
+        """
+        return {'device': 'cuda' if gpu else 'cpu'}
 
 
 @dataclasses.dataclass
