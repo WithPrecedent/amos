@@ -25,7 +25,8 @@ from . import base, evaluators, loaders, options, utilities
 # Arguments of a `nagata.FileManager` that can be set in the "files" section
 # of the settings.
 _FOLDERS: tuple[str, ...] = ('input_folder', 'interim_folder', 'output_folder')
-# Formats of the scorecard that need an optional package, and the package.
+# Formats of the scorecard (and of regression tables) that need an optional
+# package, and the package.
 _SCORECARD_FORMATS: tuple[tuple[str, str], ...] = (
     ('docx', 'docx'),
     ('png', 'matplotlib'))
@@ -169,6 +170,7 @@ class Project(chrisjen.Project):
         | scorecard.csv, .md | The scorecard of every branch (see `scorecard`). |
         | scorecard.docx | The scorecard as a Word document (with python-docx). |
         | scorecard.png | The scorecard as an image (with matplotlib). |
+        | {name}.csv, .md, .docx, .png | Each `regression_table` in the workflow, in the formats of the scorecard. |
         | data.csv | The data after the workflow (if `data` is `True`). |
 
         Args:
@@ -226,6 +228,11 @@ class Project(chrisjen.Project):
                 extension for extension, package in _SCORECARD_FORMATS
                 if _importable(package)]
             self.scorecard.export(folder, name = 'scorecard', formats = formats)
+            for node in _nodes(self.workflow):
+                if (
+                    isinstance(node, evaluators.RegressionTable)
+                    and node.table is not None):
+                    node.export(folder, formats = formats)
         if data:
             self._save_table(result.data, folder, 'data')
         return folder

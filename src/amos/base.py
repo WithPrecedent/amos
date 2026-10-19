@@ -12,6 +12,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import pathlib
+import weakref
 from collections.abc import (
     Callable,
     Hashable,
@@ -595,6 +596,12 @@ class Branch:
     every one of them, so that a `scorecard` can compare them after the
     experiment.
 
+    A branch also refers to the whole dataset that it made (with its fitted
+    model and features), which the experiment keeps in its `results`, so that
+    a `regression_table` can estimate the effects of each branch's model. The
+    reference is weak: it does not keep the dataset in memory, and copies and
+    pickles of the branch do not have it.
+
     Args:
         label: the names of the nodes in the branch, joined by " > ".
         steps: the technique used at each step, by the name of the step.
@@ -603,6 +610,8 @@ class Branch:
         score: the branch's score from the experiment's criteria. Higher is
             better. Defaults to `None`.
         criterion: the name of the experiment's criteria. Defaults to `None`.
+        source: a weak reference to the whole dataset that the branch made.
+            Defaults to `None`.
 
     """
 
@@ -611,6 +620,35 @@ class Branch:
     result: Dataset
     score: float | None = None
     criterion: str | None = None
+    source: weakref.ReferenceType[Dataset] | None = dataclasses.field(
+        default = None, repr = False, compare = False)
+
+    """ Properties """
+
+    @property
+    def dataset(self) -> Dataset | None:
+        """Returns the whole dataset that the branch made.
+
+        Returns:
+            The dataset, with its fitted model and features, or `None` if it
+                is no longer in memory (or the branch is a copy).
+
+        """
+        return None if self.source is None else self.source()
+
+    """ Dunder Methods """
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Returns the state of the branch, without `source`.
+
+        A weak reference cannot be pickled, and a copy of a branch should not
+        refer to a dataset that the copy of the experiment did not make.
+
+        Returns:
+            The fields of the branch, with `source` set to `None`.
+
+        """
+        return {**self.__dict__, 'source': None}
 
 
 @dataclasses.dataclass

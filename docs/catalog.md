@@ -276,6 +276,7 @@ imported when a technique that needs them is used (see the extras in the
 | `feature_importance` | The importance that the model itself gives each feature. |
 | `pca` | How much of the variance of the features each principal component has. |
 | `permutation_importance` | How much the model's score drops when each feature is shuffled. |
+| `regression_table` | The estimates of every model side by side, ready to publish. |
 | `scorecard` | The results of every branch of an analysis, ready to publish. |
 | `shap_importance` | The mean absolute SHAP value of each feature. |
 

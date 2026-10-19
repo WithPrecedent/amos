@@ -1351,6 +1351,108 @@ Scores in the Markdown table, Word document, and image are rounded to `digits`
 (3 by default). The title of the Word document and image is `title`, or a
 description of the branches if there is no title.
 
+## Regression tables
+
+A `regression_table` puts the estimates of every model side by side, like the
+regression tables of Stata, R, and statsmodels. It has a column for each branch
+of the most recent experiment (named by the steps that differ between
+branches), or one column for the final model. Each feature has two rows: its
+estimate, with stars for its p-value, and below it, its standard error in
+parentheses. Below the estimates are the kind of estimates, the number of
+observations that the model learned from, and the model's cross-validated
+metrics.
+
+Only some models have coefficients with standard errors, so a model gets one
+of two kinds of estimates:
+
+| Model | Estimates | Standard errors and p-values |
+| --- | --- | --- |
+| A model that reports its coefficients: `ols`, `logit_sm`, `glm`, `fixest`, `cox`, and the other statsmodels and pyfixest models | Its coefficients | The model's own |
+| Any other model, such as `random_forest`, `xgboost`, `knn`, and the scikit-learn linear models (`linear`, `logit`, `ridge`, and others, whose coefficients have no standard errors) | Average marginal effects | Refitting the model to bootstrap samples of the training rows |
+
+An *average marginal effect* (AME) is the average change in the prediction for
+a one-unit increase in a feature, with the other features held where they are.
+For a classifier, it is the change in the predicted probability of the
+positive class (or of each class, named "{feature} ({class})"). Every model has
+one, and the AME of a linear regression is its coefficient. Each feature is
+moved up and down by a small step for every training row. A boolean feature, or
+one with only two values, moves from its lower value to its higher one.
+
+| Parameter | Meaning |
+| --- | --- |
+| `marginal` | Whether to show marginal effects for every model, even one with coefficients. This puts every column on the same scale (the coefficients of `logit_sm`, for example, are log odds). Defaults to false. |
+| `simulations` | Number of bootstrap samples for the standard errors of marginal effects. Defaults to 100. |
+| `step` | Standard deviations that each feature is moved up and down. Defaults to 0.1. |
+| `validator` | The validator that cross-validates each model, if the analysis did not. Defaults to `stratified_k_fold` to classify and `k_fold` to regress. |
+| `metrics` | The cross-validated metrics. Defaults to accuracy, ROC AUC, and log loss to classify, and R², RMSE, and MAE to regress. |
+
+The `regression_table_title`, `regression_table_digits`,
+`regression_table_stars`, and `regression_table_style` settings (in the
+critic's section) set the title, the digits shown, the p-values below which an
+estimate gets one, two, and three stars (0.1, 0.05, and 0.01 by default), and
+the layout of Word documents and images ("stata" by default, or
+"columns"). In Python, use `RegressionTable.create`
+with a dataset, an applied project, or several datasets with fitted models (a
+`dict` names their columns):
+
+```python
+table = amos.evaluators.RegressionTable.create(result, simulations = 10)
+print(list(table.statistics.columns))
+# ['standard / baseline', 'standard / logit', 'robust / baseline', 'robust / logit']
+print(list(table.statistics.index))
+# ['estimates', 'observations', 'cv_accuracy', 'cv_roc_auc', 'cv_log_loss']
+print(table.table.loc[0, "standard / logit"], table.table.loc[1, "standard / logit"])
+# -0.012*** (0.002)
+```
+
+As a technique in the critic, `regression_table` stores the estimates in the
+dataset's `tables` under its name, with one row for each model and feature
+(their "estimate", "standard_error", "statistic", "p_value", "ci_lower", and
+"ci_upper"), and the rows below them as "regression_table_statistics". Like a
+scorecard, it can be saved with `to_csv`, `to_markdown`, `to_latex`,
+`to_html`, `to_word`, `to_image`, and `export`. csv, Markdown, LaTeX, and HTML
+put the models side by side, with stars, like Stata's `esttab`. Notes below
+the table explain the parentheses and stars. `to_csv` saves the table as
+text, as it is published. The numbers at full precision are in `estimates`
+and `statistics`.
+
+Word documents, images, and `to_text` look like Stata's output of `regress`.
+Each model is a block. At its top are its name, its kind of estimates, and
+(for marginal effects) what they are changes in. Beside them are the number
+of observations, the number of bootstrap samples ("Replications"), and the
+cross-validated metrics. Below is a table of its terms ("Coef." or "dy/dx",
+"Std. Err.", "t" or "z", its p-value, and its 95% confidence interval), with
+numbers written as Stata writes them (such as "-.0115626"), between rules,
+with a bar after the terms. Coefficients get a t statistic if the model's
+results use the t distribution (as least squares and `fixest` do), and a z
+statistic otherwise. Set the `regression_table_style` setting (or `style`) to
+"columns" to put the models side by side in Word documents and images too:
+
+```python
+print(table.to_text().splitlines()[0].split())
+# ['standard', '/', 'baseline', 'Number', 'of', 'obs', '=', '426']
+```
+
+Some statistics of a regression table have no meaning for most machine learning
+models, so these take their place:
+
+* *R², log-likelihood, and pseudo-R².* A flexible model can fit the rows that
+  it learned from almost perfectly, so its metrics are cross-validated instead.
+  They are the "cv_{metric}" metrics of a validator, if the analysis has one.
+* *Adjusted R², AIC, BIC, and the F-test.* These need a count of the model's
+  parameters, which a forest or a boosted model does not have.
+  Cross-validated metrics do the same job: they penalize a model that
+  overfits.
+* *Coefficients, standard errors, and p-values.* Average marginal effects
+  with bootstrapped standard errors.
+
+A marginal effect describes the model, not the world. It is causal only if the
+features are, so use an [inferer](#causal-inference) to estimate the effect of
+a treatment. An AME can mislead when features are correlated, since moving one
+while holding the others fixed makes rows unlike any real one. The bootstrap
+treats rows as independent, so its standard errors are too small for rows that
+are correlated within groups or over time.
+
 ## Reports and exports
 
 `Findings`, the default report, describes the data, the split, the workflow,
@@ -1372,6 +1474,7 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | tables/{name}.csv | Each table. |
 | figures/{name}.png | Each figure. |
 | scorecard.csv, .md, .docx, .png | The scorecard in each format. The Word document and image are saved if python-docx and matplotlib are installed. |
+| regression_table.csv, .md, .docx, .png | Each `regression_table` in the workflow (named for the technique), in the same formats as the scorecard. |
 | data.csv | The data after the workflow, if `export(data = True)`. |
 
 ## Errors you may see

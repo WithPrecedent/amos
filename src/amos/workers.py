@@ -12,6 +12,7 @@ Contents:
 from __future__ import annotations
 
 import dataclasses
+import weakref
 from typing import Any
 
 import chrisjen
@@ -147,7 +148,8 @@ class Experiment(chrisjen.Contest):
                 steps = steps,
                 result = _outcome(result),
                 score = self.scores.get(label),
-                criterion = criterion))
+                criterion = criterion,
+                source = weakref.ref(result)))
         return branches
 
 

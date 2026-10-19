@@ -6,6 +6,32 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+* Added the `regression_table` evaluator, which reports every model the way
+  Stata, R, and statsmodels report regressions: a column for each branch of
+  the experiment (or for the final model), each feature's estimate with stars
+  and its standard error in parentheses, and the kind of estimates, the
+  number of observations, and cross-validated metrics below them. A model
+  that reports its coefficients (the statsmodels and pyfixest models) shows
+  them. Any other model shows each feature's average marginal effect, with
+  standard errors from refitting the model to bootstrap samples of the
+  training rows ("simulations", 100 by default). Set "marginal" to true to
+  show marginal effects for every model. `RegressionTable.create` makes one
+  from a dataset, an applied project, or several datasets, and it is saved
+  in the same formats as a scorecard. Word documents, images, and `to_text`
+  look like Stata's output of `regress` (a block for each model, with its
+  statistics above a table of "Coef." or "dy/dx", "Std. Err.", "t" or "z",
+  the p-value, and the 95% confidence interval), and csv, Markdown, LaTeX,
+  and HTML put the models side by side. Set "style" to "columns" to put them
+  side by side in Word documents and images too. `Project.export` saves each
+  regression table in the workflow. The README shows the tables of the best
+  `logit` and `xgboost` branches of its study.
+* Each `Branch` of an experiment now keeps a weak reference to the whole
+  dataset that it made (`Branch.dataset`), so the fitted model of every
+  branch can be reached after the experiment. Copies and pickles of a branch
+  do not keep it.
+* The scorecard's exports are now shared with the regression table. LaTeX
+  tables now escape "<" and ">".
+
 * A path to a data file passed as a project's `item`, or to
   `Dataset.create`, is now read with `nagata`'s formats, just as `load_file`
   reads it, so it may be in any format that `nagata` knows (such as json
