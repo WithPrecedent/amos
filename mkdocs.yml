@@ -25,6 +25,7 @@ nav:
   - License: license.md
 - User Guide:
   - Tutorial: tutorial.md
+  - Idea File: idea.md
   - Advanced User Guide: advanced.md
   - Technique Catalog: catalog.md
   - Recipes: recipes.md

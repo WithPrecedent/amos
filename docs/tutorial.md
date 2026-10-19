@@ -295,6 +295,8 @@ these results exactly.
 
 ## Next steps
 
+* The [idea file](idea.md) page shows how to write a settings file in each
+  format and describes every setting of the "general" section.
 * The [advanced user guide](advanced.md) describes the settings and shows how
   to write your own techniques, and the [technique catalog](catalog.md) lists
   every technique.

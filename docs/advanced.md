@@ -60,6 +60,9 @@ catalog](catalog.md) lists every technique by genre.
 A project's settings are sections of settings. `amos` reads two special
 sections. Every other section is read by `chrisjen`.
 
+The [idea file](idea.md) page shows how to write settings in a file and
+describes the "general" section in detail.
+
 | Section | Setting | Meaning |
 | --- | --- | --- |
 | `general` | `label` | The column that models predict. |
