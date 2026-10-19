@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.3.1
 
 * Added the `use_gpu` setting to the "general" section, which fits the
   models that can use a GPU (`xgboost`, `catboost`, `lightgbm`, and
