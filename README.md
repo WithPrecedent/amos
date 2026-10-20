@@ -19,10 +19,9 @@
 
 **A**utomated **M**odeling for **O**pen **S**cholarship. \
 Like the Rocinante's
-mechanic in *The Expanse*, `amos` handles the dirty jobs of a data science
-project: cleaning, describing, splitting, preprocessing, modeling, evaluating,
-and drawing. It is designed for academic research, where a result has to be
-explained and reproduced.
+mechanic in *The Expanse*, `amos` makes the dirty jobs of a data science
+project (cleaning, describing, munging, preprocessing, modeling, evaluating,
+and visualizing) easier.
 
 You describe a study in a plain settings file (or a Python `dict`). `amos`
 builds the workflow with [`chrisjen`](https://github.com/WithPrecedent/chrisjen),
@@ -76,10 +75,6 @@ whether a technique changes the result versus doing nothing at all.
 
 ### Reproducible
 
-<p align="center">
-<img src="https://media.giphy.com/media/lIz5wEPUomv6bvok31/giphy.gif" height="300"/>
-</p>
-
 Open scholarship means that others can check your work. `amos` helps by:
 
 * Passing one seed to every tool that takes a `random_state`, so a project yields the same result every time.
@@ -108,7 +103,6 @@ Open scholarship means that others can check your work. `amos` helps by:
 | [shap](https://shap.readthedocs.io) and [eli5](https://eli5.readthedocs.io) | Explaining models with SHAP values (and shap's plots of them) and weights. |
 | [matplotlib](https://matplotlib.org), [seaborn](https://seaborn.pydata.org), and [SciencePlots](https://github.com/garrettj403/SciencePlots) | Figures and other visualizations, in the style of a scientific journal (Nature's, by default) and with colors that people with color blindness can tell apart. |
 | [great_tables](https://posit-dev.github.io/great-tables/) and [python-docx](https://python-docx.readthedocs.io) | Scorecards as HTML tables and Word documents. |
-
 
 
 ### Robust and Transparent
@@ -308,6 +302,10 @@ flowchart TB
     analyst -- "the combination with the best roc_auc" --> critic
     critic --> artist
 ```
+
+<p align="center">
+<img src="https://media.giphy.com/media/lIz5wEPUomv6bvok31/giphy.gif" height="300"/>
+</p>
 
 #### Run it
 
