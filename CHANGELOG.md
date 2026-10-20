@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.4.0
 
 * A technique now writes `apply` instead of `implement`, following
   `chrisjen` 0.3.0 (now the oldest version that `amos` accepts), whose nodes
