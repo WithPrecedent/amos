@@ -657,10 +657,11 @@ class Operation(chrisjen.Technique, abc.ABC):
 
     An operation is a `chrisjen.Technique`, so it is stored in the
     `chrisjen.library` under its snake case name and can be named in the
-    settings of any worker or step. Its `apply` method makes the item into a
-    `Dataset` (if it is not one already), passes it to `implement` with the
-    technique's parameters, and returns it. The dataset is changed in place.
-    Every operation adds an entry to the dataset's `history`.
+    settings of any worker or step. Each technique writes `apply`, and every
+    call to it makes the item into a `Dataset` (if it is not one already),
+    passes it to `apply` with the technique's parameters, and returns it (see
+    `_call_apply`). The dataset is changed in place. Every operation adds an
+    entry to the dataset's `history`.
 
     `Operation` is a genre: its abstract subclasses (`Loader`, `Cleaner`,
     `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`,
@@ -668,7 +669,7 @@ class Operation(chrisjen.Technique, abc.ABC):
     `Plot`) are genres within it. To add a technique, subclass the genre that
     fits and write the method it requires, or set `contents` to the tool to
     wrap. To add a new kind of technique, subclass `Operation` and write
-    `implement`.
+    `apply`.
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -688,35 +689,15 @@ class Operation(chrisjen.Technique, abc.ABC):
 
     """ Public Methods """
 
-    def apply(self, item: Any, **kwargs: Any) -> Dataset:
-        """Applies the operation to `item`.
-
-        Args:
-            item: a `Dataset` or anything that `Dataset.create` accepts.
-            **kwargs: keyword arguments for `implement` that take precedence
-                over `parameters`.
-
-        Returns:
-            The changed `Dataset`.
-
-        """
-        dataset = Dataset.create(item)
-        count = len(dataset.history)
-        result = self.implement(dataset, **{**self._keywords(), **kwargs})
-        # Records the operation if `implement` did not record it in more
-        # detail.
-        if len(result.history) == count:
-            result.record(self.name, tool = utilities.describe_tool(
-                self.contents))
-        return result
-
     @abc.abstractmethod
-    def implement(self, item: Dataset, **kwargs: Any) -> Dataset:
+    def apply(self, item: Dataset, **kwargs: Any) -> Dataset:
         """Applies the operation to `item`.
 
         Args:
-            item: the dataset to work on.
-            **kwargs: parameters for the operation.
+            item: the dataset to work on. A caller can pass anything that
+                `Dataset.create` accepts (see `_call_apply`).
+            **kwargs: parameters for the operation, which take precedence
+                over `parameters`.
 
         Returns:
             The changed dataset.
@@ -724,6 +705,37 @@ class Operation(chrisjen.Technique, abc.ABC):
         """
 
     """ Private Methods """
+
+    def _call_apply(
+        self,
+        method: Callable[..., Any],
+        item: Any,
+        /,
+        **kwargs: Any) -> Dataset:
+        """Calls `method`, the `apply` of this technique's class.
+
+        `chrisjen` sends every call to `apply` here, except one made from a
+        subclass through `super()`.
+
+        Args:
+            method: the `apply` method, before it was wrapped.
+            item: a `Dataset` or anything that `Dataset.create` accepts.
+            **kwargs: keyword arguments for `method` that take precedence over
+                `parameters`.
+
+        Returns:
+            The changed `Dataset`.
+
+        """
+        dataset = Dataset.create(item)
+        count = len(dataset.history)
+        result: Dataset = method(
+            self, dataset, **{**self._keywords(), **kwargs})
+        # Records the operation if `apply` did not record it in more detail.
+        if len(result.history) == count:
+            result.record(self.name, tool = utilities.describe_tool(
+                self.contents))
+        return result
 
     def _make_tool(
         self,
@@ -760,7 +772,7 @@ class Operation(chrisjen.Technique, abc.ABC):
         if source is None:
             message = (
                 f'technique {self.name!r} has no tool: pass a callable or '
-                f'import path as contents or override implement'
+                f'import path as contents or override apply'
             )
             raise NotImplementedError(message)
         built = utilities.import_tool(source)

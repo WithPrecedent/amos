@@ -53,7 +53,7 @@ class Sampler(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Resamples the training rows of `item`.
 
         Args:

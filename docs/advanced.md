@@ -1244,7 +1244,12 @@ be named in settings right away.
 | `Evaluator` | `evaluate(self, item, **kwargs)` | A table, stored in `tables`. |
 | `Plot` | `draw(self, item, figure, **kwargs)` | Nothing: it draws on `figure`. |
 | `Transformer`, `Sampler`, `Model`, `Validator`, `Metric` | Set `contents` to a tool. | |
-| `Operation` | `implement(self, item, **kwargs)` | The changed `Dataset`. |
+| `Operation` | `apply(self, item, **kwargs)` | The changed `Dataset`. |
+
+An `apply` that a subclass writes always gets a `Dataset` and the technique's
+parameters, whatever its caller passed, and the technique is recorded in the
+dataset's `history` unless `apply` records it itself. A call to
+`super().apply(...)` passes its arguments on exactly as they are.
 
 Keyword parameters of these methods are filled from the settings. For
 example, a cleaner that limits extreme values (winsorizes):

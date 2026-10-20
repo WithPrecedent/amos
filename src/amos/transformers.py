@@ -95,7 +95,7 @@ class Transformer(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         columns: Sequence[str] | None = None,
@@ -382,7 +382,7 @@ class IterativeImpute(Imputer):
 
     contents: str = 'sklearn.impute.IterativeImputer'
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         columns: Sequence[str] | None = None,
@@ -400,7 +400,7 @@ class IterativeImpute(Imputer):
 
         """
         importlib.import_module('sklearn.experimental.enable_iterative_imputer')
-        return super().implement(item, columns = columns, **kwargs)
+        return super().apply(item, columns = columns, **kwargs)
 
 
 @dataclasses.dataclass

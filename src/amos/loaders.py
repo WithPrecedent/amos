@@ -130,21 +130,7 @@ class Loader(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def apply(self, item: Any = None, **kwargs: Any) -> base.Dataset:
-        """Loads the data and returns it as a dataset.
-
-        Args:
-            item: the dataset so far, or anything that `Dataset.create`
-                accepts. Defaults to `None`, which starts a new dataset.
-            **kwargs: parameters that take precedence over `parameters`.
-
-        Returns:
-            The dataset with the loaded data.
-
-        """
-        return super().apply(base.Dataset() if item is None else item, **kwargs)
-
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Loads the data into a dataset that continues `item`.
 
         Args:
@@ -234,6 +220,27 @@ class Loader(base.Operation, abc.ABC):
         return clerk.load(file_path = found, file_format = kind, **parameters)
 
     """ Private Methods """
+
+    def _call_apply(
+        self,
+        method: Callable[..., Any],
+        item: Any,
+        /,
+        **kwargs: Any) -> base.Dataset:
+        """Calls `apply`, starting a new dataset if `item` is `None`.
+
+        Args:
+            method: the `apply` method, before it was wrapped.
+            item: the dataset so far, anything that `Dataset.create` accepts,
+                or `None`, which starts a new dataset.
+            **kwargs: parameters that take precedence over `parameters`.
+
+        Returns:
+            The dataset with the loaded data.
+
+        """
+        start = base.Dataset() if item is None else item
+        return super()._call_apply(method, start, **kwargs)
 
     def _get_clerk(self) -> nagata.FileManager:
         """Returns `clerk`, making one for the current folder if there is none.

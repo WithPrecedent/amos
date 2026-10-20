@@ -116,7 +116,7 @@ class Munger(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Changes the columns of `item`.
 
         Args:

@@ -73,7 +73,7 @@ class Metric(base.Operation, chrisjen.Criteria, abc.ABC):
 
     """ Public Methods """
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Stores the score of the model's predictions in `metrics`.
 
         Args:

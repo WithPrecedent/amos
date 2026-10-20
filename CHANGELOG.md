@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+* A technique now writes `apply` instead of `implement`, following
+  `chrisjen`, whose nodes all do. Calling `apply` works as before: it accepts
+  anything that `Dataset.create` accepts, fills in the technique's
+  parameters, and records the technique in the dataset's `history`. That
+  work moved to `Operation._call_apply`, which `chrisjen` calls around each
+  `apply` (but not around a `super().apply` call from a subclass). A
+  technique that wrote `implement` must rename it to `apply`.
 * Added the `auto` module, which lets a step's techniques be "auto" in the
   settings: `amos` then chooses techniques that suit the data when the
   workflow reaches the step. "auto" works in a step that samples, models, or

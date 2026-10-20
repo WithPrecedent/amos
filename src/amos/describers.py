@@ -70,7 +70,7 @@ class Describer(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Adds the table from `describe` to the tables of `item`.
 
         Args:

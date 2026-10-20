@@ -489,7 +489,7 @@ class Auto(Chooser):
 
     genre: str | None = None
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Applies the chooser for `genre` to `item`.
 
         Args:
@@ -566,7 +566,7 @@ class AutoModel(Chooser):
 
     chooses: ClassVar[str] = 'model'
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         choices: Sequence[str] | str | None = None,
@@ -693,7 +693,7 @@ class AutoPlot(Chooser):
 
     chooses: ClassVar[str] = 'plot'
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         choices: Sequence[str] | str | None = None,
@@ -777,7 +777,7 @@ class AutoSampler(Chooser):
 
     chooses: ClassVar[str] = 'sampler'
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         choices: Sequence[str] | str | None = None,

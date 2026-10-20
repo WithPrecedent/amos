@@ -167,7 +167,7 @@ class Merger(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         *,

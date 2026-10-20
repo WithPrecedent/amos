@@ -297,3 +297,8 @@ ignore-decorators = ["typing.overload"]
 
 [tool.uv]
 package = true
+
+# Uses the local chrisjen, whose nodes write `apply` instead of `implement`,
+# until that version is released.
+[tool.uv.sources]
+chrisjen = { path = "../chrisjen", editable = true }

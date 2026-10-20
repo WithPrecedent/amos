@@ -10,7 +10,7 @@ shown by making it the last line of a cell.
 
 Every plot accepts "width" and "height" (in inches) and "title" parameters,
 and "style", "colors", and "latex" parameters that set how it looks (see
-`Plot.implement`). By default, figures have SciencePlots' style for
+`Plot.apply`). By default, figures have SciencePlots' style for
 scientific figures, with the size and fonts of a figure in Nature, and a
 cycle of colors that people with color blindness can tell apart.
 
@@ -149,7 +149,7 @@ class Plot(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         width: float | None = None,

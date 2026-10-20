@@ -66,7 +66,7 @@ class Splitter(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         test_size: float = options._DEFAULT_TEST_SIZE,

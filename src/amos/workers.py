@@ -62,7 +62,7 @@ class Experiment(chrisjen.Contest):
 
     """ Public Methods """
 
-    def implement(self, item: Any, **kwargs: Any) -> Any:
+    def apply(self, item: Any, **kwargs: Any) -> Any:
         """Returns the result of the path with the best score.
 
         Args:

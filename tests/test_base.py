@@ -200,7 +200,7 @@ def test_repr(fitted: amos.Dataset) -> None:
 def test_operation_names_and_records() -> None:
     @dataclasses.dataclass
     class AddOne(amos.Operation):
-        def implement(self, item, amount = 1, **kwargs):
+        def apply(self, item, amount = 1, **kwargs):
             item.data = item.data + amount
             return item
 
@@ -210,6 +210,26 @@ def test_operation_names_and_records() -> None:
     assert list(result.data['a']) == [3, 4]
     assert result.history == [{'technique': 'add_one', 'tool': None}]
     assert amos.library.all['add_one'] is AddOne
+
+
+def test_operation_apply_through_super_is_not_wrapped_again() -> None:
+    @dataclasses.dataclass
+    class AddAmount(amos.Operation):
+        def apply(self, item, amount = 1, **kwargs):
+            item.data = item.data + amount
+            return item
+
+    @dataclasses.dataclass
+    class AddTwice(AddAmount):
+        def apply(self, item, amount = 1, **kwargs):
+            # The parent gets its default amount, not the parameter.
+            item.data = item.data + amount
+            return super().apply(item, **kwargs)
+
+    technique = AddTwice(parameters = {'amount': 10})
+    result = technique.apply(pd.DataFrame({'a': [1, 2]}))
+    assert list(result.data['a']) == [12, 13]
+    assert result.history == [{'technique': 'add_twice', 'tool': None}]
 
 
 def test_make_tool_uses_the_seed_and_accepted_parameters(

@@ -126,7 +126,7 @@ class Evaluator(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Adds the table from `evaluate` to the tables of `item`.
 
         Args:
@@ -647,7 +647,7 @@ class Conformal(Evaluator):
                 a in m for a, m in zip(actual, members, strict = True)]},
             index = rows)
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Adds the table and stores the coverage and width (or set size).
 
         Args:
@@ -659,7 +659,7 @@ class Conformal(Evaluator):
                 `metrics`.
 
         """
-        super().implement(item, **kwargs)
+        super().apply(item, **kwargs)
         table = item.tables[self.name]
         item.metrics['coverage'] = float(table['covered'].mean())
         if 'lower' in table.columns:
@@ -1215,7 +1215,7 @@ class RegressionTable(_Published, Evaluator):
         """
         return self._tabulate(self._columns(item), **kwargs)
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Adds the estimates and the rows below them to the tables of `item`.
 
         Args:
@@ -1227,7 +1227,7 @@ class RegressionTable(_Published, Evaluator):
                 name and the rows below them as "{name}_statistics".
 
         """
-        super().implement(item, **kwargs)
+        super().apply(item, **kwargs)
         if self.statistics is not None:
             item.tables[f'{self.name}_statistics'] = self.statistics
         return item
@@ -1421,7 +1421,7 @@ class RegressionTable(_Published, Evaluator):
                 figures = {},
                 history = [],
                 branches = [])
-            technique.implement(copy, metrics = names)
+            technique.apply(copy, metrics = names)
             found = copy.metrics
         return {key: found[key] for key in keys if key in found}
 
@@ -2018,7 +2018,7 @@ class Scorecard(_Published, Evaluator):
             self.summary = 'The final model'
         return table
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         metrics: Sequence[str] | None = None,
@@ -2038,7 +2038,7 @@ class Scorecard(_Published, Evaluator):
         """
         names = list(metrics or self.defaults.get(item.task or 'classify', ()))
         item.metrics.update(self._measure(item, names))
-        return super().implement(item, metrics = metrics, **kwargs)
+        return super().apply(item, metrics = metrics, **kwargs)
 
     """ Private Methods """
 

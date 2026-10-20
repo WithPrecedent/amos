@@ -151,7 +151,7 @@ class Model(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         search: str | None = None,
@@ -1727,7 +1727,7 @@ class BinomialBayesMixedglm(_Statsmodels, Model):
     column_parameters: ClassVar[tuple[str, ...]] = ('groups',)
     kind: ClassVar[str] = 'binomial_bayes_mixedglm'
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         search: str | None = None,
@@ -1739,17 +1739,17 @@ class BinomialBayesMixedglm(_Statsmodels, Model):
 
         Args:
             item: the dataset to model.
-            search: as for `Model.implement`.
-            cv: as for `Model.implement`.
-            n_iter: as for `Model.implement`.
-            scoring: as for `Model.implement`.
+            search: as for `Model.apply`.
+            cv: as for `Model.apply`.
+            n_iter: as for `Model.apply`.
+            scoring: as for `Model.apply`.
             **kwargs: parameters for the model.
 
         Returns:
             The dataset, with the fitted model and its predictions.
 
         """
-        return super().implement(
+        return super().apply(
             item,
             search = search,
             cv = cv,
@@ -1977,7 +1977,7 @@ class GEE(Model):
         'regress': Statsmodel}
     column_parameters: ClassVar[tuple[str, ...]] = ('groups',)
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         search: str | None = None,
@@ -1989,17 +1989,17 @@ class GEE(Model):
 
         Args:
             item: the dataset to model.
-            search: as for `Model.implement`.
-            cv: as for `Model.implement`.
-            n_iter: as for `Model.implement`.
-            scoring: as for `Model.implement`.
+            search: as for `Model.apply`.
+            cv: as for `Model.apply`.
+            n_iter: as for `Model.apply`.
+            scoring: as for `Model.apply`.
             **kwargs: parameters for the model.
 
         Returns:
             The dataset, with the fitted model and its predictions.
 
         """
-        return super().implement(
+        return super().apply(
             item,
             search = search,
             cv = cv,
@@ -2241,7 +2241,7 @@ class Mixedlm(_Statsmodels, Model):
     column_parameters: ClassVar[tuple[str, ...]] = ('groups',)
     kind: ClassVar[str] = 'mixedlm'
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         search: str | None = None,
@@ -2253,17 +2253,17 @@ class Mixedlm(_Statsmodels, Model):
 
         Args:
             item: the dataset to model.
-            search: as for `Model.implement`.
-            cv: as for `Model.implement`.
-            n_iter: as for `Model.implement`.
-            scoring: as for `Model.implement`.
+            search: as for `Model.apply`.
+            cv: as for `Model.apply`.
+            n_iter: as for `Model.apply`.
+            scoring: as for `Model.apply`.
             **kwargs: parameters for the model.
 
         Returns:
             The dataset, with the fitted model and its predictions.
 
         """
-        return super().implement(
+        return super().apply(
             item,
             search = search,
             cv = cv,

@@ -262,7 +262,7 @@ requires-dist = [
     { name = "catboost", marker = "extra == 'boosting'", specifier = ">=1.2" },
     { name = "category-encoders", marker = "extra == 'encoders'", specifier = ">=2.6" },
     { name = "causalml", marker = "python_full_version < '3.13' and extra == 'causal'", specifier = ">=0.17" },
-    { name = "chrisjen", specifier = ">=0.2.0" },
+    { name = "chrisjen", editable = "../chrisjen" },
     { name = "doubleml", marker = "extra == 'causal'", specifier = ">=0.11" },
     { name = "dowhy", marker = "python_full_version >= '3.13' and extra == 'causal'", specifier = ">=0.14" },
     { name = "eli5", marker = "extra == 'explain'", specifier = ">=0.16" },
@@ -960,8 +960,8 @@ wheels = [
 
 [[package]]
 name = "chrisjen"
-version = "0.2.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.2.1"
+source = { editable = "../chrisjen" }
 dependencies = [
     { name = "bobbie" },
     { name = "camina" },
@@ -970,9 +970,46 @@ dependencies = [
     { name = "nagata" },
     { name = "wonka" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3a/78/54fd890b2803f06f32b2ad5fc73bcab0d2333b62629334fc1fb88d4a8c59/chrisjen-0.2.0.tar.gz", hash = "sha256:afe20dafcd84f8385c255a3138aa524d4e6c95e144cc9e765eac578faca1b9d6", size = 146890, upload-time = "2026-10-06T02:27:08.512Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/73/2e/c9f49e6ae58e5fb1421ee057cd1c3188cf24cae818d33510a3343950c131/chrisjen-0.2.0-py3-none-any.whl", hash = "sha256:8957f432ea7615bdb210f79ace132e73f5402915106eb1e1d3093c17d903af1e", size = 30349, upload-time = "2026-10-06T02:27:07.524Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "bobbie", specifier = ">=0.2.1" },
+    { name = "camina", specifier = ">=0.2.1" },
+    { name = "holden", specifier = ">=0.2.3" },
+    { name = "miller", specifier = ">=0.2.1" },
+    { name = "nagata", specifier = ">=0.2.0" },
+    { name = "wonka", specifier = ">=0.2.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "coverage" },
+    { name = "markdown-callouts" },
+    { name = "markdown-exec" },
+    { name = "mkdocs" },
+    { name = "mkdocs-coverage" },
+    { name = "mkdocs-gen-files" },
+    { name = "mkdocs-git-committers-plugin-2" },
+    { name = "mkdocs-literate-nav" },
+    { name = "mkdocs-material" },
+    { name = "mkdocs-minify-plugin" },
+    { name = "mkdocstrings", extras = ["python"] },
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-randomly" },
+    { name = "pytest-xdist" },
+    { name = "ruff" },
+    { name = "toml" },
+    { name = "uv" },
+]
+tests = [
+    { name = "coverage" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-randomly" },
+    { name = "pytest-xdist" },
 ]
 
 [[package]]

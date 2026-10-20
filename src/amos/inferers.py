@@ -135,9 +135,9 @@ class Inferer(base.Operation, abc.ABC):
     the inferer fits it on the CPU.
 
     The techniques of each package are a genre within this one: `Doubleml`,
-    `Dowhy`, `Causalml`, and `Tigramite`, which write `implement`. To add a
+    `Dowhy`, `Causalml`, and `Tigramite`, which write `apply`. To add a
     technique of one of those packages, subclass its genre; to add one of
-    another kind, subclass `Inferer` and write `implement`.
+    another kind, subclass `Inferer` and write `apply`.
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -145,7 +145,7 @@ class Inferer(base.Operation, abc.ABC):
             class.
         contents: the estimator that the technique wraps, as an import path.
             Defaults to `None`.
-        parameters: keyword arguments for `implement`. Defaults to an empty
+        parameters: keyword arguments for `apply`. Defaults to an empty
             `dict`.
 
     """
@@ -333,7 +333,7 @@ class Causalml(Inferer, abc.ABC):
     # Whether the estimator finds the effect of each row.
     individual: ClassVar[bool] = True
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         *,
@@ -670,7 +670,7 @@ class Doubleml(Inferer, abc.ABC):
     # them, from the units of a panel or with folds within each fold).
     row_folds: ClassVar[bool] = True
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         *,
@@ -1551,7 +1551,7 @@ class Dowhy(Inferer, abc.ABC):
     # Whether the method needs an instrument.
     instrumented: ClassVar[bool] = False
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         *,
@@ -1882,7 +1882,7 @@ class Tigramite(Inferer, abc.ABC):
 
     """
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         *,
@@ -2085,7 +2085,7 @@ class TimeSeriesEffect(Tigramite):
 
     contents: Any = 'tigramite.models.LinearMediation'
 
-    def implement(
+    def apply(
         self,
         item: base.Dataset,
         *,
@@ -2272,7 +2272,7 @@ def _fits_on_gpu(name: str, task: str, seed: int | None, inferer: str) -> bool:
     x = np.column_stack([rows / _PROBE_ROWS, rows % 2])
     y = rows % 2 if task == 'classify' else rows / _PROBE_ROWS
     # DoubleML and causalml fit the learners themselves, many times over, so
-    # unlike a model (see `Model.implement`), a learner that fails on the GPU
+    # unlike a model (see `Model.apply`), a learner that fails on the GPU
     # cannot be fitted again on the CPU partway through an inferer. Instead,
     # it is fitted once to a few made-up rows before the inferer starts (and
     # makes predictions, which is when tabpfn first runs on the GPU), and

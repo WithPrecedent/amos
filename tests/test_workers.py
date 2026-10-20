@@ -69,12 +69,12 @@ def test_experiment_includes_metrics_from_each_path(
 def test_experiment_works_with_any_criteria_and_item() -> None:
     @dataclasses.dataclass
     class Double(chrisjen.Technique):
-        def implement(self, item, **kwargs):
+        def apply(self, item, **kwargs):
             return item * 2
 
     @dataclasses.dataclass
     class Triple(chrisjen.Technique):
-        def implement(self, item, **kwargs):
+        def apply(self, item, **kwargs):
             return item * 3
 
     experiment = amos.Experiment(

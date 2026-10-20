@@ -68,7 +68,7 @@ class Cleaner(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Cleans the data of `item`.
 
         Args:
@@ -271,7 +271,7 @@ class KeepColumns(Cleaner):
                 kept.append(name)
         return data[kept]
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Keeps the chosen columns of `item`, its label, and its groups.
 
         Args:
@@ -282,7 +282,7 @@ class KeepColumns(Cleaner):
             The cleaned dataset.
 
         """
-        return super().implement(
+        return super().apply(
             item, **{'label': item.label, 'groups': item.groups, **kwargs})
 
 
@@ -315,7 +315,7 @@ class RenameColumns(Cleaner):
         """
         return data.rename(columns = dict(names or {}))
 
-    def implement(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Renames the columns of `item`, including its label.
 
         Args:
@@ -336,4 +336,4 @@ class RenameColumns(Cleaner):
             item.groups = [names.get(g, g) for g in item.groups]
             if item.label in names:
                 item.label = names[item.label]
-        return super().implement(item, **kwargs)
+        return super().apply(item, **kwargs)
