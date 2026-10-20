@@ -207,3 +207,23 @@ def test_an_experiment_compares_the_scores_of_each_branch() -> None:
     assert 'cv_accuracy' in comparison.columns
     # The comparison ranks the branches by the score on the test rows.
     assert table.loc[0, 'model'] == 'logit'
+
+
+def _spaced() -> amos.Dataset:
+    """Returns a split dataset whose feature names have spaces."""
+    data = make_numeric(rows = 200)
+    data.columns = [
+        str(c).replace('x', 'feature ') if c != 'target' else c
+        for c in data.columns]
+    dataset = amos.Dataset(data, label = 'target', seed = SEED)
+    return amos.splitters.Stratified().apply(dataset)
+
+
+def test_validators_use_the_columns_that_lightgbm_renamed() -> None:
+    requires('lightgbm')
+    dataset = _spaced()
+    amos.models.Lightgbm().apply(dataset, n_estimators = 10)
+    # lightgbm names the features "feature_0" and so on.
+    assert 'feature_0' in list(dataset.model.feature_names_in_)
+    amos.validators.StratifiedKFold().apply(dataset, metrics = ['accuracy'])
+    assert 0 <= dataset.metrics['cv_accuracy'] <= 1

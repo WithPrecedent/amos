@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from conftest import requires
+from conftest import SEED, make_numeric, requires
 
 import amos
 from amos import evaluators
@@ -180,3 +180,19 @@ def test_analyses_of_the_features_use_the_real_training_rows(
     assert classified.tables['pca']['share'].iloc[0] < 0.9
     with pytest.raises(ValueError, match = 'two numeric columns'):
         evaluators.FactorAnalysis().apply(classified, columns = ['x0'])
+
+
+def test_evaluators_name_the_columns_that_lightgbm_renamed() -> None:
+    requires('lightgbm')
+    data = make_numeric(rows = 200)
+    data.columns = [
+        str(c).replace('x', 'feature ') if c != 'target' else c
+        for c in data.columns]
+    dataset = amos.Dataset(data, label = 'target', seed = SEED)
+    amos.splitters.Stratified().apply(dataset)
+    amos.models.Lightgbm().apply(dataset, n_estimators = 10)
+    evaluators.FeatureImportance().apply(dataset)
+    table = dataset.tables['feature_importance']
+    assert set(table.index) == set(dataset.features)
+    effects = evaluators.RegressionTable.create(dataset, simulations = 3)
+    assert list(effects.estimates.loc['lightgbm'].index) == dataset.features

@@ -4,6 +4,8 @@ Contents:
     accepted_parameters: limits parameters to those that a tool accepts.
     describe_tool: returns a name for a tool that can be stored in a record.
     environment: describes the software used to run a project.
+    feature_names: returns the columns of the data that a model was fitted
+        to.
     gpus: describes the NVIDIA GPUs that models can be fitted on.
     import_tool: imports a tool from its import path, with a helpful error.
     parameters_of: returns the parameters of a built tool.
@@ -24,7 +26,7 @@ import inspect
 import logging
 import platform
 import sys
-from collections.abc import Callable, Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 import chrisjen.utilities
@@ -130,6 +132,38 @@ def environment(*, gpu: bool = False) -> dict[str, Any]:
     if gpu:
         described['gpus'] = [dict(found) for found in gpus()]
     return described
+
+
+def feature_names(model: Any, columns: Iterable[Any]) -> list[Any] | None:
+    """Returns the columns of the data that a model was fitted to.
+
+    A fitted scikit-learn model names its features in `feature_names_in_`,
+    but some tools change names that they cannot store: lightgbm replaces
+    the spaces in a name with underscores ("mean radius" becomes
+    "mean_radius"). Those names are given back as the columns they came
+    from, so that they can select the model's columns of the data.
+
+    Args:
+        model: a fitted model.
+        columns: the columns of the data.
+
+    Returns:
+        The model's features, in its order, as names in `columns` (or as the
+            model names them, if no column matches), or `None` if the model
+            does not name its features.
+
+    """
+    names = getattr(model, 'feature_names_in_', None)
+    if names is None:
+        return None
+    columns = list(columns)
+    known = set(columns)
+    renamed: dict[str, Any] = {}
+    for column in columns:
+        renamed.setdefault(str(column).replace(' ', '_'), column)
+    return [
+        name if name in known else renamed.get(str(name), name)
+        for name in names]
 
 
 @functools.cache

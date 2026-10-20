@@ -144,6 +144,10 @@ class Model(base.Operation, abc.ABC):
     column_parameters: ClassVar[tuple[str, ...]] = ()
     # Whether the label must be counts: whole numbers of 0 or more.
     counts: ClassVar[bool] = False
+    # Parameters that the tool accepts only through `**kwargs` (and so does
+    # not list in its signature or `get_params`), which are passed to it
+    # when they are set.
+    keyword_parameters: ClassVar[tuple[str, ...]] = ()
 
     """ Public Methods """
 
@@ -391,8 +395,10 @@ class Model(base.Operation, abc.ABC):
             The fitted model.
 
         """
-        estimator = self._make_tool(
-            item, fixed, tool = tool, known = self._device_parameters(gpu = gpu))
+        known = {
+            **(self._device_parameters(gpu = gpu) or {}),
+            **{k: v for k, v in fixed.items() if k in self.keyword_parameters}}
+        estimator = self._make_tool(item, fixed, tool = tool, known = known)
         if (
             task == 'classify'
             and self.numbered_classes
@@ -2144,6 +2150,10 @@ class Lightgbm(Model):
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'lightgbm.LGBMClassifier',
         'regress': 'lightgbm.LGBMRegressor'}
+    # lightgbm's models take "verbose" through `**kwargs`. It is -1 by
+    # default, so lightgbm does not print a warning for each tree it cannot
+    # split further (which small data has many of).
+    keyword_parameters: ClassVar[tuple[str, ...]] = ('verbose',)
     parameters: base.GenericDict = dataclasses.field(
         default_factory = lambda: {'verbose': -1})
 

@@ -43,7 +43,8 @@ GENRES: tuple[tuple[str, str], ...] = (
     ('metric', 'Metrics (critic)'),
     ('evaluator', 'Evaluators (critic)'),
     ('inferer', 'Inferers (critic)'),
-    ('plot', 'Plots (artist)'))
+    ('plot', 'Plots (artist)'),
+    ('chooser', 'Choosers (any stage)'))
 
 
 def main() -> None:

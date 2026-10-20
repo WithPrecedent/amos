@@ -25,6 +25,7 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
 | `Loader`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, `Metric` has the genre `GroupMetric` (fairness metrics), and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
+| `Chooser` | The genre of the techniques that choose other techniques to suit the data (`auto`, `auto_sampler`, `auto_model`, and `auto_plot`). See [Choosing techniques automatically](#choosing-techniques-automatically). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
 | `Findings` | The default report. |
 
@@ -44,7 +45,7 @@ import sklearn.datasets
 import amos
 
 print(sorted(amos.library["vertex"]["operation"]))
-# ['cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'metric', 'model', 'munger', 'plot', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
+# ['chooser', 'cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'metric', 'model', 'munger', 'plot', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
 print(amos.library.classify("smote"), amos.library.classify("one_hot"))
 # sampler encoder
 print(amos.library.all["random_forest"])
@@ -847,6 +848,98 @@ dataset = amos.Dataset(clinics, label = "target", seed = 43, groups = ["clinic"]
 amos.models.Fixest().apply(dataset, fixed_effects = "clinic", cluster = "clinic")
 print(list(dataset.tables["fixest_coefficients"].index[:3]))
 # ['age', 'sex', 'bmi']
+```
+
+## Choosing techniques automatically
+
+Name "auto" in place of a step's techniques, and `amos` chooses techniques
+that suit the data when the workflow reaches that step. "auto" works in a
+step that samples, models, or plots. The kind of step is found from its name
+("sample", "model", or "plot", and a few others such as "resample", "fit",
+and "draw") or, for a worker without steps, from the worker's name (such as
+"artist"). In a step with another name, name the chooser yourself:
+`auto_sampler`, `auto_model`, or `auto_plot`.
+
+| Chooser | What it chooses |
+| --- | --- |
+| `auto_sampler` | Nothing for a regressed label or classes that are balanced (the rarest class has at least half the rows of the most common). Otherwise `random_under` if the rarest class has 10,000 rows or more, `smote_tomek` if the classes overlap, `smote` if the features are numeric, and `random_over` if they are not (or have missing values, are mostly binary, or the rarest class has fewer than 6 rows). |
+| `auto_model` | Rules out the models that cannot do the task or use the features, and those whose assumptions the data does not meet (such as `linear` when the errors are not normal or the features are collinear, `poisson` for overdispersed counts, or `naive_bayes` when the features are not normal), cross-validates the first 4 of the rest ("candidates"), and fits the simplest model whose score is within one standard error of the best. |
+| `auto_plot` | Plots of the data before a model is fitted. After, plots of the model that suit the task and the model, such as a precision-recall curve for imbalanced classes, a Q-Q plot for a model that assumes normal errors, or partial dependence for a model that is not linear. |
+
+Each chooser adds a table to the dataset's `tables`, named for it, with a row
+for each technique it considered: whether it was chosen and why (or why
+not). For models, it also has each model's cross-validated score. The
+dataset's `history` records the choice and the profile of the training rows
+that it was based on, so a paper can report how each technique was chosen.
+
+```python
+tumors = sklearn.datasets.load_breast_cancer(as_frame = True).frame
+auto_settings = {
+    "general": {"label": "target", "seed": 43},
+    "cancer_project": {"cancer_workers": ["analyst", "artist"]},
+    "analyst": {
+        "steps": ["split", "scale", "sample", "model"],
+        "split_techniques": "stratified",
+        "scale_techniques": "standard",
+        "sample_techniques": "auto",
+        "model_techniques": "auto",
+    },
+    "auto_model_parameters": {
+        "choices": ["naive_bayes", "logit", "random_forest", "gradient_boosting"],
+    },
+    "artist": {"techniques": "auto"},
+}
+auto_project = amos.Project.create(auto_settings, item = tumors)
+auto_result = auto_project.result
+print(auto_result.tables["auto_sampler"].loc["none", "reason"])
+# the classes are balanced: the rarest has 60% of the rows of the most common
+model_choices = auto_result.tables["auto_model"]
+print(model_choices.loc["naive_bayes", "reason"])
+# assumes normal features, but 73% of them are not
+print(model_choices["score"].round(3).dropna().to_dict())
+# {'logit': 0.967, 'random_forest': 0.955, 'gradient_boosting': 0.968}
+print(model_choices.index[model_choices["chosen"]].tolist())
+# ['logit']
+print(list(auto_result.figures))
+# ['confusion_heatmap', 'roc_curve', 'calibration_curve', 'importance_plot']
+```
+
+`gradient_boosting` scored a little better than `logit`, but by less than
+one standard error, so the simpler `logit` was chosen. Set "simplest" to
+false to choose the best score instead. The "auto_model_parameters" section
+holds the parameters of the "model" step's "auto" (as for any technique of a
+step). "choices" limits the techniques that a chooser considers (in the
+order to prefer them). Its other parameters ("candidates", "folds", and
+"metric" for `auto_model`, and "data" for `auto_plot`) are described in the
+[API reference](reference/amos/auto.md), and any others are passed to the
+techniques it chooses.
+
+The choosers can also be applied directly, and `amos.auto.profile` returns
+what they found about the data. Here, the label is counts that vary more
+than a Poisson model assumes:
+
+```python
+generator = np.random.default_rng(0)
+dockets = pd.DataFrame({
+    "judges": generator.integers(1, 10, 500),
+    "pages": generator.normal(30, 8, 500),
+})
+mean = np.exp(0.2 + 0.15 * dockets["judges"] + 0.01 * dockets["pages"])
+dockets["appeals"] = generator.negative_binomial(2, 2 / (2 + mean))
+appeal_data = amos.Dataset(dockets, label = "appeals", task = "regress", seed = 43)
+appeal_data = amos.splitters.TrainTest().apply(appeal_data)
+amos.auto.AutoModel().apply(
+    appeal_data, choices = ["poisson", "negative_binomial", "linear", "random_forest"])
+model_table = appeal_data.tables["auto_model"]
+print(model_table.index[model_table["chosen"]].tolist())
+# ['negative_binomial']
+print(model_table.loc["poisson", "reason"])
+# assumes that the variance of the counts equals their mean, but they are overdispersed (dispersion 3.31)
+print(model_table.loc["linear", "reason"])
+# assumes normal errors, but they are not (skewness 1.95, excess kurtosis 5.34)
+found = amos.auto.profile(appeal_data)
+print(found.counts, found.overdispersed, found.normal)
+# True True False
 ```
 
 ## Groups and fairness

@@ -362,3 +362,12 @@ imported when a technique that needs them is used (see the extras in the
 | [`survival_curves`][amos.plots.SurvivalCurves] | The share of rows without an event over time (Kaplan-Meier curves). |
 | [`tree_plot`][amos.plots.TreePlot] | The splits of a decision tree (or of one tree of a forest). |
 | [`validation_curve`][amos.plots.ValidationCurve] | The model's score as one of its parameters changes. |
+
+## Choosers (any stage)
+
+| Name | Description |
+| --- | --- |
+| [`auto`][amos.auto.Auto] | Chooses the techniques of the step that it is in. |
+| [`auto_model`][amos.auto.AutoModel] | Fits the best of the models whose needs and assumptions the data meets. |
+| [`auto_plot`][amos.auto.AutoPlot] | Draws the figures that suit the data and the model. |
+| [`auto_sampler`][amos.auto.AutoSampler] | Chooses a sampler that suits the classes and the features, or none. |

@@ -20,7 +20,7 @@ import nagata
 import numpy as np
 import pandas as pd
 
-from . import base, evaluators, loaders, options, utilities
+from . import auto, base, evaluators, loaders, options, utilities
 
 # Arguments of a `nagata.FileManager` that can be set in the "files" section
 # of the settings.
@@ -129,6 +129,16 @@ class Project(chrisjen.Project):
         return cast('Project', project)
 
     """ Public Methods """
+
+    def draft(self) -> None:
+        """Builds the `workflow` from the settings.
+
+        Each "auto" technique in the workflow is told which kind of technique
+        to choose, from the name of its step or worker (see `auto.resolve`).
+
+        """
+        super().draft()
+        auto.resolve(self.workflow)
 
     def apply(self, item: Any = None, **kwargs: Any) -> Any:
         """Applies the workflow to a copy of the data and generates the report.

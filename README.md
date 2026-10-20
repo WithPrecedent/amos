@@ -238,6 +238,8 @@ title = The test rows by their actual and predicted classes
 
 [shap_waterfall_parameters]
 title = How each feature moved the prediction for one tumor
+limit = 30
+height = 10
 ```
 
 The "general" section names the label (the column that models predict) and
@@ -333,7 +335,7 @@ sections. The ROC curve shows how well the best combination tells the two
 kinds of tumors apart on the test rows it never learned from, and the
 confusion heatmap counts the test rows that it classified rightly and
 wrongly. The importance plot shows how much its score drops when each feature
-is shuffled, which works for any model, and the SHAP waterfall shows how each
+is shuffled, which works for any model, and the SHAP waterfall shows how every
 feature (after scaling) moved its prediction for one tumor:
 
 <p align="center">
@@ -342,7 +344,9 @@ feature (after scaling) moved its prediction for one tumor:
 </p>
 <p align="center">
 <img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/importance_plot.png" alt="The ten features whose shuffling lowers the model's score the most" height="320"/>
-<img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/shap_waterfall.png" alt="How each feature moved the best model's prediction for one tumor, from the largest change to the smallest" height="320"/>
+</p>
+<p align="center">
+<img src="https://raw.githubusercontent.com/WithPrecedent/amos/main/docs/img/shap_waterfall.png" alt="How each of the 30 features moved the best model's prediction for one tumor, from the largest change to the smallest" height="640"/>
 </p>
 
 The result includes a `Dataset`, the fitted `model`, its `predictions`,

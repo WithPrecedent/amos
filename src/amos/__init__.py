@@ -7,6 +7,7 @@ __version__ = '0.3.1'
 __author__: str = 'Corey Rayburn Yung'
 
 __all__: list[str] = [
+    'Chooser',
     'Cleaner',
     'Dataset',
     'Describer',
@@ -40,6 +41,7 @@ __all__: list[str] = [
 # they can be named in settings as soon as `amos` is imported.
 from chrisjen import library
 
+from .auto import Chooser
 from .base import Dataset, Operation
 from .cleaners import Cleaner
 from .describers import Describer

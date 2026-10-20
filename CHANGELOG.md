@@ -6,6 +6,31 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+* Added the `auto` module, which lets a step's techniques be "auto" in the
+  settings: `amos` then chooses techniques that suit the data when the
+  workflow reaches the step. "auto" works in a step that samples, models, or
+  plots (found from the name of the step, or of a worker such as "artist"),
+  and `auto_sampler`, `auto_model`, and `auto_plot` can be named in any
+  step. `auto_sampler` resamples only imbalanced classes, with a sampler that
+  suits their size, overlap, and features. `auto_model` rules out the models
+  that cannot use the features or whose assumptions the data does not meet
+  (normal errors, collinear features, the dispersion of counts, and so on),
+  cross-validates the rest, and fits the simplest model within one standard
+  error of the best. `auto_plot` draws the data before a model is fitted,
+  and the plots that suit the task and the model after. Each records a table
+  of the techniques it considered and why each was or was not chosen, and
+  `amos.auto.profile` returns what it found about the data.
+* Fixed validators, `conformal`, `explain_weights`, `feature_importance`, and
+  the marginal effects of `regression_table` for `lightgbm` models whose
+  feature names have spaces. lightgbm replaces the spaces with underscores,
+  so the names it reports were not columns of the data: validators failed,
+  and the other techniques named features that the data did not have (and
+  `regression_table` left them out). `utilities.feature_names` now gives
+  back the columns that a model was fitted to.
+* `lightgbm` is now quiet, as its default "verbose" of -1 meant it to be.
+  The setting never reached lightgbm, which takes it only through
+  `**kwargs`, so lightgbm printed a warning for each tree it could not split
+  further. A model's `keyword_parameters` now names such parameters.
 * Added the `regression_table` evaluator, which reports every model the way
   Stata, R, and statsmodels report regressions: a column for each branch of
   the experiment (or for the final model), each feature's estimate with stars

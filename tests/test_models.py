@@ -314,3 +314,15 @@ def test_optuna_search(classified: amos.Dataset) -> None:
     assert table['param_n_estimators'].between(5, 20).all()
     assert list(table['rank_test_score'])[0] == 1
     assert classified.history[-1]['search'] == 'optuna'
+
+
+def test_lightgbm_is_quiet_unless_asked(classified: amos.Dataset) -> None:
+    requires('lightgbm')
+    clone = importlib.import_module('sklearn.base').clone
+    # lightgbm takes "verbose" only through `**kwargs`, so it must be passed
+    # even though its signature does not name it.
+    models.Lightgbm().apply(classified, n_estimators = 5)
+    assert classified.model.get_params()['verbose'] == -1
+    assert clone(classified.model).get_params()['verbose'] == -1
+    models.Lightgbm().apply(classified, n_estimators = 5, verbose = 0)
+    assert classified.model.get_params()['verbose'] == 0

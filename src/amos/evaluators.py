@@ -600,7 +600,8 @@ class Conformal(Evaluator):
         """
         sklearn_base = importlib.import_module('sklearn.base')
         model = _model(item)
-        columns = list(getattr(model, 'feature_names_in_', item.features))
+        columns = (
+            utilities.feature_names(model, item.data.columns) or item.features)
         rows = item.y_test.index if item.is_split else item.data.index
         train = item.y_train.index
         estimator = sklearn_base.clone(model)
@@ -706,8 +707,9 @@ class ExplainWeights(Evaluator):
         model = _model(item)
         if isinstance(model, models.LabelCoded):
             model = model.estimator
-        names = [str(n) for n in getattr(
-            model, 'feature_names_in_', item.features)]
+        names = [str(n) for n in (
+            utilities.feature_names(model, item.data.columns)
+            or item.features)]
         table: pd.DataFrame | None = eli5.explain_weights_df(
             model, feature_names = names, top = top)
         if table is None:
@@ -879,7 +881,8 @@ class FeatureImportance(Evaluator):
                 )
                 raise ValueError(message)
             importances = np.abs(np.atleast_2d(coefficients)).mean(axis = 0)
-        features = list(getattr(model, 'feature_names_in_', item.features))
+        features = (
+            utilities.feature_names(model, item.data.columns) or item.features)
         return _importance_table(features, np.asarray(importances))
 
 
@@ -2620,7 +2623,7 @@ def _movable(
             out.
 
     """
-    names = getattr(model, 'feature_names_in_', None)
+    names = utilities.feature_names(model, item.data.columns)
     features = list(item.features if names is None else names)
     movable = []
     for feature in features:

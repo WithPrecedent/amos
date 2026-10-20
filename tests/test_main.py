@@ -101,7 +101,7 @@ def test_every_concrete_operation_is_in_the_library() -> None:
         amos.loaders, amos.cleaners, amos.mungers, amos.mergers,
         amos.shapers, amos.describers, amos.splitters, amos.transformers,
         amos.samplers, amos.models, amos.validators, amos.metrics,
-        amos.evaluators, amos.plots, amos.inferers)
+        amos.evaluators, amos.plots, amos.inferers, amos.auto)
     for module in modules:
         for _, kind in inspect.getmembers(module, inspect.isclass):
             if (

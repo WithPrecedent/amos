@@ -441,7 +441,7 @@ def _columns(model: Any, item: base.Dataset) -> list[Any]:
             name, such as the fixed effects of a `fixest` model.
 
     """
-    names = getattr(model, 'feature_names_in_', None)
+    names = utilities.feature_names(model, item.data.columns)
     columns = list(item.features if names is None else names)
     get_params = getattr(model, 'get_params', None)
     parameters = get_params(deep = False) if callable(get_params) else {}

@@ -128,3 +128,25 @@ def test_preserved_logging_restores_the_root_logger() -> None:
         assert root.level == logging.INFO
     assert root.level == level
     assert root.handlers == handlers
+
+
+class _Named:
+    """A fitted model that names its features as lightgbm does."""
+
+    feature_names_in_ = ('mean_radius', 'texture', 'worst area')
+
+
+def test_feature_names_gives_back_the_columns_a_tool_renamed() -> None:
+    columns = ['mean radius', 'texture', 'worst area', 'target']
+    assert utilities.feature_names(_Named(), columns) == [
+        'mean radius', 'texture', 'worst area']
+    # A name that matches a column exactly is kept, even if another column
+    # would be renamed to it.
+    assert utilities.feature_names(_Named(), ['mean_radius', 'mean radius'])[
+        0] == 'mean_radius'
+    # A name that matches no column is kept as the model names it.
+    assert utilities.feature_names(_Named(), ['texture'])[0] == 'mean_radius'
+
+
+def test_feature_names_is_none_for_a_model_without_names() -> None:
+    assert utilities.feature_names(object(), ['a', 'b']) is None
