@@ -34,7 +34,7 @@ keywords = [
     "workflow"]
 dependencies = [
     "camina>=0.2.1",
-    "chrisjen>=0.2.0",
+    "chrisjen>=0.3.0",
     "nagata>=0.2.0",
     "numpy>=1.26",
     "pandas>=3.0",
@@ -297,8 +297,3 @@ ignore-decorators = ["typing.overload"]
 
 [tool.uv]
 package = true
-
-# Uses the local chrisjen, whose nodes write `apply` instead of `implement`,
-# until that version is released.
-[tool.uv.sources]
-chrisjen = { path = "../chrisjen", editable = true }

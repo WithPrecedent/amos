@@ -262,7 +262,7 @@ requires-dist = [
     { name = "catboost", marker = "extra == 'boosting'", specifier = ">=1.2" },
     { name = "category-encoders", marker = "extra == 'encoders'", specifier = ">=2.6" },
     { name = "causalml", marker = "python_full_version < '3.13' and extra == 'causal'", specifier = ">=0.17" },
-    { name = "chrisjen", editable = "../chrisjen" },
+    { name = "chrisjen", specifier = ">=0.3.0" },
     { name = "doubleml", marker = "extra == 'causal'", specifier = ">=0.11" },
     { name = "dowhy", marker = "python_full_version >= '3.13' and extra == 'causal'", specifier = ">=0.14" },
     { name = "eli5", marker = "extra == 'explain'", specifier = ">=0.16" },
@@ -960,8 +960,8 @@ wheels = [
 
 [[package]]
 name = "chrisjen"
-version = "0.2.1"
-source = { editable = "../chrisjen" }
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bobbie" },
     { name = "camina" },
@@ -970,46 +970,9 @@ dependencies = [
     { name = "nagata" },
     { name = "wonka" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "bobbie", specifier = ">=0.2.1" },
-    { name = "camina", specifier = ">=0.2.1" },
-    { name = "holden", specifier = ">=0.2.3" },
-    { name = "miller", specifier = ">=0.2.1" },
-    { name = "nagata", specifier = ">=0.2.0" },
-    { name = "wonka", specifier = ">=0.2.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "coverage" },
-    { name = "markdown-callouts" },
-    { name = "markdown-exec" },
-    { name = "mkdocs" },
-    { name = "mkdocs-coverage" },
-    { name = "mkdocs-gen-files" },
-    { name = "mkdocs-git-committers-plugin-2" },
-    { name = "mkdocs-literate-nav" },
-    { name = "mkdocs-material" },
-    { name = "mkdocs-minify-plugin" },
-    { name = "mkdocstrings", extras = ["python"] },
-    { name = "mypy" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-randomly" },
-    { name = "pytest-xdist" },
-    { name = "ruff" },
-    { name = "toml" },
-    { name = "uv" },
-]
-tests = [
-    { name = "coverage" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-randomly" },
-    { name = "pytest-xdist" },
+sdist = { url = "https://files.pythonhosted.org/packages/48/63/9e05d28d912b6d5f15b3f9d793b9757c3b7a4c031524a419d38d207a3646/chrisjen-0.3.0.tar.gz", hash = "sha256:49f9427687d239f1ab287d25e297d5d94d7e5d371782ed725c68d23b1730f441", size = 148447, upload-time = "2026-10-20T17:13:42.881Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/d4/4d3289a41d196975270305c8ebc36de1e1c3a39ac70dc8ae9792f6b21b2e/chrisjen-0.3.0-py3-none-any.whl", hash = "sha256:3ba5e1123ba79a1c7552788978c9a87db3dbd58268c4cc3c22da7d228c327a40", size = 30972, upload-time = "2026-10-20T17:13:41.662Z" },
 ]
 
 [[package]]

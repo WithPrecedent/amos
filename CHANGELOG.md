@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 * A technique now writes `apply` instead of `implement`, following
-  `chrisjen`, whose nodes all do. Calling `apply` works as before: it accepts
+  `chrisjen` 0.3.0 (now the oldest version that `amos` accepts), whose nodes
+  all do. Calling `apply` works as before: it accepts
   anything that `Dataset.create` accepts, fills in the technique's
   parameters, and records the technique in the dataset's `history`. That
   work moved to `Operation._call_apply`, which `chrisjen` calls around each
