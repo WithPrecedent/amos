@@ -1,7 +1,7 @@
 """Techniques that learn from the training rows and then change every row.
 
 These are the preprocessing techniques of the "analyst" stage. Each one wraps a
-transformer from scikit-learn, category_encoders, or skrub. A transformer is
+transformer from scikit-learn, category_encoders, skrub, or mlxtend. A transformer is
 fitted to the training rows only and then changes every row, so nothing is
 learned from the test rows. Unlike scikit-learn, every transformer keeps the
 data in a `pandas.DataFrame` with named columns, can be limited to some
@@ -38,7 +38,8 @@ Contents:
         OneHot, Ordinal, PolynomialCoding, SumCoding, Target, Tfidf,
         WeightOfEvidence: encoders.
     Interactions, Polynomial, Splines: mixers.
-    KBest, PCAReduce, SelectPercentile, VarianceThreshold: reducers.
+    ExhaustiveSelection, KBest, PCAReduce, SelectPercentile,
+        SequentialSelection, VarianceThreshold: reducers.
 
 """
 
@@ -54,7 +55,7 @@ from typing import Any, ClassVar
 import numpy as np
 import pandas as pd
 
-from . import base, utilities
+from . import base, models, utilities
 
 
 @dataclasses.dataclass
@@ -962,6 +963,149 @@ class Splines(Mixer):
 """ Reducers """
 
 
+class _Selector:
+    """Makes a reducer one of mlxtend's searches for the best features.
+
+    mlxtend's selectors fit a model to sets of the features, in
+    cross-validation on the training rows, and keep the set with the best
+    score. The model is "estimator" (an estimator, its class, or its import
+    path), or by default a logistic regression (to classify) or a linear
+    regression. The score is "scoring" (the name of a scikit-learn scorer),
+    or by default accuracy or R². The folds ("cv", 5 by default) keep the
+    rows of each of the dataset's first groups together, as a model's search
+    does (see `models.search_folds`).
+
+    It is a plain class rather than a `Reducer`, so that the library does not
+    store it as a technique.
+
+    """
+
+    def _prepare(
+        self,
+        item: base.Dataset,
+        parameters: dict[str, Any]) -> dict[str, Any]:
+        """Chooses the model, scorer, and folds of the search.
+
+        Args:
+            item: the dataset to transform.
+            parameters: parameters for the selector.
+
+        Returns:
+            The parameters, with "estimator", "scoring", and "cv".
+
+        """
+        estimator = parameters.get('estimator')
+        if estimator is None:
+            linear_model = importlib.import_module('sklearn.linear_model')
+            estimator = (
+                linear_model.LogisticRegression(max_iter = 1000)
+                if item.task == 'classify'
+                else linear_model.LinearRegression())
+        else:
+            estimator = utilities.import_tool(estimator)
+            if isinstance(estimator, type):
+                estimator = estimator()
+        if item.seed is not None and hasattr(estimator, 'get_params') and (
+            estimator.get_params().get('random_state', False) is None):
+            estimator.set_params(random_state = item.seed)
+        scoring = parameters.get('scoring') or (
+            'accuracy' if item.task == 'classify' else 'r2')
+        cv = models.search_folds(
+            item, item.x_train, item.y_train, parameters.get('cv', 5))
+        return {
+            **parameters,
+            'estimator': estimator,
+            'scoring': scoring,
+            'cv': cv}
+
+    def _to_frame(
+        self,
+        values: Any,
+        tool: Any,
+        columns: list[str],  # noqa: ARG002
+        index: pd.Index) -> pd.DataFrame:
+        """Returns the selected features as a `DataFrame`.
+
+        Args:
+            values: the output of the selector's `transform` method.
+            tool: the fitted selector.
+            columns: not used.
+            index: index of the data.
+
+        Returns:
+            The selected features, with `index` and their names.
+
+        """
+        names = getattr(tool, 'k_feature_names_', None)
+        if names is None:
+            names = tool.best_feature_names_
+        # mlxtend returns an array, which is of objects if the features were
+        # of several types, so each column is given back its type.
+        return pd.DataFrame(
+            np.asarray(values), index = index,
+            columns = [str(n) for n in names]).infer_objects()
+
+
+@dataclasses.dataclass
+class ExhaustiveSelection(_Selector, Reducer):
+    """Keeps the best of every set of 1 to 3 features (by cross-validation).
+
+    mlxtend's exhaustive search tries every set of `min_features` to
+    `max_features` features (1 to 3 by default), so it is slow for many
+    features. See `_Selector` for the model, score, and folds. The score of
+    each set is a table in the dataset's `tables` as "{name}_search".
+
+    Wraps:
+        [`mlxtend.feature_selection.ExhaustiveFeatureSelector`](https://rasbt.github.io/mlxtend/user_guide/feature_selection/ExhaustiveFeatureSelector/)
+        from mlxtend.
+
+    """
+
+    contents: str = 'mlxtend.feature_selection.ExhaustiveFeatureSelector'
+    parameters: base.GenericDict = dataclasses.field(
+        default_factory = lambda: {
+            'min_features': 1, 'max_features': 3, 'print_progress': False})
+
+    def apply(
+        self,
+        item: base.Dataset,
+        columns: Sequence[str] | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Keeps the best set of features, and adds the score of each set.
+
+        Args:
+            item: the dataset to transform.
+            columns: names of the columns to choose from. Defaults to `None`,
+                which uses `select`.
+            **kwargs: parameters for the selector.
+
+        Returns:
+            The transformed dataset, with the table of the search.
+
+        """
+        super().apply(item, columns = columns, **kwargs)
+        _add_search(item, self.name)
+        return item
+
+    def _fit(
+        self,
+        tool: Any,
+        x: pd.DataFrame,
+        y: pd.Series | None) -> None:
+        """Tries no more features than there are.
+
+        Args:
+            tool: the built selector.
+            x: the training rows of the columns to choose from.
+            y: the training labels.
+
+        """
+        most = min(tool.max_features, x.shape[1])
+        tool.set_params(
+            max_features = most, min_features = min(tool.min_features, most))
+        tool.fit(x, y)
+
+
 @dataclasses.dataclass
 class KBest(Reducer):
     """Keeps the k features (10 by default) most related to the label.
@@ -1066,6 +1210,68 @@ class SelectPercentile(Reducer):
 
 
 @dataclasses.dataclass
+class SequentialSelection(_Selector, Reducer):
+    """Adds (or removes) features one at a time while the score improves.
+
+    mlxtend's sequential search starts with no features and adds the one
+    that most improves the score of the model, again and again (or, if
+    "forward" is false, starts with every feature and removes them). If
+    "floating" is true, it also tries to remove (or add back) a feature after
+    each step. It keeps `k_features` features, or by default ("best") the
+    number with the best score. See `_Selector` for the model, score, and
+    folds. The score of the set of each size is a table in the dataset's
+    `tables` as "{name}_search".
+
+    Wraps:
+        [`mlxtend.feature_selection.SequentialFeatureSelector`](https://rasbt.github.io/mlxtend/user_guide/feature_selection/SequentialFeatureSelector/)
+        from mlxtend.
+
+    """
+
+    contents: str = 'mlxtend.feature_selection.SequentialFeatureSelector'
+    parameters: base.GenericDict = dataclasses.field(
+        default_factory = lambda: {'k_features': 'best'})
+
+    def apply(
+        self,
+        item: base.Dataset,
+        columns: Sequence[str] | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Keeps the features that were chosen, and adds the score of each set.
+
+        Args:
+            item: the dataset to transform.
+            columns: names of the columns to choose from. Defaults to `None`,
+                which uses `select`.
+            **kwargs: parameters for the selector.
+
+        Returns:
+            The transformed dataset, with the table of the search.
+
+        """
+        super().apply(item, columns = columns, **kwargs)
+        _add_search(item, self.name)
+        return item
+
+    def _fit(
+        self,
+        tool: Any,
+        x: pd.DataFrame,
+        y: pd.Series | None) -> None:
+        """Keeps every feature if there are no more than `k_features`.
+
+        Args:
+            tool: the built selector.
+            x: the training rows of the columns to choose from.
+            y: the training labels.
+
+        """
+        if isinstance(tool.k_features, int) and tool.k_features > x.shape[1]:
+            tool.set_params(k_features = x.shape[1])
+        tool.fit(x, y)
+
+
+@dataclasses.dataclass
 class VarianceThreshold(Reducer):
     """Removes features whose variance is at or below a threshold (0).
 
@@ -1099,6 +1305,34 @@ def _accepts_target(method: Any) -> bool:
     if any(p.name == 'y' for p in parameters):
         return True
     return any(p.kind is inspect.Parameter.VAR_POSITIONAL for p in parameters)
+
+
+def _add_search(item: base.Dataset, name: str) -> None:
+    """Adds the score of each set of features that a selector tried.
+
+    The table is "{name}_search" in the dataset's `tables`, with a row for
+    each set, best first: its features (joined by commas), their number
+    ("size"), and the mean and standard deviation of its scores in
+    cross-validation ("score" and "std").
+
+    Args:
+        item: the dataset with the fitted selector.
+        name: name of the selector.
+
+    """
+    tool = item.fitted.get(name)
+    if tool is None:
+        return
+    rows = []
+    for subset in tool.get_metric_dict().values():
+        names = [str(n) for n in subset['feature_names']]
+        rows.append({
+            'features': ', '.join(names),
+            'size': len(names),
+            'score': float(subset['avg_score']),
+            'std': float(subset['std_dev'])})
+    item.tables[f'{name}_search'] = pd.DataFrame(rows).sort_values(
+        'score', ascending = False, kind = 'stable', ignore_index = True)
 
 
 def _target(item: base.Dataset) -> pd.Series | None:

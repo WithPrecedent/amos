@@ -13,6 +13,13 @@ import amos
 from amos import plots
 
 
+# The plots of dtreeviz, and whether each draws the trees of xgboost.
+TREE_PLOTS = {
+    'tree_feature_space': False,
+    'tree_leaf_distributions': True,
+    'tree_leaf_purity': False,
+    'tree_leaf_sizes': True,
+    'tree_prediction_path': False}
 SHAP_PLOTS = [
     'shap_bar', 'shap_beeswarm', 'shap_decision', 'shap_embedding',
     'shap_heatmap', 'shap_partial_dependence', 'shap_scatter', 'shap_violin',
@@ -325,6 +332,119 @@ def test_tree_plot(classified: amos.Dataset, tmp_path: pathlib.Path) -> None:
     amos.models.RandomForest().apply(classified, n_estimators = 5)
     plots.TreePlot().apply(classified, tree = 4)
     _check(classified, 'tree_plot', tmp_path)
+
+
+@pytest.mark.parametrize('name', list(TREE_PLOTS))
+@pytest.mark.parametrize('model', ['decision_tree', 'random_forest'])
+def test_tree_plots(
+    name: str,
+    model: str,
+    multiclass: amos.Dataset,
+    regressed: amos.Dataset,
+    tmp_path: pathlib.Path) -> None:
+    requires('dtreeviz')
+    pyplot = importlib.import_module('matplotlib.pyplot')
+    show = pyplot.show
+    before = pyplot.get_fignums()
+    for item in (multiclass, regressed):
+        amos.library.borrow(model)().apply(
+            item, max_depth = 3, n_estimators = 3)
+        amos.library.borrow(name)().apply(item, tree = 1)
+        _check(item, name, tmp_path)
+    # dtreeviz shows its plots with pyplot, which must not open a window.
+    assert pyplot.get_fignums() == before
+    assert pyplot.show is show
+
+
+def test_tree_plots_of_boosters(
+    classified: amos.Dataset,
+    tmp_path: pathlib.Path) -> None:
+    requires('dtreeviz')
+    requires('xgboost')
+    amos.models.Xgboost().apply(classified, n_estimators = 3, max_depth = 2)
+    for name, boosters in TREE_PLOTS.items():
+        if boosters:
+            amos.library.borrow(name)().apply(classified, tree = 2)
+            _check(classified, name, tmp_path)
+        else:
+            with pytest.raises(ValueError, match = 'xgboost or lightgbm'):
+                amos.library.borrow(name)().apply(classified)
+
+
+def test_tree_plots_use_the_style(classified: amos.Dataset) -> None:
+    requires('dtreeviz')
+    amos.models.DecisionTree().apply(classified, max_depth = 3)
+    plots.TreeLeafSizes().apply(classified, style = 'default', colors = None)
+    axes = classified.figures['tree_leaf_sizes'].axes[0]
+    label = axes.xaxis.label
+    assert label.get_text() == 'Leaf IDs'
+    assert label.get_fontname() == 'DejaVu Sans'
+    assert label.get_fontsize() == pytest.approx(10.0)
+
+
+def test_tree_feature_space_draws_chosen_features(
+    classified: amos.Dataset) -> None:
+    requires('dtreeviz')
+    amos.models.DecisionTree().apply(classified, max_depth = 3)
+    plots.TreeFeatureSpace().apply(classified, features = ['x3'])
+    axes = classified.figures['tree_feature_space'].axes[0]
+    assert axes.get_xlabel() == 'x3'
+    with pytest.raises(ValueError, match = 'needs 1 or 2 features, not 3'):
+        plots.TreeFeatureSpace().apply(
+            classified, features = ['x0', 'x1', 'x2'])
+    with pytest.raises(ValueError, match = 'they are not features'):
+        plots.TreeFeatureSpace().apply(classified, features = ['nothing'])
+
+
+def test_tree_plots_need_a_tree(fitted: amos.Dataset) -> None:
+    requires('dtreeviz')
+    for name in TREE_PLOTS:
+        with pytest.raises(ValueError, match = 'needs a decision tree'):
+            amos.library.borrow(name)().apply(fitted)
+    amos.models.GradientBoosting().apply(fitted, n_estimators = 3)
+    with pytest.raises(ValueError, match = 'needs a decision tree'):
+        plots.TreeLeafSizes().apply(fitted)
+
+
+def test_decision_regions(
+    multiclass: amos.Dataset,
+    tmp_path: pathlib.Path) -> None:
+    requires('mlxtend')
+    pyplot = importlib.import_module('matplotlib.pyplot')
+    before = pyplot.get_fignums()
+    amos.models.DecisionTree().apply(multiclass, max_depth = 3)
+    plots.DecisionRegions().apply(multiclass)
+    _check(multiclass, 'decision_regions', tmp_path)
+    assert pyplot.get_fignums() == before
+    axes = multiclass.figures['decision_regions'].axes[0]
+    importance = multiclass.model.feature_importances_
+    top = [multiclass.features[i] for i in np.argsort(importance)[::-1][:2]]
+    assert [axes.get_xlabel(), axes.get_ylabel()] == top
+    legend = axes.get_legend()
+    assert [t.get_text() for t in legend.get_texts()] == ['0', '1', '2']
+    assert legend.get_title().get_text() == 'target'
+    plots.DecisionRegions().apply(multiclass, features = ['x0', 'x1'])
+    axes = multiclass.figures['decision_regions'].axes[0]
+    assert [axes.get_xlabel(), axes.get_ylabel()] == ['x0', 'x1']
+
+
+def test_decision_regions_of_text_classes(tmp_path: pathlib.Path) -> None:
+    requires('mlxtend')
+    dataset = amos.Dataset(make_numeric(), label = 'target', seed = SEED)
+    dataset.data['target'] = dataset.data['target'].map({0: 'no', 1: 'yes'})
+    amos.splitters.Stratified().apply(dataset)
+    amos.models.Logit().apply(dataset)
+    plots.DecisionRegions().apply(dataset)
+    _check(dataset, 'decision_regions', tmp_path)
+    legend = dataset.figures['decision_regions'].axes[0].get_legend()
+    assert [t.get_text() for t in legend.get_texts()] == ['no', 'yes']
+
+
+def test_decision_regions_needs_a_classifier(
+    fitted_regression: amos.Dataset) -> None:
+    requires('mlxtend')
+    with pytest.raises(ValueError, match = 'needs a classifier'):
+        plots.DecisionRegions().apply(fitted_regression)
 
 
 def test_validation_curve(fitted: amos.Dataset, tmp_path: pathlib.Path) -> None:

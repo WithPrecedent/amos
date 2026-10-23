@@ -40,6 +40,8 @@ Contents:
         NegativeBinomial, NeuralNetwork, OLS, OrdinalRegression, Poisson,
         Probit, QuantileRegression, RandomForest, Ridge, RobustRegression,
         SVM, Tabpfn, WLS, Xgboost, ZeroInflatedPoisson: models.
+    search_folds: the folds of a search, which keep the rows of each group
+        together.
 
 """
 
@@ -461,21 +463,6 @@ class Model(base.Operation, abc.ABC):
         cv: int) -> int | list[tuple[np.ndarray, np.ndarray]]:
         """Returns the folds of a search, which keep groups together.
 
-        When rows are not independent (such as the votes of the judges of one
-        case), a fold that splits a group puts rows that are nearly copies of
-        each other on both sides, so the search scores the model on rows it
-        has partly seen. So if the dataset has groups, each group of its first
-        group column is kept wholly in one fold, as the group validators keep
-        them: with the classes balanced across folds for a classifier, and in
-        folds of about equal size for a regression. A row with a missing
-        group is a group of its own.
-
-        Wraps:
-            - [`sklearn.model_selection.StratifiedGroupKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedGroupKFold.html)
-              from scikit-learn, for a classifier.
-            - [`sklearn.model_selection.GroupKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupKFold.html)
-              from scikit-learn, for a regression.
-
         Args:
             item: the dataset being modeled.
             x: the training rows of the columns the model uses.
@@ -483,23 +470,10 @@ class Model(base.Operation, abc.ABC):
             cv: number of cross-validation folds.
 
         Returns:
-            `cv`, if the dataset has no groups, or else the training and test
-                positions of each fold.
+            The folds from `search_folds`.
 
         """
-        if not item.groups:
-            return cv
-        model_selection = importlib.import_module('sklearn.model_selection')
-        groups = item.data.loc[x.index, item.groups[0]].astype(object)
-        missing = groups.isna()
-        groups[missing] = [f'__row__{label}' for label in groups.index[missing]]
-        codes = pd.factorize(groups)[0]
-        if item.task == 'classify':
-            splitter = model_selection.StratifiedGroupKFold(
-                n_splits = cv, shuffle = True, random_state = item.seed)
-        else:
-            splitter = model_selection.GroupKFold(n_splits = cv)
-        return list(splitter.split(x, y, codes))
+        return search_folds(item, x, y, cv)
 
     def _search(
         self,
@@ -2650,6 +2624,57 @@ class ZeroInflatedPoisson(_Statsmodels, Model):
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     kind: ClassVar[str] = 'zero_inflated_poisson'
     counts: ClassVar[bool] = True
+
+
+""" Public Functions """
+
+
+def search_folds(
+    item: base.Dataset,
+    x: pd.DataFrame,
+    y: pd.Series,
+    cv: int) -> int | list[tuple[np.ndarray, np.ndarray]]:
+    """Returns the folds of a search, which keep groups together.
+
+    When rows are not independent (such as the votes of the judges of one
+    case), a fold that splits a group puts rows that are nearly copies of
+    each other on both sides, so the search scores the model on rows it
+    has partly seen. So if the dataset has groups, each group of its first
+    group column is kept wholly in one fold, as the group validators keep
+    them: with the classes balanced across folds for a classifier, and in
+    folds of about equal size for a regression. A row with a missing
+    group is a group of its own.
+
+    Wraps:
+        - [`sklearn.model_selection.StratifiedGroupKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedGroupKFold.html)
+          from scikit-learn, for a classifier.
+        - [`sklearn.model_selection.GroupKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupKFold.html)
+          from scikit-learn, for a regression.
+
+    Args:
+        item: the dataset being modeled.
+        x: the training rows of the columns the model uses.
+        y: the training labels.
+        cv: number of cross-validation folds.
+
+    Returns:
+        `cv`, if the dataset has no groups, or else the training and test
+            positions of each fold.
+
+    """
+    if not item.groups:
+        return cv
+    model_selection = importlib.import_module('sklearn.model_selection')
+    groups = item.data.loc[x.index, item.groups[0]].astype(object)
+    missing = groups.isna()
+    groups[missing] = [f'__row__{label}' for label in groups.index[missing]]
+    codes = pd.factorize(groups)[0]
+    if item.task == 'classify':
+        splitter = model_selection.StratifiedGroupKFold(
+            n_splits = cv, shuffle = True, random_state = item.seed)
+    else:
+        splitter = model_selection.GroupKFold(n_splits = cv)
+    return list(splitter.split(x, y, codes))
 
 
 """ Private Functions """

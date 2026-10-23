@@ -3,9 +3,56 @@
 from __future__ import annotations
 
 import pytest
+from conftest import requires
 
 import amos
 from amos import describers
+
+
+def test_association_rules(mixed: amos.Dataset) -> None:
+    requires('mlxtend')
+    describers.AssociationRules().apply(
+        mixed, min_support = 0.05, min_threshold = 0.5)
+    table = mixed.tables['association_rules']
+    assert {'antecedents', 'consequents', 'support', 'confidence',
+            'lift'} <= set(table.columns)
+    assert table['lift'].is_monotonic_decreasing
+    assert (table['confidence'] >= 0.5).all()
+    assert (table['support'] >= 0.05).all()
+    items = {
+        i for side in ('antecedents', 'consequents')
+        for rule in table[side] for i in rule.split(', ')}
+    # The values of "region", "member" (where it is true), and the label.
+    assert 'outcome = yes' in items
+    assert 'member' in items
+    assert items <= {
+        'member', 'outcome = no', 'outcome = yes', 'region = east',
+        'region = north', 'region = south', 'region = west'}
+    south = table[
+        (table['antecedents'] == 'region = south')
+        & (table['consequents'] == 'outcome = yes')]
+    data = mixed.data
+    share = (data.loc[data['region'] == 'south', 'outcome'] == 'yes').mean()
+    assert south['confidence'].iloc[0] == pytest.approx(share)
+
+
+def test_association_rules_of_chosen_columns(mixed: amos.Dataset) -> None:
+    requires('mlxtend')
+    describers.AssociationRules().apply(
+        mixed, columns = ['region', 'outcome'], min_support = 0.05,
+        metric = 'lift', min_threshold = 1.2, max_len = 2)
+    table = mixed.tables['association_rules']
+    assert not table.empty
+    assert (table['lift'] >= 1.2).all()
+    assert not table['antecedents'].str.contains(', ').any()
+    assert 'member' not in set(table['antecedents'])
+
+
+def test_association_rules_without_common_items(mixed: amos.Dataset) -> None:
+    requires('mlxtend')
+    with pytest.raises(ValueError, match = 'lower "min_support"'):
+        describers.AssociationRules().apply(
+            mixed, columns = ['region'], min_support = 0.9)
 
 
 def test_correlations(classified: amos.Dataset) -> None:

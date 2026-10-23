@@ -84,6 +84,7 @@ imported when a technique that needs them is used (see the extras in the
 
 | Name | Description |
 | --- | --- |
+| [`association_rules`][amos.describers.AssociationRules] | Rules of which values tend to appear in the same rows. |
 | [`correlations`][amos.describers.Correlations] | Correlations between the numeric columns (including the label). |
 | [`describe`][amos.describers.Describe] | The `pandas` description of every column, one row per column. |
 | [`frequencies`][amos.describers.Frequencies] | The count and share of each value of the categorical columns. |
@@ -162,9 +163,11 @@ imported when a technique that needs them is used (see the extras in the
 
 | Name | Tool | Description |
 | --- | --- | --- |
+| [`exhaustive_selection`][amos.transformers.ExhaustiveSelection] | <code>mlxtend.<wbr>feature_selection.<wbr>ExhaustiveFeatureSelector</code> | Keeps the best of every set of 1 to 3 features (by cross-validation). |
 | [`k_best`][amos.transformers.KBest] | <code>sklearn.<wbr>feature_selection.<wbr>SelectKBest</code> | Keeps the k features (10 by default) most related to the label. |
 | [`pca_reduce`][amos.transformers.PCAReduce] | <code>sklearn.<wbr>decomposition.<wbr>PCA</code> | Replaces the features with their principal components. |
 | [`select_percentile`][amos.transformers.SelectPercentile] | <code>sklearn.<wbr>feature_selection.<wbr>SelectPercentile</code> | Keeps the features (50% by default) most related to the label. |
+| [`sequential_selection`][amos.transformers.SequentialSelection] | <code>mlxtend.<wbr>feature_selection.<wbr>SequentialFeatureSelector</code> | Adds (or removes) features one at a time while the score improves. |
 | [`variance_threshold`][amos.transformers.VarianceThreshold] | <code>sklearn.<wbr>feature_selection.<wbr>VarianceThreshold</code> | Removes features whose variance is at or below a threshold (0). |
 
 ## Samplers (analyst)
@@ -274,6 +277,7 @@ imported when a technique that needs them is used (see the extras in the
 
 | Name | Description |
 | --- | --- |
+| [`bias_variance`][amos.evaluators.BiasVariance] | The model's expected error on the test rows, as its bias and variance. |
 | [`classification_report`][amos.evaluators.ClassificationReport] | Precision, recall, f1, and the number of rows of each class. |
 | [`conformal`][amos.evaluators.Conformal] | Prediction intervals (or sets) with a known rate of coverage. |
 | [`confusion`][amos.evaluators.Confusion] | How many rows of each class were predicted to be each class. |
@@ -331,6 +335,7 @@ imported when a technique that needs them is used (see the extras in the
 | [`confusion_heatmap`][amos.plots.ConfusionHeatmap] | The confusion matrix as a heatmap (classification). |
 | [`correlation_heatmap`][amos.plots.CorrelationHeatmap] | The correlations between the numeric columns as a heatmap. |
 | [`count_plots`][amos.plots.CountPlots] | The count of each value of each categorical feature, split by class. |
+| [`decision_regions`][amos.plots.DecisionRegions] | The class that the model predicts across two features (classification). |
 | [`det_curve`][amos.plots.DetCurve] | The detection error tradeoff (DET) curve (classification). |
 | [`fairness_plot`][amos.plots.FairnessPlot] | The model's fairness metrics for each group, as bars. |
 | [`histograms`][amos.plots.Histograms] | The distribution of each numeric feature, in a grid. |
@@ -360,7 +365,12 @@ imported when a technique that needs them is used (see the extras in the
 | [`shap_waterfall`][amos.plots.ShapWaterfall] | How each feature moves one row's prediction (a waterfall plot). |
 | [`shape_functions`][amos.plots.ShapeFunctions] | An explainable boosting model's contribution from each feature. |
 | [`survival_curves`][amos.plots.SurvivalCurves] | The share of rows without an event over time (Kaplan-Meier curves). |
+| [`tree_feature_space`][amos.plots.TreeFeatureSpace] | How a decision tree divides one or two features. |
+| [`tree_leaf_distributions`][amos.plots.TreeLeafDistributions] | The label of the training rows in each leaf of a decision tree. |
+| [`tree_leaf_purity`][amos.plots.TreeLeafPurity] | The impurity of each leaf of a decision tree. |
+| [`tree_leaf_sizes`][amos.plots.TreeLeafSizes] | The number of training rows in each leaf of a decision tree. |
 | [`tree_plot`][amos.plots.TreePlot] | The splits of a decision tree (or of one tree of a forest). |
+| [`tree_prediction_path`][amos.plots.TreePredictionPath] | How much each feature decides one row's path down a decision tree. |
 | [`validation_curve`][amos.plots.ValidationCurve] | The model's score as one of its parameters changes. |
 
 ## Choosers (any stage)

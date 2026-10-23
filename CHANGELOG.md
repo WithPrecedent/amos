@@ -6,6 +6,32 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+* Added techniques that wrap mlxtend, which the new `mlxtend` extra (and
+  `all`) installs: `sequential_selection` and `exhaustive_selection`,
+  reducers that search for the set of features with which a model (a
+  logistic or linear regression, or "estimator") scores best in
+  cross-validation, folding by the dataset's first group as a model's search
+  does, and store the score of each set as "{name}_search";
+  `association_rules`, a describer of which values (of the categorical and
+  boolean columns, and of a classified label) tend to appear in the same
+  rows; `bias_variance`, an evaluator that splits the model's expected loss
+  on the test rows into its bias and variance; and `decision_regions`, a plot
+  of the class that a classifier predicts across two features.
+* Added dtreeviz's plots of decision trees, which the `explain` extra now
+  installs: `tree_leaf_sizes`, `tree_leaf_distributions`, `tree_leaf_purity`,
+  `tree_feature_space`, and `tree_prediction_path`. They draw a
+  `decision_tree` or one tree of a `random_forest`, `extra_trees`, or
+  `adaboost` model (and `tree_leaf_sizes` and `tree_leaf_distributions` one
+  tree of an `xgboost` or `lightgbm` model), in the style of the other
+  figures. dtreeviz's drawing of a whole tree is not wrapped, since it needs
+  Graphviz and makes only SVG files; `tree_plot` draws one.
+* `models.search_folds` returns the folds of a hyperparameter search (which
+  `Model._folds` now calls), so that other techniques can fold by groups as
+  a search does.
+* Plots that draw with `matplotlib.pyplot` (shap's, and now mlxtend's and
+  dtreeviz's) are lent their figure by `plots._lent`, which also keeps
+  `pyplot.show` from opening a window while they draw.
+
 * A model's hyperparameter search ("grid", "random", or "optuna") keeps the
   rows of each group of the dataset's first group column in one fold, as the
   group validators do, when the dataset has groups: with

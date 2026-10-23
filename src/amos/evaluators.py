@@ -8,6 +8,7 @@ that the model learned from, so they work in any stage.
 
 Contents:
     Evaluator: base class for techniques that evaluate a model with a table.
+    BiasVariance: the model's expected error, as its bias and variance.
     ClassificationReport: precision, recall, and f1 for each class.
     Confusion: how many rows of each class were predicted to be each class.
     Conformal: prediction intervals (or sets) with a known rate of coverage.
@@ -494,6 +495,84 @@ class _Published:
         """
         return self._require_table().map(
             functools.partial(_written, digits = self.digits))
+
+
+@dataclasses.dataclass
+class BiasVariance(Evaluator):
+    """The model's expected error on the test rows, as its bias and variance.
+
+    mlxtend's bias-variance decomposition: copies of the model are fitted to
+    `rounds` bootstrap samples of the training rows, and each predicts the
+    test rows. The expected loss is their mean loss: the share of rows
+    misclassified (0-1 loss), for a classifier, or the mean squared error.
+    The bias is the loss of their main prediction (the most common class, or
+    the mean), and the variance is how far the copies' predictions are from
+    it. A model with a large bias underfits; one with a large variance
+    overfits. The table has one row, with the "loss", "expected_loss",
+    "bias", and "variance".
+
+    Wraps:
+        [`mlxtend.evaluate.bias_variance_decomp`](https://rasbt.github.io/mlxtend/user_guide/evaluate/bias_variance_decomp/)
+        from mlxtend.
+
+    """
+
+    def evaluate(
+        self,
+        item: base.Dataset,
+        rounds: int = 100,
+        **kwargs: Any) -> pd.DataFrame:
+        """Returns the expected loss of the model, and its bias and variance.
+
+        Args:
+            item: the dataset with a fitted scikit-learn model and test rows.
+            rounds: number of bootstrap samples (and copies of the model).
+                Defaults to 100.
+            **kwargs: not used.
+
+        Raises:
+            TypeError: if the model is not a scikit-learn estimator.
+            ValueError: if the data is not split.
+
+        Returns:
+            One row, with the loss and its parts.
+
+        """
+        evaluate = utilities.import_tool('mlxtend.evaluate')
+        sklearn = importlib.import_module('sklearn.base')
+        if not item.is_split:
+            message = 'bias_variance needs test rows: split the data first'
+            raise ValueError(message)
+        model = _model(item)
+        names = list(
+            utilities.feature_names(model, item.data.columns) or item.features)
+        y_train, y_test = item.y_train, item.y_test
+        if isinstance(model, models.LabelCoded):
+            model = model.estimator
+        if item.task == 'classify':
+            # mlxtend counts the predictions of each class by its number.
+            positions = {c: i for i, c in enumerate(item.classes)}
+            y_train, y_test = y_train.map(positions), y_test.map(positions)
+        if not isinstance(model, sklearn.BaseEstimator):
+            message = (
+                f'bias_variance needs a scikit-learn model, not a '
+                f'{type(model).__name__}')
+            raise TypeError(message)
+        loss = '0-1_loss' if item.task == 'classify' else 'mse'
+        expected, bias, variance = evaluate.bias_variance_decomp(
+            sklearn.clone(model),
+            item.x_train[names].to_numpy(),
+            y_train.to_numpy(),
+            item.x_test[names].to_numpy(),
+            y_test.to_numpy(),
+            loss = loss,
+            num_rounds = rounds,
+            random_seed = item.seed)
+        return pd.DataFrame({
+            'loss': [loss],
+            'expected_loss': [float(expected)],
+            'bias': [float(bias)],
+            'variance': [float(variance)]})
 
 
 @dataclasses.dataclass

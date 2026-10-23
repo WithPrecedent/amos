@@ -50,7 +50,7 @@ def _readme_packages() -> list[str]:
 def test_every_package_in_the_readme_has_a_test() -> None:
     packages = _readme_packages()
     assert 'scikit-learn' in packages
-    assert len(packages) == 25
+    assert len(packages) == 27
     for package in packages:
         name = IMPORT_NAMES.get(package, package.replace('-', '_'))
         assert callable(globals().get(f'test_{name}')), package
@@ -500,6 +500,49 @@ def test_great_tables(fitted: amos.Dataset) -> None:
     for value in scorecard._text().iloc[0]:
         assert value in html
         assert value in expected
+
+
+def test_mlxtend(classified: amos.Dataset) -> None:
+    requires('mlxtend')
+    feature_selection = importlib.import_module('mlxtend.feature_selection')
+    linear_model = importlib.import_module('sklearn.linear_model')
+    x_train, y_train = classified.x_train, classified.y_train
+    amos.transformers.SequentialSelection().apply(
+        classified, k_features = 3, cv = 3)
+    selector = feature_selection.SequentialFeatureSelector(
+        linear_model.LogisticRegression(max_iter = 1000, random_state = SEED),
+        k_features = 3,
+        scoring = 'accuracy',
+        cv = 3).fit(x_train, y_train)
+    assert classified.features == list(selector.k_feature_names_)
+    table = classified.tables['sequential_selection_search'].set_index('size')
+    for size, subset in selector.get_metric_dict().items():
+        assert table.loc[size, 'score'] == pytest.approx(subset['avg_score'])
+
+
+def test_dtreeviz(classified: amos.Dataset) -> None:
+    requires('dtreeviz')
+    dtreeviz = importlib.import_module('dtreeviz')
+    figures = importlib.import_module('matplotlib.figure')
+    amos.models.DecisionTree().apply(classified, max_depth = 3)
+    amos.plots.TreeLeafSizes().apply(classified)
+    viz = dtreeviz.model(
+        classified.model,
+        classified.x_train,
+        classified.y_train.to_numpy(),
+        feature_names = list(classified.x_train.columns),
+        target_name = 'target',
+        class_names = ['0', '1'])
+    figure = figures.Figure()
+    axes = figure.subplots()
+    # dtreeviz shows the plot with pyplot, which is lent the figure.
+    with amos.plots._lent(figure):
+        viz.leaf_sizes(ax = axes)
+    drawn = classified.figures['tree_leaf_sizes'].axes[0]
+    assert [p.get_height() for p in drawn.patches] == [
+        p.get_height() for p in axes.patches]
+    assert [t.get_text() for t in drawn.get_xticklabels()] == [
+        t.get_text() for t in axes.get_xticklabels()]
 
 
 def test_eli5(fitted: amos.Dataset) -> None:

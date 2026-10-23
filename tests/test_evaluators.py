@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from conftest import SEED, make_numeric, requires
+from conftest import SEED, make_mixed, make_numeric, requires
 
 import amos
 from amos import evaluators
@@ -98,6 +98,53 @@ def test_conformal_intervals_for_regression(
     assert (table['lower'] <= table['upper']).all()
     assert fitted_regression.metrics['interval_width'] > 0
     assert fitted_regression.metrics['coverage'] >= 0.6
+
+
+def test_bias_variance(fitted: amos.Dataset) -> None:
+    requires('mlxtend')
+    evaluators.BiasVariance().apply(fitted, rounds = 10)
+    table = fitted.tables['bias_variance']
+    assert list(table.columns) == ['loss', 'expected_loss', 'bias', 'variance']
+    row = table.iloc[0]
+    assert row['loss'] == '0-1_loss'
+    assert 0 <= row['bias'] <= 1
+    assert 0 <= row['variance'] <= 1
+    assert fitted.history[-1] == {
+        'technique': 'bias_variance', 'table': 'bias_variance'}
+
+
+def test_bias_variance_of_a_regression(
+    fitted_regression: amos.Dataset) -> None:
+    requires('mlxtend')
+    evaluators.BiasVariance().apply(fitted_regression, rounds = 10)
+    row = fitted_regression.tables['bias_variance'].iloc[0]
+    assert row['loss'] == 'mse'
+    # The mean squared error is the squared bias plus the variance.
+    assert row['expected_loss'] == pytest.approx(row['bias'] + row['variance'])
+
+
+def test_bias_variance_of_coded_text_classes() -> None:
+    requires('mlxtend')
+    requires('xgboost')
+    dataset = amos.Dataset(make_mixed(), label = 'outcome', seed = SEED)
+    amos.cleaners.DropColumns().apply(dataset, columns = ['joined', 'region'])
+    amos.splitters.Stratified().apply(dataset)
+    amos.models.Xgboost().apply(dataset, n_estimators = 5)
+    evaluators.BiasVariance().apply(dataset, rounds = 5)
+    assert 0 <= dataset.tables['bias_variance'].iloc[0]['bias'] <= 1
+
+
+def test_bias_variance_needs_test_rows_and_scikit_learn(
+    classified: amos.Dataset) -> None:
+    requires('mlxtend')
+    unsplit = amos.Dataset(classified.data, label = 'target', seed = SEED)
+    amos.models.Logit().apply(unsplit)
+    with pytest.raises(ValueError, match = 'split the data first'):
+        evaluators.BiasVariance().apply(unsplit)
+    requires('statsmodels')
+    amos.models.LogitSM().apply(classified)
+    with pytest.raises(TypeError, match = 'needs a scikit-learn model'):
+        evaluators.BiasVariance().apply(classified)
 
 
 def test_explain_weights(fitted: amos.Dataset) -> None:

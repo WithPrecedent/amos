@@ -5,6 +5,7 @@ figure and adds it to the dataset's `figures` (under the technique's name).
 Figures are made without `matplotlib.pyplot`, so they do not open windows or
 depend on a display. (shap draws its plots with `matplotlib.pyplot`, so the
 SHAP plots lend it their figure while shap draws, and take it back after.)
+mlxtend's and dtreeviz's plots draw on the figure's axes.
 `Project.export` saves them as image files, and in a notebook, a figure is
 shown by making it the last line of a cell.
 
@@ -23,6 +24,8 @@ Contents:
     ConfusionHeatmap: the confusion matrix as a heatmap (classification).
     CorrelationHeatmap: the correlations between numeric columns.
     CountPlots: the count of each value of each categorical feature.
+    DecisionRegions: the class predicted across two features
+        (classification).
     DetCurve: the detection error tradeoff curve (classification).
     FairnessPlot: the model's fairness metrics for each group.
     Histograms: the distribution of each numeric feature.
@@ -52,7 +55,13 @@ Contents:
     ShapWaterfall: how each feature moves one row's prediction.
     ShapeFunctions: an explainable boosting model's shape functions.
     SurvivalCurves: the share of rows without an event over time.
+    TreeFeatureSpace: how a decision tree divides one or two features.
+    TreeLeafDistributions: the label of the training rows in each leaf.
+    TreeLeafPurity: the impurity of each leaf of a decision tree.
+    TreeLeafSizes: the number of training rows in each leaf.
     TreePlot: the splits of a decision tree.
+    TreePredictionPath: how much each feature decides one row's path down a
+        decision tree.
     ValidationCurve: the model's score as one of its parameters changes.
 
 """
@@ -65,6 +74,7 @@ import dataclasses
 import importlib
 import math
 import re
+import warnings
 from collections.abc import Callable, Generator, Hashable, Sequence
 from typing import Any, ClassVar
 
@@ -93,6 +103,9 @@ _FONT_SIZES: tuple[str, ...] = (
 _INFLUENCE: frozenset[str] = frozenset({'glm', 'ols'})
 # Columns of a table of coefficients that a `coefficient_plot` draws.
 _INTERVAL_COLUMNS: tuple[str, ...] = ('coefficient', 'ci_lower', 'ci_upper')
+# The warning of scikit-learn when a model that learned from named features
+# is given an array.
+_UNNAMED_WARNING: str = 'X does not have valid feature names'
 
 
 @dataclasses.dataclass
@@ -533,6 +546,90 @@ class CountPlots(Plot):
             axes.set_ylabel('')
         if grid:
             _figure_legend(figure, grid[0], by)
+
+
+@dataclasses.dataclass
+class DecisionRegions(Plot):
+    """The class that the model predicts across two features (classification).
+
+    mlxtend's plot of the decision regions of a classifier: the plane of two
+    `features` (by default, the two most important) is shaded by the class
+    that the model predicts at each point, with the test rows (or every row,
+    if the data is not split) drawn over it as points of their classes. The
+    other features are held at their medians in the training rows, so the
+    regions are a slice of what the model does.
+
+    Wraps:
+        [`mlxtend.plotting.plot_decision_regions`](https://rasbt.github.io/mlxtend/user_guide/plotting/plot_decision_regions/)
+        from mlxtend.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        features: Sequence[str] | None = None,
+        **kwargs: Any) -> None:
+        """Draws the decision regions of the model across two features.
+
+        Args:
+            item: the dataset with a fitted classifier.
+            figure: the figure to draw on.
+            features: the two features to draw. Defaults to `None`, which
+                uses the two most important (see `importance_plot`).
+            **kwargs: not used.
+
+        Raises:
+            ValueError: if the task is not classification, there are not two
+                features, or a feature is not a number.
+
+        """
+        if item.task != 'classify':
+            message = 'decision_regions needs a classifier'
+            raise ValueError(message)
+        plotting = utilities.import_tool('mlxtend.plotting')
+        matplotlib = importlib.import_module('matplotlib')
+        model = _model(item)
+        names = list(
+            utilities.feature_names(model, item.data.columns) or item.features)
+        chosen = _top_features(item, names, features, self.name)
+        data = item.data[names]
+        if not all(pd.api.types.is_numeric_dtype(data[n]) or
+                   pd.api.types.is_bool_dtype(data[n]) for n in names):
+            message = 'decision_regions needs features that are all numbers'
+            raise ValueError(message)
+        x = (item.x_test if item.is_split else item.x)[names]
+        classes = _classes(item)
+        positions = {c: i for i, c in enumerate(classes)}
+        y = (item.y_test if item.is_split else item.y).map(positions)
+        held = {
+            names.index(n): float(m)
+            for n, m in item.x_train[names].astype(float).median().items()
+            if n not in chosen}
+        cycle = matplotlib.rcParams['axes.prop_cycle'].by_key()['color']
+        axes = figure.subplots()
+        # mlxtend sizes its grid of points by pyplot's current figure.
+        with _lent(figure):
+            plotting.plot_decision_regions(
+                x.to_numpy(dtype = float),
+                y.to_numpy(dtype = int),
+                clf = _ClassPositions(model, names, classes),
+                feature_index = [names.index(n) for n in chosen],
+                filler_feature_values = held or None,
+                filler_feature_ranges = dict.fromkeys(held, np.inf) or None,
+                colors = ','.join(
+                    matplotlib.colors.to_hex(c) for c in cycle[:len(classes)]),
+                legend = 0,
+                ax = axes)
+        handles = [
+            h for h in axes.collections if h.get_label().lstrip('-').isdigit()]
+        axes.legend(
+            handles, [str(classes[int(h.get_label())]) for h in handles],
+            title = str(item.label))
+        axes.set_xlabel(str(chosen[0]))
+        axes.set_ylabel(str(chosen[1]))
 
 
 @dataclasses.dataclass
@@ -1520,7 +1617,7 @@ class ShapEmbedding(Plot):
         feature = _feature(explanation, feature)
         # shap resizes the figure, but every plot keeps the size that it was
         # given.
-        figure.set_size_inches = _keep_size
+        figure.set_size_inches = _do_nothing
         try:
             with _pyplot(figure, item.seed) as shap:
                 shap.plots.embedding(
@@ -1966,7 +2063,7 @@ class ShapWaterfall(Plot):
         position = _explained_position(item, explanation, row)
         # shap resizes the figure before it fits the labels to the arrows, but
         # every plot keeps the size that it was given.
-        figure.set_size_inches = _keep_size
+        figure.set_size_inches = _do_nothing
         try:
             with _pyplot(figure, item.seed) as shap:
                 shap.plots.waterfall(
@@ -2120,6 +2217,170 @@ class SurvivalCurves(Plot):
 
 
 @dataclasses.dataclass
+class TreeFeatureSpace(Plot):
+    """How a decision tree divides one or two features.
+
+    dtreeviz's feature space of a `decision_tree`, or of one tree (numbered
+    `tree`) of a `random_forest`, `extra_trees`, or `adaboost` model: the
+    training rows across one or two `features` (by default,
+    the two most important), with the tree's splits on them as lines. For a
+    classifier, the rows are colored by class; for a regression, by the
+    label, with the mean of the label in each region.
+
+    Wraps:
+        - [`dtreeviz.trees.DTreeVizAPI.ctree_feature_space`](https://github.com/parrt/dtreeviz)
+          from dtreeviz, for classes.
+        - [`dtreeviz.trees.DTreeVizAPI.rtree_feature_space`](https://github.com/parrt/dtreeviz)
+          from dtreeviz, for values.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        features: Sequence[str] | None = None,
+        tree: int = 0,
+        **kwargs: Any) -> None:
+        """Draws the training rows and the tree's splits across `features`.
+
+        Args:
+            item: the dataset with a fitted tree model.
+            figure: the figure to draw on.
+            features: one or two features to draw. Defaults to `None`, which
+                uses the two most important (see `importance_plot`).
+            tree: number of the tree to draw, for a model of many trees.
+                Defaults to 0.
+            **kwargs: not used.
+
+        """
+        viz, names = _tree_viz(item, tree, self.name)
+        chosen = _top_features(
+            item, names, features, self.name, counts = (1, 2))
+        method = (
+            viz.ctree_feature_space if item.task == 'classify'
+            else viz.rtree_feature_space)
+        _draw_tree(figure, method, features = [str(c) for c in chosen])
+
+
+@dataclasses.dataclass
+class TreeLeafDistributions(Plot):
+    """The label of the training rows in each leaf of a decision tree.
+
+    dtreeviz's distributions of the leaves of a tree (see `tree_leaf_sizes`
+    for the trees it draws): for a classifier, the number of training rows of
+    each class in each leaf, as stacked bars; for a regression, the label of
+    each training row in each leaf, as points, with the leaf's prediction as
+    a line.
+
+    Wraps:
+        - [`dtreeviz.trees.DTreeVizAPI.ctree_leaf_distributions`](https://github.com/parrt/dtreeviz)
+          from dtreeviz, for classes.
+        - [`dtreeviz.trees.DTreeVizAPI.rtree_leaf_distributions`](https://github.com/parrt/dtreeviz)
+          from dtreeviz, for values.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        tree: int = 0,
+        **kwargs: Any) -> None:
+        """Draws the label of the training rows in each leaf.
+
+        Args:
+            item: the dataset with a fitted tree model.
+            figure: the figure to draw on.
+            tree: number of the tree to draw, for a model of many trees.
+                Defaults to 0.
+            **kwargs: not used.
+
+        """
+        viz, _ = _tree_viz(item, tree, self.name, boosters = True)
+        method = (
+            viz.ctree_leaf_distributions if item.task == 'classify'
+            else viz.rtree_leaf_distributions)
+        _draw_tree(figure, method)
+
+
+@dataclasses.dataclass
+class TreeLeafPurity(Plot):
+    """The impurity of each leaf of a decision tree.
+
+    dtreeviz's purity of the leaves of a `decision_tree`, or of one tree
+    (numbered `tree`) of a `random_forest`, `extra_trees`, or `adaboost`
+    model: the value of the tree's criterion in each leaf (such as
+    its Gini impurity, for a classifier, or the squared error of its
+    prediction, for a regression). A leaf of rows that are all alike has an
+    impurity of 0.
+
+    Wraps:
+        [`dtreeviz.trees.DTreeVizAPI.leaf_purity`](https://github.com/parrt/dtreeviz)
+        from dtreeviz.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        tree: int = 0,
+        **kwargs: Any) -> None:
+        """Draws the impurity of each leaf.
+
+        Args:
+            item: the dataset with a fitted tree model.
+            figure: the figure to draw on.
+            tree: number of the tree to draw, for a model of many trees.
+                Defaults to 0.
+            **kwargs: not used.
+
+        """
+        viz, _ = _tree_viz(item, tree, self.name)
+        _draw_tree(figure, viz.leaf_purity)
+
+
+@dataclasses.dataclass
+class TreeLeafSizes(Plot):
+    """The number of training rows in each leaf of a decision tree.
+
+    dtreeviz's sizes of the leaves of a `decision_tree`, of one tree (numbered
+    `tree`) of a `random_forest`, `extra_trees`, or `adaboost` model, or of
+    one tree of an `xgboost` or `lightgbm` model. A tree with many tiny
+    leaves has learned rows by heart (it overfits).
+
+    Wraps:
+        [`dtreeviz.trees.DTreeVizAPI.leaf_sizes`](https://github.com/parrt/dtreeviz)
+        from dtreeviz.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        tree: int = 0,
+        **kwargs: Any) -> None:
+        """Draws the number of training rows in each leaf.
+
+        Args:
+            item: the dataset with a fitted tree model.
+            figure: the figure to draw on.
+            tree: number of the tree to draw, for a model of many trees.
+                Defaults to 0.
+            **kwargs: not used.
+
+        """
+        viz, _ = _tree_viz(item, tree, self.name, boosters = True)
+        _draw_tree(figure, viz.leaf_sizes)
+
+
+@dataclasses.dataclass
 class TreePlot(Plot):
     """The splits of a decision tree (or of one tree of a forest).
 
@@ -2190,6 +2451,53 @@ class TreePlot(Plot):
 
 
 @dataclasses.dataclass
+class TreePredictionPath(Plot):
+    """How much each feature decides one row's path down a decision tree.
+
+    dtreeviz's importance of the features for one row, in a `decision_tree`
+    or in one tree (numbered `tree`) of a `random_forest`, `extra_trees`, or
+    `adaboost` model: the row goes down the tree from its root to a
+    leaf, and each feature's importance is how much the splits on it along
+    that path reduce the impurity, as the tree's `feature_importances_` are
+    for every row. The row is `row`, or the first row of the test data (or
+    of all the data, if it is not split).
+
+    Wraps:
+        [`dtreeviz.trees.DTreeVizAPI.instance_feature_importance`](https://github.com/parrt/dtreeviz)
+        from dtreeviz.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        row: Hashable | None = None,
+        tree: int = 0,
+        **kwargs: Any) -> None:
+        """Draws the importance of each feature on the path of `row`.
+
+        Args:
+            item: the dataset with a fitted tree model.
+            figure: the figure to draw on.
+            row: index label of the row. Defaults to `None`, which uses the
+                first row of the test data (or of all the data).
+            tree: number of the tree to draw, for a model of many trees.
+                Defaults to 0.
+            **kwargs: not used.
+
+        """
+        viz, names = _tree_viz(item, tree, self.name)
+        if row is None:
+            row = (item.x_test if item.is_split else item.x).index[0]
+        _draw_tree(
+            figure,
+            viz.instance_feature_importance,
+            item.data.loc[[row], names].to_numpy(dtype = float)[0])
+
+
+@dataclasses.dataclass
 class ValidationCurve(Plot):
     """The model's score as one of its parameters changes.
 
@@ -2248,6 +2556,44 @@ class ValidationCurve(Plot):
             scoring = scoring or _scoring(item),
             score_name = scoring or _scoring(item),
             ax = figure.subplots())
+
+
+""" Private Classes """
+
+
+@dataclasses.dataclass
+class _ClassPositions:
+    """Predicts the position of each class from an array of features.
+
+    mlxtend's `plot_decision_regions` passes the model an array (without the
+    names of the features) and needs classes numbered 0 to n - 1. This gives
+    the model its features by name and numbers its predictions.
+
+    Args:
+        model: the fitted classifier.
+        columns: the names of the model's features, in its order.
+        classes: the classes, in the order of their numbers.
+
+    """
+
+    model: Any
+    columns: list[str]
+    classes: list[Any]
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        """Returns the number of the class predicted for each row of `x`.
+
+        Args:
+            x: the features, in the order of `columns`.
+
+        Returns:
+            The position in `classes` of each prediction.
+
+        """
+        predictions = pd.Series(
+            np.asarray(self.model.predict(pd.DataFrame(x, columns = self.columns))))
+        positions = {c: i for i, c in enumerate(self.classes)}
+        return predictions.map(positions).to_numpy(dtype = int)
 
 
 """ Private Functions """
@@ -2347,6 +2693,44 @@ def _curves(item: base.Dataset) -> list[tuple[str, Any, pd.Series, Any]]:
         return [(str(positive), y_true, probabilities[positive], positive)]
     return [
         (str(c), y_true == c, probabilities[c], True) for c in classes]
+
+
+def _do_nothing(*args: Any, **kwargs: Any) -> None:
+    """Does nothing, in place of a method that should not run.
+
+    Such as a figure's `set_size_inches` or `matplotlib.pyplot.show`.
+
+    Args:
+        *args: not used.
+        **kwargs: not used.
+
+    """
+
+
+def _draw_tree(
+    figure: Any,
+    method: Callable[..., Any],
+    *args: Any,
+    **kwargs: Any) -> None:
+    """Draws a plot of dtreeviz on new axes of `figure`, in the style.
+
+    The figure is lent to pyplot while dtreeviz draws (see `_lent`), and the
+    plot is given the font and sizes of text of the style (see
+    `_tree_viz_text`).
+
+    Args:
+        figure: the figure to draw on.
+        method: the method of dtreeviz's adapter that draws the plot.
+        *args: positional arguments for `method`.
+        **kwargs: keyword arguments for `method`.
+
+    """
+    with _lent(figure), warnings.catch_warnings():
+        # dtreeviz passes the rows to the tree as arrays, without the names
+        # of the features that it learned from.
+        warnings.filterwarnings('ignore', _UNNAMED_WARNING, UserWarning)
+        method(
+            *args, ax = figure.subplots(), **_tree_viz_text(method), **kwargs)
 
 
 def _explained_position(
@@ -2583,16 +2967,6 @@ def _importances(
     return found, item.tables[found]
 
 
-def _keep_size(*args: Any, **kwargs: Any) -> None:
-    """Does nothing, in place of a figure's `set_size_inches`.
-
-    Args:
-        *args: not used.
-        **kwargs: not used.
-
-    """
-
-
 def _labels_beside_arrows(figure: Any) -> None:
     """Puts the labels of the arrows of shap's waterfall plot beside them.
 
@@ -2648,6 +3022,53 @@ def _labels_beside_arrows(figure: Any) -> None:
             break
         for twin in axes.get_shared_y_axes().get_siblings(axes):
             twin.set_xlim(widened)
+
+
+@contextlib.contextmanager
+def _lent(figure: Any) -> Generator[Any, None, None]:
+    """Lends `figure` to `matplotlib.pyplot` while a tool draws on it.
+
+    Some tools (such as shap, mlxtend, and dtreeviz) draw with
+    `matplotlib.pyplot`, which only draws on figures that it manages. In this
+    context, `figure` is pyplot's current figure, with a canvas that draws
+    images but never opens a window, and `pyplot.show` (which dtreeviz calls
+    after it draws) does nothing. Afterwards, pyplot forgets `figure` and any
+    other figure made in the context (which can still be used), and its
+    interactive mode (which some shap plots turn off) and `show` are
+    restored.
+
+    Args:
+        figure: the figure to lend.
+
+    Yields:
+        Any: the `matplotlib.pyplot` module.
+
+    """
+    matplotlib = importlib.import_module('matplotlib')
+    pyplot = importlib.import_module('matplotlib.pyplot')
+    # pyplot keeps its figures in `Gcf`. Newer versions of matplotlib can
+    # adopt a figure with `pyplot.figure(figure)`, but that would also give
+    # it a window if the backend has them.
+    figures = importlib.import_module('matplotlib._pylab_helpers').Gcf
+    agg = importlib.import_module('matplotlib.backends.backend_agg')
+    bases = importlib.import_module('matplotlib.backend_bases')
+    before = set(pyplot.get_fignums())
+    interactive = matplotlib.is_interactive()
+    show = pyplot.show
+    manager = agg.FigureCanvasAgg.new_manager(
+        figure, max(before, default = 0) + 1)
+    figures.set_active(manager)
+    setattr(pyplot, 'show', _do_nothing)  # noqa: B010
+    try:
+        yield pyplot
+    finally:
+        setattr(pyplot, 'show', show)  # noqa: B010
+        for number in set(pyplot.get_fignums()) - before:
+            made = figures.get_fig_manager(number).canvas.figure
+            pyplot.close(number)
+            # Without pyplot's canvas, the figure cannot open a window.
+            bases.FigureCanvasBase(made)
+        matplotlib.interactive(interactive)
 
 
 def _model(item: base.Dataset) -> Any:
@@ -2727,18 +3148,12 @@ def _prediction_error(item: base.Dataset, figure: Any, kind: str) -> None:
 def _pyplot(figure: Any, seed: int | None) -> Generator[Any, None, None]:
     """Lends `figure` to `matplotlib.pyplot` while shap draws on it.
 
-    shap draws with `matplotlib.pyplot`, which only draws on figures that it
-    manages. In this context, `figure` is pyplot's current figure, with a
-    canvas that draws images but never opens a window. Afterwards, pyplot
-    forgets `figure` and any other figure made in the context (which can
-    still be used), and its interactive mode (which some shap plots turn
-    off) is restored.
-
-    Some shap plots also use `numpy`'s global random numbers (to jitter dots
-    or to bootstrap), so they are seeded with `seed` in the context, and put
-    back as they were afterwards. And shap's bar and waterfall plots are
-    colored with the colors of the style (see `_shap_colors`), and shap's own
-    colors are put back afterwards.
+    shap draws with `matplotlib.pyplot`, so `figure` is lent to it (see
+    `_lent`). Some shap plots also use `numpy`'s global random numbers (to
+    jitter dots or to bootstrap), so they are seeded with `seed` in the
+    context, and put back as they were afterwards. And shap's bar and
+    waterfall plots are colored with the colors of the style (see
+    `_shap_colors`), and shap's own colors are put back afterwards.
 
     Args:
         figure: the figure to lend.
@@ -2750,19 +3165,7 @@ def _pyplot(figure: Any, seed: int | None) -> Generator[Any, None, None]:
     """
     shap = utilities.import_tool('shap')
     matplotlib = importlib.import_module('matplotlib')
-    pyplot = importlib.import_module('matplotlib.pyplot')
-    # pyplot keeps its figures in `Gcf`. Newer versions of matplotlib can
-    # adopt a figure with `pyplot.figure(figure)`, but that would also give
-    # it a window if the backend has them.
-    figures = importlib.import_module('matplotlib._pylab_helpers').Gcf
-    agg = importlib.import_module('matplotlib.backends.backend_agg')
-    bases = importlib.import_module('matplotlib.backend_bases')
-    before = set(pyplot.get_fignums())
-    interactive = matplotlib.is_interactive()
     state = np.random.get_state()  # noqa: NPY002
-    manager = agg.FigureCanvasAgg.new_manager(
-        figure, max(before, default = 0) + 1)
-    figures.set_active(manager)
     np.random.seed(seed)  # noqa: NPY002
     # shap places the ticks of some plots (such as its bar and waterfall
     # plots) so that `matplotlib` would make billions of minor ticks between
@@ -2778,18 +3181,12 @@ def _pyplot(figure: Any, seed: int | None) -> Generator[Any, None, None]:
     try:
         if styles is not None:
             styles.set_style(**_shap_colors(matplotlib))
-        with matplotlib.rc_context(minor):
+        with _lent(figure), matplotlib.rc_context(minor):
             yield shap
     finally:
         if styles is not None:
             styles.set_style(colors)
         np.random.set_state(state)  # noqa: NPY002
-        for number in set(pyplot.get_fignums()) - before:
-            made = figures.get_fig_manager(number).canvas.figure
-            pyplot.close(number)
-            # Without pyplot's canvas, the figure cannot open a window.
-            bases.FigureCanvasBase(made)
-        matplotlib.interactive(interactive)
 
 
 def _refittable(
@@ -2994,6 +3391,157 @@ def _styled(
                 f for f in matplotlib.rcParams['font.family']
                 if f in installed] or ['sans-serif']
         yield matplotlib
+
+
+def _top_features(
+    item: base.Dataset,
+    names: list[str],
+    features: Sequence[str] | None,
+    use: str,
+    counts: tuple[int, ...] = (2,)) -> list[str]:
+    """Returns the features to draw: `features`, or the most important.
+
+    Args:
+        item: the dataset with a fitted model.
+        names: the model's features.
+        features: the features that were asked for, or `None`.
+        use: the plot that draws them (for the message of an error).
+        counts: the numbers of features that the plot can draw. The most
+            important are the largest number. Defaults to (2,).
+
+    Raises:
+        ValueError: if the model has too few features, or `features` are not
+            the model's or are not a number that the plot can draw.
+
+    Returns:
+        The names of the features.
+
+    """
+    if features is None:
+        try:
+            _, table = _importances(item, None)
+            ranked = [n for n in table.index if n in names]
+        except ValueError:
+            ranked = []
+        ranked += [n for n in names if n not in ranked]
+        features = ranked[:max(counts)]
+    chosen = list(features)
+    unknown = [f for f in chosen if f not in names]
+    if unknown:
+        message = f'{use} cannot draw {unknown}: they are not features'
+        raise ValueError(message)
+    if len(chosen) not in counts:
+        wanted = ' or '.join(str(c) for c in counts)
+        message = f'{use} needs {wanted} features, not {len(chosen)}'
+        raise ValueError(message)
+    return chosen
+
+
+def _tree_viz(
+    item: base.Dataset,
+    tree: int,
+    use: str,
+    *,
+    boosters: bool = False) -> tuple[Any, list[str]]:
+    """Returns dtreeviz's adapter of the dataset's tree, with the training rows.
+
+    The tree is a scikit-learn decision tree, the tree numbered `tree` of a
+    scikit-learn forest (or of `adaboost`), or (if `boosters`) the tree
+    numbered `tree` of an xgboost or lightgbm model. The adapter is given the
+    training rows, with the classes numbered in the order of the model's
+    classes.
+
+    Wraps:
+        [`dtreeviz.model`](https://github.com/parrt/dtreeviz)
+        from dtreeviz.
+
+    Args:
+        item: the dataset with a fitted tree model.
+        tree: number of the tree, for a model of many trees.
+        use: the plot that draws the tree (for the message of an error).
+        boosters: whether the plot can draw a tree of xgboost or lightgbm
+            (dtreeviz draws only some plots of them). Defaults to `False`.
+
+    Raises:
+        ValueError: if the model is not a tree, or trees, that dtreeviz
+            draws for the plot.
+
+    Returns:
+        The adapter, and the names of the model's features.
+
+    """
+    dtreeviz = utilities.import_tool('dtreeviz')
+    fitted = _model(item)
+    model = _unwrapped(item)
+    names = list(
+        utilities.feature_names(model, item.data.columns) or item.features)
+    chosen, index = model, None
+    booster = hasattr(model, 'booster_') or hasattr(model, 'get_booster')
+    if booster and not boosters:
+        message = (
+            f'{use} needs a decision tree or a forest of them from '
+            f'scikit-learn: dtreeviz cannot draw it for xgboost or lightgbm')
+        raise ValueError(message)
+    if hasattr(model, 'booster_'):
+        # lightgbm's models are drawn from their boosters.
+        chosen, index = model.booster_, tree
+    elif hasattr(model, 'get_booster'):
+        index = tree
+    elif hasattr(model, 'estimators_') and not hasattr(model, 'train_score_'):
+        # The trees of scikit-learn's gradient boosting fit the errors of the
+        # trees before them, not the label, so they are not drawn.
+        chosen = list(np.ravel(np.asarray(
+            model.estimators_, dtype = object)))[tree]
+    trees = index is not None or (
+        hasattr(chosen, 'tree_')
+        and (item.task != 'classify' or hasattr(chosen, 'classes_')))
+    if not trees:
+        message = (
+            f'{use} needs a decision tree, a forest of them, or an xgboost or '
+            f'lightgbm model')
+        raise ValueError(message)
+    y = item.y_train
+    classes = None
+    if item.task == 'classify':
+        classes = list(getattr(fitted, 'classes_', _classes(item)))
+        y = y.map({c: i for i, c in enumerate(classes)})
+    viz = dtreeviz.model(
+        chosen,
+        item.x_train[names],
+        y.to_numpy(),
+        tree_index = index,
+        feature_names = [str(n) for n in names],
+        target_name = str(item.label),
+        class_names = None if classes is None else [str(c) for c in classes])
+    return viz, names
+
+
+def _tree_viz_text(method: Callable[..., Any]) -> dict[str, Any]:
+    """Returns the font and sizes of text of the style, for a dtreeviz plot.
+
+    dtreeviz sets the font (Arial) and sizes of its text itself, so the
+    style's are passed to each of its plots, as the parameters it accepts.
+
+    Args:
+        method: the method of dtreeviz's adapter that draws the plot.
+
+    Returns:
+        The parameters for the font and sizes of text that `method` accepts.
+
+    """
+    matplotlib = importlib.import_module('matplotlib')
+    fonts = importlib.import_module('matplotlib.font_manager')
+    settings = matplotlib.rcParams
+    size = fonts.FontProperties(size = settings['font.size']).get_size()
+    ticks = fonts.FontProperties(
+        size = settings['xtick.labelsize']).get_size()
+    text = {
+        'fontname': fonts.FontProperties(
+            family = settings['font.family']).get_name(),
+        'fontsize': size,
+        'label_fontsize': size,
+        'ticks_fontsize': ticks}
+    return utilities.accepted_parameters(method, text)
 
 
 def _unwrapped(item: base.Dataset) -> Any:

@@ -58,8 +58,9 @@ causal = [
     "rdrobust>=2.1",
     "tigramite>=5.2"]
 encoders = ["category-encoders>=2.6", "skrub>=0.5"]
-explain = ["eli5>=0.16", "interpret-core>=0.6", "shap>=0.45"]
+explain = ["dtreeviz>=2.2", "eli5>=0.16", "interpret-core>=0.6", "shap>=0.45"]
 fairness = ["fairlearn>=0.12"]
+mlxtend = ["mlxtend>=0.23"]
 plots = ["matplotlib>=3.8", "scienceplots>=2.1", "seaborn>=0.13"]
 polars = ["polars>=1.0", "pyarrow>=15"]
 sampling = ["imbalanced-learn>=0.12"]
@@ -71,7 +72,7 @@ uncertainty = ["mapie>=1.0"]
 word = ["python-docx>=1.1"]
 # TabPFN needs PyTorch, which is large, so it is not part of "all".
 tabpfn = ["tabpfn>=2.0"]
-all = ["amos[boosting,causal,encoders,explain,fairness,plots,polars,sampling,statistics,survival,tables,tuning,uncertainty,word]"]
+all = ["amos[boosting,causal,encoders,explain,fairness,mlxtend,plots,polars,sampling,statistics,survival,tables,tuning,uncertainty,word]"]
 
 [project.urls]
 Documentation = "https://WithPrecedent.github.io/amos"
@@ -105,6 +106,7 @@ tests = [
     "causalml>=0.17; python_version < '3.13'",
     "doubleml>=0.11",
     "dowhy>=0.14; python_version >= '3.13'",
+    "dtreeviz>=2.2",
     "eli5>=0.16",
     "fairlearn>=0.12",
     "great-tables>=0.15",
@@ -113,6 +115,7 @@ tests = [
     "lightgbm>=4.0",
     "mapie>=1.0",
     "matplotlib>=3.8",
+    "mlxtend>=0.23",
     "networkx>=3.0",
     "optuna>=4.0",
     "optuna-integration[sklearn]>=4.0",

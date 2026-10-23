@@ -696,6 +696,37 @@ print(list(dataset.tables["random_forest_search"].columns[:2]))
 # ['param_max_depth', 'param_n_estimators']
 ```
 
+### Searching for features
+
+Two reducers wrap mlxtend's searches for the set of features with which a
+model scores best, in cross-validation on the training rows.
+`sequential_selection` adds the feature that most improves the score, one at
+a time (or, with `forward = false`, removes them), and keeps `k_features`
+features, or by default the number of features that scored best.
+`exhaustive_selection` tries every set of `min_features` to `max_features`
+features (1 to 3 by default), which is slow when there are many. Both take:
+
+| Parameter | Meaning |
+| --- | --- |
+| `estimator` | The model to score each set with: an estimator, its class, or its import path. Defaults to a logistic regression (to classify) or a linear regression. |
+| `scoring` | The scikit-learn scorer to compare with. Defaults to accuracy or R². |
+| `cv` | Number of cross-validation folds. Defaults to 5. As in a hyperparameter search, a fold keeps the rows of every group of the first group column together. |
+
+The score of every set that was tried is stored in `tables` as
+"{name}_search", best first.
+
+```python
+features = amos.Dataset.create(cancer, seed = 43)
+amos.splitters.Stratified().apply(features)
+amos.transformers.SequentialSelection().apply(
+    features, k_features = 3, cv = 3,
+    estimator = "sklearn.tree.DecisionTreeClassifier")
+print(len(features.features))
+# 3
+print(sorted(features.tables["sequential_selection_search"]["size"]))
+# [1, 2, 3]
+```
+
 ### Fitting models on a GPU
 
 Four models can be fitted on an NVIDIA GPU, which can be much faster for
@@ -1155,7 +1186,8 @@ into a few families:
 | The data | `histograms`, `box_plots`, `count_plots`, `pair_plot`, `correlation_heatmap`, `missing_heatmap`, `label_plot` |
 | Classifiers | `roc_curve`, `precision_recall_curve`, `det_curve`, `calibration_curve`, `confusion_heatmap` |
 | Regressions | `actual_vs_predicted`, `residual_plot`, `qq_plot`, `influence_plot`, `coefficient_plot` |
-| Models | `importance_plot`, `partial_dependence`, `learning_curve`, `validation_curve`, `search_plot`, `prediction_intervals`, `tree_plot`, `shape_functions` |
+| Models | `importance_plot`, `partial_dependence`, `decision_regions`, `learning_curve`, `validation_curve`, `search_plot`, `prediction_intervals`, `shape_functions` |
+| Trees | `tree_plot`, `tree_leaf_sizes`, `tree_leaf_distributions`, `tree_leaf_purity`, `tree_feature_space`, `tree_prediction_path` |
 | SHAP values | `shap_bar`, `shap_beeswarm`, `shap_violin`, `shap_heatmap`, `shap_decision`, `shap_embedding`, `shap_waterfall`, `shap_force`, `shap_scatter`, `shap_partial_dependence`, `shap_group_difference` |
 | Groups and time | `fairness_plot`, `survival_curves` |
 
@@ -1182,6 +1214,29 @@ for plot in (amos.plots.CoefficientPlot(), amos.plots.QqPlot()):
 amos.plots.InfluencePlot().apply(dataset, title = "Influence of each row")
 print(sorted(dataset.figures))
 # ['coefficient_plot', 'influence_plot', 'qq_plot']
+```
+
+The tree plots draw a `decision_tree`, or one tree (numbered `tree`) of a
+`random_forest`, `extra_trees`, or `adaboost` model. `tree_plot` is
+scikit-learn's drawing of the splits; the others are dtreeviz's, which also
+draw the training rows in each part of the tree: how many are in each leaf
+(`tree_leaf_sizes`), their classes or labels (`tree_leaf_distributions`), how
+mixed each leaf is (`tree_leaf_purity`), how the splits divide one or two
+features (`tree_feature_space`), and how much each feature decides one row's
+path to its leaf (`tree_prediction_path`). `tree_leaf_sizes` and
+`tree_leaf_distributions` also draw a tree of an `xgboost` or `lightgbm`
+model. `decision_regions` is mlxtend's plot of the class that any classifier
+predicts across two features (the two most important, by default), with the
+other features held at their medians.
+
+```python
+trees = amos.Dataset.create(cancer, seed = 43)
+amos.splitters.Stratified().apply(trees)
+amos.models.DecisionTree().apply(trees, max_depth = 3)
+for plot in (amos.plots.TreeLeafSizes(), amos.plots.DecisionRegions()):
+    plot.apply(trees)
+print(sorted(trees.figures))
+# ['decision_regions', 'tree_leaf_sizes']
 ```
 
 ### Styles
