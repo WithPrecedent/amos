@@ -661,7 +661,7 @@ Every model accepts these parameters:
 | Parameter | Meaning |
 | --- | --- |
 | `search` | "grid", "random", or "optuna". Without it, lists are passed to the model as they are. |
-| `cv` | Number of cross-validation folds. Defaults to 5. |
+| `cv` | Number of cross-validation folds. Defaults to 5. If the dataset has groups, each fold keeps the rows of every group of its first group column together. |
 | `n_iter` | Number of combinations to try in a random or Optuna search. Defaults to 10. |
 | `scoring` | The scikit-learn scorer to compare with, such as "roc_auc". Defaults to the model's own score. |
 
@@ -673,6 +673,13 @@ usually finds good values in fewer tries, and it searches a range that spans
 two or more orders of magnitude (such as a learning rate from 0.001 to 0.1) on
 a log scale. The search uses the training rows only, and the results of every
 combination are stored in `tables` as "{name}_search".
+
+When rows are not independent, such as the votes of the judges of one case,
+give the dataset `groups`. A search then folds whole groups (with
+`StratifiedGroupKFold` for a classifier and `GroupKFold` for a regression),
+just as the group validators do, so that no group has rows on both sides of
+a fold and the search never scores a model on rows that are nearly copies of
+ones it learned from.
 
 ```python
 amos.splitters.Stratified().apply(dataset)

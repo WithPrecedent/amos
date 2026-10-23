@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* A model's hyperparameter search ("grid", "random", or "optuna") keeps the
+  rows of each group of the dataset's first group column in one fold, as the
+  group validators do, when the dataset has groups: with
+  `StratifiedGroupKFold` for a classifier and `GroupKFold` for a regression.
+  Before, its folds divided the rows at random, so rows of one group (such as
+  the votes of the judges of one case) could be on both sides of a fold and
+  the search scored a model on rows it had partly seen. A row with a missing
+  group is a group of its own.
+* Brought in the CI fixes of `snickerdoodle` 0.4.3: GitHub releases are made
+  with the GitHub CLI (in place of the deprecated `gh-action-auto-release`
+  Action), with the released version's section of CHANGELOG.md as their
+  notes, only from `main` and after the tests and linters pass. The test
+  matrix now runs every Python version it names, instead of recreating the
+  environment with Python 3.11 at `uv run`.
+
 ## 0.4.0
 
 * A technique now writes `apply` instead of `implement`, following

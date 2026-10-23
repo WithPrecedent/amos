@@ -140,6 +140,72 @@ def test_grid_search(classified: amos.Dataset) -> None:
     assert classified.history[-1]['search'] == 'grid'
 
 
+def _grouped(item: amos.Dataset, size: int = 3) -> amos.Dataset:
+    """Gives `item` groups of `size` rows in a row, as votes of a case are."""
+    item.data['case'] = np.arange(len(item.data)) // size
+    item.groups = ['case']
+    return item
+
+
+def _divided(item: amos.Dataset, folds: list[tuple[np.ndarray, np.ndarray]]) -> int:
+    """Returns how many groups have training rows on both sides of a fold."""
+    cases = item.data.loc[item.y_train.index, 'case'].to_numpy()
+    return sum(
+        len(set(cases[train]) & set(cases[test])) for train, test in folds)
+
+
+def test_search_folds_keep_groups_together(classified: amos.Dataset) -> None:
+    _grouped(classified)
+    x, y = classified.x_train, classified.y_train
+    folds = models.DecisionTree()._folds(classified, x, y, 4)
+    assert len(folds) == 4
+    assert _divided(classified, folds) == 0
+    tested = np.sort(np.concatenate([test for _, test in folds]))
+    assert (tested == np.arange(len(x))).all()
+    # The classes are balanced across the folds of a classifier.
+    shares = [y.iloc[test].mean() for _, test in folds]
+    assert max(shares) - min(shares) < 0.25
+
+
+def test_search_folds_of_a_regression(regressed: amos.Dataset) -> None:
+    _grouped(regressed, size = 4)
+    folds = models.Ridge()._folds(
+        regressed, regressed.x_train, regressed.y_train, 3)
+    assert _divided(regressed, folds) == 0
+
+
+def test_search_folds_without_groups(classified: amos.Dataset) -> None:
+    assert models.DecisionTree()._folds(
+        classified, classified.x_train, classified.y_train, 3) == 3
+
+
+def test_search_folds_with_missing_groups(classified: amos.Dataset) -> None:
+    _grouped(classified)
+    classified.data['case'] = classified.data['case'].astype(float)
+    classified.data.loc[classified.data.index[:20], 'case'] = np.nan
+    folds = models.DecisionTree()._folds(
+        classified, classified.x_train, classified.y_train, 3)
+    assert _divided(classified, folds) == 0
+    assert sum(len(test) for _, test in folds) == len(classified.y_train)
+
+
+def test_grid_search_with_groups(classified: amos.Dataset) -> None:
+    _grouped(classified)
+    models.DecisionTree().apply(
+        classified, search = 'grid', max_depth = [1, 3], cv = 3)
+    assert len(classified.tables['decision_tree_search']) == 2
+    assert 'case' not in classified.model.feature_names_in_
+
+
+def test_optuna_search_with_groups(classified: amos.Dataset) -> None:
+    requires('optuna_integration')
+    _grouped(classified)
+    models.RandomForest().apply(
+        classified, search = 'optuna', n_estimators = [5, 20], n_iter = 3,
+        cv = 3, scoring = 'roc_auc')
+    assert len(classified.tables['random_forest_search']) == 3
+
+
 def test_random_search_draws_from_ranges(classified: amos.Dataset) -> None:
     models.RandomForest().apply(
         classified,

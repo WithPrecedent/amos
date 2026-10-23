@@ -13,7 +13,9 @@ Every model accepts the parameters of the tool it wraps. It also accepts
 "search" ("grid", "random", or "optuna"), which searches for the best values
 of any parameter that is given as a list, using cross-validation on the
 training rows ("cv" folds, 5 by default, and "n_iter" draws for a random or
-Optuna search).
+Optuna search). If the dataset has groups, the folds of a search keep the
+rows of each group of its first group column together, as the group
+validators do.
 
 If "use_gpu" is true in the "general" section of the settings (see
 `Dataset.use_gpu`) and an NVIDIA GPU is found, the models that can be fitted
@@ -166,7 +168,9 @@ class Model(base.Operation, abc.ABC):
             search: "grid" or "random" to search for the best values of any
                 parameter given as a list. Defaults to `None`, which does not
                 search (and passes lists to the model as they are).
-            cv: number of cross-validation folds for a search. Defaults to 5.
+            cv: number of cross-validation folds for a search, which keep
+                the rows of each of the dataset's first groups together if
+                it has groups. Defaults to 5.
             n_iter: number of combinations to draw for a random search.
                 Defaults to 10.
             scoring: scikit-learn scorer for a search (such as "roc_auc").
@@ -449,6 +453,54 @@ class Model(base.Operation, abc.ABC):
                 index = x.index,
                 columns = columns)
 
+    def _folds(
+        self,
+        item: base.Dataset,
+        x: pd.DataFrame,
+        y: pd.Series,
+        cv: int) -> int | list[tuple[np.ndarray, np.ndarray]]:
+        """Returns the folds of a search, which keep groups together.
+
+        When rows are not independent (such as the votes of the judges of one
+        case), a fold that splits a group puts rows that are nearly copies of
+        each other on both sides, so the search scores the model on rows it
+        has partly seen. So if the dataset has groups, each group of its first
+        group column is kept wholly in one fold, as the group validators keep
+        them: with the classes balanced across folds for a classifier, and in
+        folds of about equal size for a regression. A row with a missing
+        group is a group of its own.
+
+        Wraps:
+            - [`sklearn.model_selection.StratifiedGroupKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedGroupKFold.html)
+              from scikit-learn, for a classifier.
+            - [`sklearn.model_selection.GroupKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupKFold.html)
+              from scikit-learn, for a regression.
+
+        Args:
+            item: the dataset being modeled.
+            x: the training rows of the columns the model uses.
+            y: the training labels.
+            cv: number of cross-validation folds.
+
+        Returns:
+            `cv`, if the dataset has no groups, or else the training and test
+                positions of each fold.
+
+        """
+        if not item.groups:
+            return cv
+        model_selection = importlib.import_module('sklearn.model_selection')
+        groups = item.data.loc[x.index, item.groups[0]].astype(object)
+        missing = groups.isna()
+        groups[missing] = [f'__row__{label}' for label in groups.index[missing]]
+        codes = pd.factorize(groups)[0]
+        if item.task == 'classify':
+            splitter = model_selection.StratifiedGroupKFold(
+                n_splits = cv, shuffle = True, random_state = item.seed)
+        else:
+            splitter = model_selection.GroupKFold(n_splits = cv)
+        return list(splitter.split(x, y, codes))
+
     def _search(
         self,
         item: base.Dataset,
@@ -464,7 +516,8 @@ class Model(base.Operation, abc.ABC):
         """Searches for the best parameters and returns the best model.
 
         The results of every combination are stored in the dataset's `tables`
-        as "{name}_search".
+        as "{name}_search". If the dataset has groups, the folds keep the
+        rows of each of its first group together (see `_folds`).
 
         Args:
             item: the dataset being modeled.
@@ -482,22 +535,23 @@ class Model(base.Operation, abc.ABC):
             The best model, refitted to every training row.
 
         """
+        folds = self._folds(item, x, y, cv)
         if search == 'optuna':
             return self._search_optuna(
                 item, estimator, x, y,
-                space = space, cv = cv, n_iter = n_iter, scoring = scoring)
+                space = space, cv = folds, n_iter = n_iter, scoring = scoring)
         model_selection = importlib.import_module('sklearn.model_selection')
         if search == 'random':
             searcher = model_selection.RandomizedSearchCV(
                 estimator,
                 param_distributions = space,
                 n_iter = n_iter,
-                cv = cv,
+                cv = folds,
                 scoring = scoring,
                 random_state = item.seed)
         else:
             searcher = model_selection.GridSearchCV(
-                estimator, param_grid = space, cv = cv, scoring = scoring)
+                estimator, param_grid = space, cv = folds, scoring = scoring)
         searcher.fit(x, y)
         results = pd.DataFrame(searcher.cv_results_)
         columns = [c for c in results.columns if c.startswith('param_')]
@@ -514,7 +568,7 @@ class Model(base.Operation, abc.ABC):
         y: pd.Series,
         *,
         space: dict[str, Any],
-        cv: int,
+        cv: int | list[tuple[np.ndarray, np.ndarray]],
         n_iter: int,
         scoring: str | None) -> Any:
         """Searches with Optuna and returns the best model.
@@ -529,7 +583,8 @@ class Model(base.Operation, abc.ABC):
             x: the training rows of the columns the model uses.
             y: the training labels.
             space: Optuna distributions of the parameters to search.
-            cv: number of cross-validation folds.
+            cv: number of cross-validation folds, or the folds (as `_folds`
+                returns them).
             n_iter: number of combinations to try.
             scoring: scikit-learn scorer, or `None`.
 
