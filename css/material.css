@@ -1,0 +1,16 @@
+/* More space at the bottom of the page. */
+.md-main__inner {
+  margin-bottom: 1.5rem;
+}
+
+/* Keeps code in tables (such as technique names and import paths) from
+   breaking in the middle of a word, which Material allows for all code. A
+   table too wide for the page scrolls sideways instead. */
+.md-typeset table:not([class]) code {
+  word-break: normal;
+}
+
+/* Centers table cells that span rows (such as the stages in the README). */
+.md-typeset table:not([class]) td[rowspan] {
+  vertical-align: middle;
+}
