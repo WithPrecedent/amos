@@ -1115,6 +1115,17 @@ class RegressionTable(_Published, Evaluator):
     distribution. Set "marginal" to true to show marginal effects for every
     model, which puts every column on the same scale.
 
+    Features that form a set, such as the dummy variables of one category
+    with its reference left out (a victim's relationship to an offender:
+    "family", "partner", or "stranger", against "unknown"), cannot be moved
+    one at a time: setting "family" to 1 in a row whose "stranger" is 1 makes
+    a row that cannot happen. Name them in "sets" (in settings, as
+    "family, partner, stranger; under_12, teen", with sets separated by
+    semicolons) and the AME of each member is the average change in the
+    prediction from the reference (every member 0) to that member alone (it
+    1, the others 0). The members of a set must have two values each, and
+    members that are not features of a model are left out of its set.
+
     The metrics are cross-validated on the training rows, never scored on
     the rows that the model learned from. They are the "cv_{metric}" metrics
     of a validator that the analysis already ran, or else they come from the
@@ -1514,7 +1525,8 @@ class RegressionTable(_Published, Evaluator):
         *,
         marginal: bool,
         simulations: int,
-        step: float) -> tuple[pd.DataFrame, str]:
+        step: float,
+        sets: Sequence[Sequence[str]] = ()) -> tuple[pd.DataFrame, str]:
         """Returns the estimates of the model of `item` and their kind.
 
         Args:
@@ -1524,6 +1536,8 @@ class RegressionTable(_Published, Evaluator):
             simulations: number of bootstrap samples for marginal effects.
             step: standard deviations that each feature is moved up and
                 down for marginal effects.
+            sets: sets of features whose members are moved one at a time
+                from all of them being 0. Defaults to none.
 
         Returns:
             One row for each term, with the columns of `estimates`, and the
@@ -1538,7 +1552,7 @@ class RegressionTable(_Published, Evaluator):
         if item.task == 'classify' and not hasattr(model, 'predict_proba'):
             empty = pd.DataFrame(columns = list(_ESTIMATES), dtype = float)
             return empty, 'none (no predicted probabilities)'
-        table = _marginal_effects(item, model, simulations, step)
+        table = _marginal_effects(item, model, simulations, step, sets)
         return table, 'marginal effects'
 
     def _levels(self) -> list[float]:
@@ -1829,6 +1843,7 @@ class RegressionTable(_Published, Evaluator):
         marginal: bool = False,
         simulations: int = 100,
         step: float = 0.1,
+        sets: Any = None,
         validator: str | None = None,
         metrics: Sequence[str] | None = None,
         **kwargs: Any) -> pd.DataFrame:
@@ -1842,6 +1857,11 @@ class RegressionTable(_Published, Evaluator):
                 of marginal effects. Defaults to 100.
             step: standard deviations that each feature is moved up and down
                 to find its marginal effect. Defaults to 0.1.
+            sets: sets of features (such as the dummy variables of one
+                category) whose marginal effects are each from all of the set
+                being 0: a list of lists of names, or text such as
+                "a, b; c, d" (see `_feature_sets`). Defaults to `None`, which
+                moves every feature on its own.
             validator: name of the validator that cross-validates a model if
                 the analysis did not. Defaults to `None`, which uses
                 `validators` for the task.
@@ -1856,9 +1876,11 @@ class RegressionTable(_Published, Evaluator):
         frames = []
         statistics: dict[str, dict[str, Any]] = {}
         self._blocks = {}
+        grouped = _feature_sets(sets)
         for name, item in columns.items():
             table, kind = self._estimate(
-                item, marginal = marginal, simulations = simulations, step = step)
+                item, marginal = marginal, simulations = simulations, step = step,
+                sets = grouped)
             self._blocks[name] = _block_of(item, kind, simulations)
             table.index = pd.Index([str(t) for t in table.index], name = 'term')
             frames.append(pd.concat({name: table}, names = ['model']))
@@ -2466,7 +2488,10 @@ class _Move:
     """How a feature is moved to find its marginal effect.
 
     A feature is moved up and down by `shift` from each row's value, or, if
-    `shift` is `None`, set to `low` and then to `high` in every row.
+    `shift` is `None`, set to `low` and then to `high` in every row. A
+    feature in a set of features has `others`: the rest of its set, which
+    are set to their lower values in both, so that it moves from the set's
+    reference to itself alone.
 
     Args:
         shift: how far the feature is moved each way, or `None`.
@@ -2474,6 +2499,8 @@ class _Move:
         high: the higher value of a feature with two values.
         width: the distance between the two values of the feature, which the
             change in the prediction is divided by.
+        others: the other features of its set, with the value each is set to.
+            Defaults to none.
 
     """
 
@@ -2481,6 +2508,7 @@ class _Move:
     low: Any
     high: Any
     width: float
+    others: tuple[tuple[str, Any], ...] = ()
 
     def apply(self, x: pd.DataFrame, feature: str) -> pd.DataFrame:
         """Returns the rows of `x` with `feature` moved down, then up.
@@ -2500,6 +2528,9 @@ class _Move:
         else:
             low[feature] = x[feature] - self.shift
             high[feature] = x[feature] + self.shift
+        for other, value in self.others:
+            low[other] = value
+            high[other] = value
         return pd.concat([low, high], ignore_index = True)
 
 
@@ -2592,11 +2623,36 @@ def _effects(
     return pd.Series(effects, dtype = float)
 
 
+def _feature_sets(sets: Any) -> list[list[str]]:
+    """Returns sets of features from the forms that "sets" can take.
+
+    Args:
+        sets: `None`; a list of lists of feature names; or text with sets
+            separated by semicolons and names by commas ("a, b; c, d"), as a
+            string or as the list that a settings file makes of it by
+            splitting it at the commas (["a", "b; c", "d"]).
+
+    Returns:
+        A list of sets, each a list of names. Empty sets are left out.
+
+    """
+    if sets is None:
+        return []
+    if isinstance(sets, str) or all(isinstance(s, str) for s in sets):
+        text = sets if isinstance(sets, str) else ', '.join(sets)
+        parts = [part.split(',') for part in text.split(';')]
+    else:
+        parts = [list(members) for members in sets]
+    found = [[str(m).strip() for m in part if str(m).strip()] for part in parts]
+    return [members for members in found if members]
+
+
 def _marginal_effects(
     item: base.Dataset,
     model: Any,
     simulations: int,
-    step: float) -> pd.DataFrame:
+    step: float,
+    sets: Sequence[Sequence[str]] = ()) -> pd.DataFrame:
     """Returns the average marginal effects of the features of a model.
 
     Wraps:
@@ -2610,6 +2666,8 @@ def _marginal_effects(
         model: the fitted model.
         simulations: number of bootstrap samples.
         step: standard deviations that each feature is moved up and down.
+        sets: sets of features whose members are moved one at a time from
+            all of them being at their lower values. Defaults to none.
 
     Returns:
         One row for each term (see `_effects`), with the columns of
@@ -2629,7 +2687,7 @@ def _marginal_effects(
     columns = validators._columns(model, item)
     x = item.data.loc[rows, columns].reset_index(drop = True)
     y = item.y.loc[rows].reset_index(drop = True)
-    moves = _moves(x, _movable(model, item, columns), step)
+    moves = _moves(x, _movable(model, item, columns), step, sets)
     estimates = _effects(model, x, moves, item.task)
     draws = []
     if len(estimates) and simulations > 1:
@@ -2723,8 +2781,56 @@ def _movable(
 def _moves(
     x: pd.DataFrame,
     features: Sequence[str],
-    step: float) -> dict[str, _Move]:
+    step: float,
+    sets: Sequence[Sequence[str]] = ()) -> dict[str, _Move]:
     """Returns how each feature is moved to find its marginal effect.
+
+    Args:
+        x: the rows that the model learned from.
+        features: the features to move.
+        step: standard deviations that each feature is moved up and down.
+        sets: sets of features whose members are each moved with the rest
+            of their set at its lower values. Members that are not in
+            `features` are left out. Defaults to none.
+
+    Raises:
+        ValueError: if a member of a set has more than two values, or a
+            feature is in more than one set.
+
+    Returns:
+        A `_Move` for each feature: from false to true for a boolean, from
+            the lower to the higher value for a feature of two values, and
+            up and down by `step` standard deviations for any other. A member
+            of a set also sets the rest of its set to their lower values.
+
+    """
+    moves = _single_moves(x, features, step)
+    seen: set[str] = set()
+    for members in sets:
+        present = [m for m in dict.fromkeys(members) if m in moves]
+        for member in present:
+            if member in seen:
+                message = f'{member!r} is in more than one set of features'
+                raise ValueError(message)
+            seen.add(member)
+            if moves[member].shift is not None:
+                message = (
+                    f'{member!r} is in a set of features, but it has more '
+                    f'than two values'
+                )
+                raise ValueError(message)
+        for member in present:
+            others = tuple(
+                (other, moves[other].low) for other in present if other != member)
+            moves[member] = dataclasses.replace(moves[member], others = others)
+    return moves
+
+
+def _single_moves(
+    x: pd.DataFrame,
+    features: Sequence[str],
+    step: float) -> dict[str, _Move]:
+    """Returns how each feature is moved on its own (see `_moves`).
 
     Args:
         x: the rows that the model learned from.
@@ -2732,9 +2838,7 @@ def _moves(
         step: standard deviations that each feature is moved up and down.
 
     Returns:
-        A `_Move` for each feature: from false to true for a boolean, from
-            the lower to the higher value for a feature of two values, and
-            up and down by `step` standard deviations for any other.
+        A `_Move` for each feature that varies.
 
     """
     moves = {}

@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+* `regression_table` takes "sets" of features (such as the dummy variables
+  of one category, as "family, partner, stranger; under_12, teen" in
+  settings), whose members' average marginal effects are each the change
+  from the set's reference (every member 0) to that member alone, rather
+  than from moving each dummy on its own, which made rows that cannot
+  happen.
 * Added techniques that wrap mlxtend, which the new `mlxtend` extra (and
   `all`) installs: `sequential_selection` and `exhaustive_selection`,
   reducers that search for the set of features with which a model (a

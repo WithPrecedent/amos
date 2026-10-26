@@ -90,6 +90,61 @@ def test_marginal_shows_effects_for_a_model_with_coefficients() -> None:
         estimates['estimate'], coefficients.drop('const'), rtol = 1e-6)
 
 
+def _categorical() -> amos.Dataset:
+    """Returns a dataset whose "a" and "b" are dummies of one category."""
+    rng = np.random.default_rng(SEED)
+    rows = 3000
+    group = rng.choice(['reference', 'a', 'b'], rows, p = [0.4, 0.3, 0.3])
+    data = pd.DataFrame({
+        'a': (group == 'a').astype(int),
+        'b': (group == 'b').astype(int),
+        'z': rng.normal(size = rows)})
+    odds = -2 + 3 * data['a'] + 3 * data['b'] + 0.5 * data['z']
+    data['y'] = (rng.random(rows) < 1 / (1 + np.exp(-odds))).astype(int)
+    dataset = amos.Dataset(data, label = 'y', seed = SEED)
+    return amos.library.borrow('logit')().apply(dataset, C = 1e6)
+
+
+def _changes(dataset: amos.Dataset) -> dict[str, float]:
+    """Returns the change from the reference to "a" and to "b" alone."""
+    x = dataset.data[['a', 'b', 'z']]
+
+    def mean(a: int, b: int) -> float:
+        moved = x.assign(a = a, b = b)
+        return float(dataset.model.predict_proba(moved)[:, 1].mean())
+
+    return {'a': mean(1, 0) - mean(0, 0), 'b': mean(0, 1) - mean(0, 0)}
+
+
+def test_sets_move_dummies_from_their_reference() -> None:
+    dataset = _categorical()
+    expected = _changes(dataset)
+    grouped = RegressionTable.create(
+        dataset, marginal = True, simulations = 0, sets = [['a', 'b']])
+    estimates = grouped.estimates.loc['logit', 'estimate']
+    for name, change in expected.items():
+        assert estimates[name] == pytest.approx(change)
+    alone = RegressionTable.create(dataset, marginal = True, simulations = 0)
+    single = alone.estimates.loc['logit', 'estimate']
+    assert abs(single['a'] - expected['a']) > 0.01
+    assert single['z'] == pytest.approx(estimates['z'])
+    written = RegressionTable.create(
+        dataset, marginal = True, simulations = 0, sets = 'a, b; q')
+    np.testing.assert_allclose(
+        written.estimates.loc['logit', 'estimate'], estimates)
+
+
+def test_sets_need_features_of_two_values() -> None:
+    dataset = _categorical()
+    with pytest.raises(ValueError, match = 'more than two values'):
+        RegressionTable.create(
+            dataset, marginal = True, simulations = 0, sets = [['a', 'z']])
+    with pytest.raises(ValueError, match = 'more than one set'):
+        RegressionTable.create(
+            dataset, marginal = True, simulations = 0,
+            sets = [['a', 'b'], ['b']])
+
+
 def test_models_without_coefficients_show_marginal_effects() -> None:
     dataset = _regressed('random_forest', n_estimators = 10)
     table = RegressionTable.create(dataset, simulations = 5)
