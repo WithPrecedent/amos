@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.4.1
 
 * `regression_table` takes "sets" of features (such as the dummy variables
   of one category, as "family, partner, stranger; under_12, teen" in
@@ -37,7 +37,6 @@ All notable changes to this project will be documented in this file.
 * Plots that draw with `matplotlib.pyplot` (shap's, and now mlxtend's and
   dtreeviz's) are lent their figure by `plots._lent`, which also keeps
   `pyplot.show` from opening a window while they draw.
-
 * A model's hyperparameter search ("grid", "random", or "optuna") keeps the
   rows of each group of the dataset's first group column in one fold, as the
   group validators do, when the dataset has groups: with

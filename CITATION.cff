@@ -11,8 +11,8 @@ authors:
     family-names: Yung
     email: coreyrayburnyung@gmail.com
     orcid: "https://orcid.org/0000-0001-6524-9956"
-version: 0.4.0
-date-released: 2026-10-20
+version: 0.4.1
+date-released: 2026-10-26
 license: Apache-2.0
 repository-code: "https://github.com/WithPrecedent/amos"
 url: "https://WithPrecedent.github.io/amos"
