@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.5.0
 
 * A validator resamples only the model's features when it applies the
   analysis's samplers to each fold, and gives each copied row the other

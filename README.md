@@ -491,7 +491,7 @@ repository" button reads the same information from
 @software{yung_amos,
   author  = {Yung, Corey Rayburn},
   title   = {amos: Automated Modeling for Open Scholarship},
-  version = {0.4.1},
+  version = {0.5.0},
   year    = {2026},
   url     = {https://github.com/WithPrecedent/amos},
   license = {Apache-2.0}
