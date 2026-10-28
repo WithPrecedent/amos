@@ -243,3 +243,41 @@ def test_evaluators_name_the_columns_that_lightgbm_renamed() -> None:
     assert set(table.index) == set(dataset.features)
     effects = evaluators.RegressionTable.create(dataset, simulations = 3)
     assert list(effects.estimates.loc['lightgbm'].index) == dataset.features
+
+
+def _fixest_courts(rows: int = 240) -> amos.Dataset:
+    """Returns a binary dataset with a court group, fitted by a fixest logit.
+
+    "twice" is twice "x", so pyfixest drops one of them as collinear.
+    """
+    requires('pyfixest')
+    data = make_numeric(rows = rows)
+    data['twice'] = 2 * data[data.columns[0]]
+    data['court'] = np.repeat(list('abcdef'), rows // 6)
+    dataset = amos.Dataset(
+        data, label = 'target', seed = SEED, groups = ['court'])
+    amos.splitters.Stratified().apply(dataset)
+    amos.models.Fixest().apply(dataset, fixed_effects = 'court')
+    return dataset
+
+
+def test_shap_importance_explains_fixest_given_its_fixed_effects() -> None:
+    requires('shap')
+    dataset = _fixest_courts()
+    table = evaluators.ShapImportance().evaluate(
+        dataset, rows = 12, background = 20)
+    # Each row is explained with its own court's fixed effect, so every
+    # feature (and only the features) has an importance.
+    assert set(table.index) == set(dataset.features)
+    explanation = dataset.fitted['shap_importance']
+    assert np.asarray(explanation.values).shape[0] == 12
+    assert np.isfinite(np.asarray(explanation.values)).all()
+
+
+def test_feature_importance_of_fixest_leaves_out_dropped_coefficients() -> None:
+    dataset = _fixest_courts()
+    kept = list(dataset.model.coefficients().dropna(subset = ['coefficient']).index)
+    table = evaluators.FeatureImportance().evaluate(dataset)
+    # pyfixest drops collinear features, which then have no importance.
+    assert len(kept) < len(dataset.features)
+    assert sorted(table.index) == sorted(kept)

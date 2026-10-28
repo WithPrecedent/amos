@@ -173,6 +173,25 @@ def test_a_model_without_new_groups_cannot_be_validated_by_group() -> None:
         amos.validators.GroupKFold().apply(dataset, n_splits = 3)
 
 
+@pytest.mark.parametrize('sampler', ['smote', 'random_under'])
+def test_a_validator_resamples_only_the_features_of_fixest(sampler: str) -> None:
+    requires('pyfixest')
+    requires('imblearn')
+    # fixest needs its fixed effects ("court", which is text) as well as its
+    # features, but a sampler can only resample the features: the validator
+    # resamples them and gives each row the court of the row it copies.
+    data = make_numeric(rows = 240)
+    data['court'] = np.repeat(list('abcdef'), 40)
+    dataset = amos.Dataset(
+        data, label = 'target', seed = SEED, groups = ['court'])
+    amos.splitters.Stratified().apply(dataset)
+    amos.library.borrow(sampler, genre = 'sampler')().apply(dataset)
+    amos.models.Fixest().apply(dataset, fixed_effects = 'court')
+    amos.validators.StratifiedKFold().apply(
+        dataset, metrics = ['roc_auc'], n_splits = 3)
+    assert 0 <= dataset.metrics['cv_roc_auc'] <= 1
+
+
 def test_a_model_with_numbered_classes_is_validated() -> None:
     requires('xgboost')
     dataset = amos.Dataset(

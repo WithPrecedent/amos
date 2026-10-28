@@ -923,8 +923,10 @@ class FeatureImportance(Evaluator):
     This is the model's `feature_importances_` (for trees and boosting), the
     importance of each term (for `explainable_boosting`), or the absolute
     value of its coefficients (for linear models, averaged over the classes).
-    Coefficients are only comparable if the features were scaled. For other
-    models, use `permutation_importance`.
+    Coefficients are only comparable if the features were scaled. A feature
+    that the model dropped (such as a collinear one, which pyfixest drops) has
+    no coefficient and is left out. For other models, use
+    `permutation_importance`.
 
     """
 
@@ -962,6 +964,14 @@ class FeatureImportance(Evaluator):
             importances = np.abs(np.atleast_2d(coefficients)).mean(axis = 0)
         features = (
             utilities.feature_names(model, item.data.columns) or item.features)
+        coefficients = getattr(model, 'coefficients', None)
+        if len(np.ravel(importances)) != len(features) and callable(coefficients):
+            # A model that drops features (such as pyfixest's, which drops
+            # collinear ones) has a coefficient only for the others.
+            table = coefficients().dropna(subset = ['coefficient'])
+            kept = [f for f in features if f in table.index]
+            return _importance_table(
+                kept, np.abs(table.loc[kept, 'coefficient'].to_numpy(float)))
         return _importance_table(features, np.asarray(importances))
 
 
@@ -2275,8 +2285,16 @@ class ShapImportance(Evaluator):
             One row for each feature, with an "importance" column.
 
         """
+        # The validators module imports this one, so it is imported when used.
+        from . import validators  # noqa: PLC0415
         shap = utilities.import_tool('shap')
         model = _model(item)
+        # Columns that the model needs besides its features, such as the
+        # fixed effects of a `fixest` model, are held at each row's own
+        # values while its features are explained.
+        others = [
+            c for c in validators._columns(model, item)
+            if c not in set(validators._features(model, item))]
         if isinstance(model, models.LabelCoded):
             model = model.estimator
         train = item.x_train
@@ -2284,7 +2302,8 @@ class ShapImportance(Evaluator):
             min(background, len(train)), random_state = item.seed)
         x = item.x_test if item.is_split else item.x
         x = x.head(rows)
-        explanation = _explain(shap, model, sample, x, item.task)
+        given = item.data.loc[x.index, others] if others else None
+        explanation = _explain(shap, model, sample, x, item.task, given = given)
         values = np.asarray(explanation.values)
         if values.ndim == 3:  # noqa: PLR2004
             values = values[:, :, -1]
@@ -2300,12 +2319,16 @@ def _explain(
     model: Any,
     background: pd.DataFrame,
     x: pd.DataFrame,
-    task: str | None) -> Any:
+    task: str | None,
+    *,
+    given: pd.DataFrame | None = None) -> Any:
     """Returns SHAP values for `x`.
 
     The explainer is chosen by `shap` for the model. If `shap` does not
     recognize the model, the model's prediction function is explained
-    instead.
+    instead. If the model needs columns besides the features (`given`, such
+    as the fixed effects of a `fixest` model), each row is explained with
+    those columns held at its own values (see `_explain_given`).
 
     Wraps:
         [`shap.Explainer`](https://shap.readthedocs.io/en/latest/generated/shap.Explainer.html)
@@ -2317,23 +2340,75 @@ def _explain(
         background: background rows for the explainer.
         x: rows to explain.
         task: "classify" or "regress".
+        given: the other columns of the rows of `x`, which are not explained.
+            Defaults to `None`.
 
     Returns:
         A `shap.Explanation`.
 
     """
+    if given is not None and len(given.columns):
+        return _explain_given(shap, _prediction(model, task), background, x, given)
     try:
         explainer = shap.Explainer(model, background)
     except Exception:  # noqa: BLE001
-        predict = (
-            model.predict_proba
-            if task == 'classify' and hasattr(model, 'predict_proba')
-            else model.predict)
-        explainer = shap.Explainer(predict, background)
+        explainer = shap.Explainer(_prediction(model, task), background)
     try:
         return explainer(x, check_additivity = False)
     except TypeError:
         return explainer(x)
+
+
+def _explain_given(
+    shap: Any,
+    predict: Any,
+    background: pd.DataFrame,
+    x: pd.DataFrame,
+    given: pd.DataFrame) -> Any:
+    """Returns SHAP values for `x`, each with its own `given` columns held fixed.
+
+    A model with fixed effects predicts a row from its features and its
+    fixed effects (such as its court), but only the features are explained.
+    Each row is explained by its own explainer of the prediction function
+    with that row's fixed effects, so its SHAP values are the effects of its
+    features given its fixed effects.
+
+    Args:
+        shap: the `shap` module.
+        predict: the model's prediction function.
+        background: background rows (of the features) for the explainers.
+        x: rows to explain.
+        given: the other columns of the rows of `x`.
+
+    Returns:
+        A `shap.Explanation` of every row of `x`.
+
+    """
+    columns = list(x.columns)
+    parts = []
+    for position in range(len(x)):
+        held = given.iloc[position]
+
+        def predicted(values: Any, held: pd.Series = held) -> Any:
+            frame = pd.DataFrame(np.asarray(values), columns = columns)
+            for column, value in held.items():
+                frame[column] = value
+            return predict(frame)
+
+        explainer = shap.Explainer(predicted, background)
+        parts.append(explainer(x.iloc[[position]]))
+    return shap.Explanation(
+        values = np.concatenate([np.asarray(p.values) for p in parts]),
+        base_values = np.concatenate([np.asarray(p.base_values) for p in parts]),
+        data = x.to_numpy(),
+        feature_names = columns)
+
+
+def _prediction(model: Any, task: str | None) -> Any:
+    """Returns the model's prediction function: probabilities, if it classifies."""
+    if task == 'classify' and hasattr(model, 'predict_proba'):
+        return model.predict_proba
+    return model.predict
 
 
 def _worst_first(score: float | None) -> float:

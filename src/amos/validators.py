@@ -41,7 +41,7 @@ import chrisjen
 import numpy as np
 import pandas as pd
 
-from . import base, evaluators, utilities
+from . import base, evaluators, samplers, utilities
 from . import metrics as metrics_
 
 
@@ -114,6 +114,7 @@ class Validator(base.Operation, abc.ABC):
         if order is not None:
             rows = item.data.loc[rows].sort_values(order, kind = 'stable').index
         x = item.data.loc[rows, _columns(model, item)]
+        features = _features(model, item)
         y = item.y.loc[rows]
         column = groups or (item.groups[0] if item.groups else None)
         if self.uses_groups and column is None:
@@ -129,7 +130,8 @@ class Validator(base.Operation, abc.ABC):
         for number, (learn, score) in enumerate(divided, start = 1):
             x_learn, y_learn = x.iloc[learn], y.iloc[learn]
             for sampler in samplers:
-                x_learn, y_learn = clone(sampler).fit_resample(x_learn, y_learn)
+                x_learn, y_learn = _resampled(
+                    clone(sampler), x_learn, y_learn, features)
             estimator = clone(model).fit(x_learn, y_learn)
             folds.append(_Fold(
                 number, len(y_learn), *_predict(estimator, x.iloc[score], item)))
@@ -436,13 +438,12 @@ def _columns(model: Any, item: base.Dataset) -> list[Any]:
         item: the dataset it was fitted to.
 
     Returns:
-        The model's features (or the dataset's features, if the model does
-            not name them), and any other columns that the model's parameters
-            name, such as the fixed effects of a `fixest` model.
+        The model's features (see `_features`), and any other columns that
+            the model's parameters name, such as the fixed effects of a
+            `fixest` model.
 
     """
-    names = utilities.feature_names(model, item.data.columns)
-    columns = list(item.features if names is None else names)
+    columns = _features(model, item)
     get_params = getattr(model, 'get_params', None)
     parameters = get_params(deep = False) if callable(get_params) else {}
     for parameter in _column_parameters():
@@ -450,6 +451,64 @@ def _columns(model: Any, item: base.Dataset) -> list[Any]:
             if name in item.data.columns and name not in columns:
                 columns.append(name)
     return columns
+
+
+def _features(model: Any, item: base.Dataset) -> list[Any]:
+    """Returns the features that the model was fitted to.
+
+    Args:
+        model: the fitted model.
+        item: the dataset it was fitted to.
+
+    Returns:
+        The model's features, or the dataset's features if the model does
+            not name them.
+
+    """
+    names = utilities.feature_names(model, item.data.columns)
+    return list(item.features if names is None else names)
+
+
+def _resampled(
+    sampler: Any,
+    x: pd.DataFrame,
+    y: pd.Series,
+    features: Sequence[Any]) -> tuple[pd.DataFrame, pd.Series]:
+    """Resamples the features of `x`, as a sampler of the analysis did.
+
+    A model can need columns besides its features, such as the fixed effects
+    of a `fixest` model, which are often text that a sampler (such as
+    `smote`) cannot resample. Only the features are resampled, and each row
+    that copies a row of `x` gets that row's other columns, as
+    `Dataset.resample` gives it that row's groups. A made-up row has none
+    of them.
+
+    Args:
+        sampler: a sampler that has not been fitted.
+        x: the rows that a copy of the model learns from.
+        y: their labels.
+        features: the model's features.
+
+    Returns:
+        The resampled rows (with every column of `x`) and labels.
+
+    """
+    others = [c for c in x.columns if c not in set(features)]
+    kept = x if not others else x[list(features)]
+    x_new, y_new = sampler.fit_resample(kept, y)
+    if not others:
+        return x_new, y_new
+    origins = getattr(sampler, 'sample_indices_', None)
+    if origins is None:
+        origins = samplers._leading_copies(kept, x_new)
+    positions = np.asarray(origins)
+    copied = positions >= 0
+    x_new = x_new.copy()
+    for column in others:
+        values = pd.Series(pd.NA, index = x_new.index, dtype = x[column].dtype)
+        values[copied] = x[column].to_numpy()[positions[copied]]
+        x_new[column] = values
+    return x_new[list(x.columns)], y_new
 
 
 def _column_parameters() -> set[str]:

@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* A validator resamples only the model's features when it applies the
+  analysis's samplers to each fold, and gives each copied row the other
+  columns that the model needs (such as the fixed effects and cluster of a
+  `fixest` model) from the row it copies, as a sampler does for the groups.
+  Before, `smote` and the other samplers that interpolate numbers failed in
+  a validator of a `fixest` model whose fixed effects were text.
+* `shap_importance` (and the SHAP plots, which use it) explains a model that
+  needs columns besides its features, such as a `fixest` model, by
+  explaining each row with those columns held at its own values, so its
+  SHAP values are the effects of its features given its fixed effects.
+  Before, it failed because the explained rows had no fixed effects.
+* `feature_importance` (and `importance_plot`) leaves out the features that
+  a model dropped, such as the collinear features that pyfixest drops,
+  rather than failing because there were fewer coefficients than features.
+
 ## 0.4.1
 
 * `regression_table` takes "sets" of features (such as the dummy variables
