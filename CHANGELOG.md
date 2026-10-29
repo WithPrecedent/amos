@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.5.2
 
 * Added named pipelines (the new `pipelines` module and `Pipeline` class).
   `pipeline = classification` in the "general" section (or the project's
