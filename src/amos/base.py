@@ -600,7 +600,8 @@ class Branch:
     model and features), which the experiment keeps in its `results`, so that
     a `regression_table` can estimate the effects of each branch's model. The
     reference is weak: it does not keep the dataset in memory, and copies and
-    pickles of the branch do not have it.
+    pickles of the branch do not have it. An experiment that conserves memory
+    keeps only the winner's dataset, so the other branches have none.
 
     Args:
         label: the names of the nodes in the branch, joined by " > ".

@@ -1466,14 +1466,16 @@ class RegressionTable(_Published, Evaluator):
         if not kept:
             warnings.warn(
                 'the datasets of the branches are no longer in memory, so '
-                'the regression table has only the final model',
+                'the regression table has only the final model (an '
+                'experiment keeps them only if "conserve_memory" is false)',
                 stacklevel = 3)
             return {_model_name(item): item}
         if len(kept) < len(item.branches):
             lost = [b.label for b in item.branches if b not in kept]
             warnings.warn(
                 f'the datasets of some branches are no longer in memory, so '
-                f'they are not in the regression table: {lost}',
+                f'they are not in the regression table (an experiment keeps '
+                f'them only if "conserve_memory" is false): {lost}',
                 stacklevel = 3)
         names = _unique(_branch_names(kept))
         return {

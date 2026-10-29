@@ -41,6 +41,14 @@ class Experiment(chrisjen.Contest):
     metric (not the negated value used to rank metrics for which lower is
     better).
 
+    The whole dataset of every combination is kept in `results`, so that a
+    `regression_table` can estimate the effects of each one's model. If
+    `conserve_memory` is true (in the worker's section of the settings, or in
+    the "general" section for every worker), only the best dataset so far is
+    kept while the combinations are tried, so no more than two are in memory
+    at once. The comparison table and the branches are the same, but only
+    the winner's branch has its whole `dataset`.
+
     Args:
         name: name used to refer to the worker in a workflow.
         contents: the graph of nodes. Defaults to an empty `dict`.
@@ -48,17 +56,24 @@ class Experiment(chrisjen.Contest):
             empty `dict`.
         criteria: the criteria used to score each result. Higher scores are
             better. Defaults to `None`.
+        conserve_memory: whether to keep only the winner's whole dataset in
+            `results`. Defaults to `False`.
 
     Attributes:
         results: the result of each path in the most recent call, by the
-            names of the nodes in the path (joined by " > ").
+            names of the nodes in the path (joined by " > "). If
+            `conserve_memory` is true, only the winner's.
         scores: the score of each path in the most recent call.
+        outcomes: the outcome of each path that made a `Dataset` in the most
+            recent call: its label and group columns, predictions,
+            probabilities, and metrics (see `_outcome`).
         winner: label of the path with the best result in the most recent
             call.
 
     """
 
-    scores: dict[str, Any] = dataclasses.field(default_factory = dict)
+    outcomes: dict[str, base.Dataset] = dataclasses.field(
+        default_factory = dict)
 
     """ Public Methods """
 
@@ -76,27 +91,16 @@ class Experiment(chrisjen.Contest):
             The best result. Ties go to the first path.
 
         """
-        results = self.try_paths(item, **kwargs)
-        self.scores = dict(zip(
-            results, self.compare(list(results.values())), strict = True))
-        criteria = self.criteria
-        if isinstance(criteria, metrics.Metric):
-            # Stores the real value of the metric, which is negated in the
-            # score if lower values are better.
-            sign = 1 if criteria.greater_is_better else -1
-            for label, result in results.items():
-                if isinstance(result, base.Dataset):
-                    result.metrics[criteria.name] = sign * self.scores[label]
-        self.winner = max(self.scores, key = self.scores.__getitem__)
-        best = results[self.winner]
+        self.outcomes = {}
+        best = super().apply(item, **kwargs)
         if isinstance(best, base.Dataset):
-            best.branches = self._branches(results)
+            best.branches = self._branches()
             best.tables[f'{self.name}_comparison'] = self.tabulate()
             best.record(
                 str(self.name),
                 winner = self.winner,
                 criterion = getattr(self.criteria, 'name', None),
-                paths = len(results))
+                paths = len(self.scores))
         return best
 
     def tabulate(self) -> pd.DataFrame:
@@ -110,8 +114,8 @@ class Experiment(chrisjen.Contest):
         """
         rows = {}
         for label, score in self.scores.items():
-            result = self.results[label]
-            values = dict(getattr(result, 'metrics', {}))
+            outcome = self.outcomes.get(label)
+            values = {} if outcome is None else dict(outcome.metrics)
             rows[label] = {'score': score, **values}
         table = pd.DataFrame.from_dict(rows, orient = 'index')
         table.index.name = 'path'
@@ -121,11 +125,8 @@ class Experiment(chrisjen.Contest):
 
     """ Private Methods """
 
-    def _branches(self, results: dict[str, Any]) -> list[base.Branch]:
+    def _branches(self) -> list[base.Branch]:
         """Returns a record of every path that made a `Dataset`.
-
-        Args:
-            results: the result of each path, by its label.
 
         Returns:
             A `Branch` for each path, in the order of the paths.
@@ -137,20 +138,43 @@ class Experiment(chrisjen.Contest):
         branches = []
         for path in paths:
             label = ' > '.join(str(getattr(n, 'name', n)) for n in path)
-            result = results.get(label)
-            if not isinstance(result, base.Dataset):
+            outcome = self.outcomes.get(label)
+            if outcome is None:
                 continue
             steps = {
                 columns[position]: _technique_of(node)
                 for position, node in enumerate(path) if position in columns}
+            # Only the datasets that were kept (every one, unless memory is
+            # conserved) can be found again through the branch.
+            dataset = self.results.get(label)
             branches.append(base.Branch(
                 label = label,
                 steps = steps,
-                result = _outcome(result),
+                result = outcome,
                 score = self.scores.get(label),
                 criterion = criterion,
-                source = weakref.ref(result)))
+                source = None if dataset is None else weakref.ref(dataset)))
         return branches
+
+    def _observe(self, label: str, result: Any) -> None:
+        """Keeps the outcome of each path before its dataset may be dropped.
+
+        If the criteria is a `Metric`, its real value is first stored in the
+        metrics of `result` (it is negated in the score if lower values are
+        better).
+
+        Args:
+            label: the label of the path.
+            result: the result of the path.
+
+        """
+        if not isinstance(result, base.Dataset):
+            return
+        criteria = self.criteria
+        if isinstance(criteria, metrics.Metric):
+            sign = 1 if criteria.greater_is_better else -1
+            result.metrics[criteria.name] = sign * self.scores[label]
+        self.outcomes[label] = _outcome(result)
 
 
 """ Private Functions """

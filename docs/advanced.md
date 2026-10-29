@@ -71,6 +71,7 @@ describes the "general" section in detail.
 | | `seed` | Seed for every random process (passed as `random_state`). |
 | | `groups` | Columns that identify groups of rows (see "Groups and fairness" below). |
 | | `use_gpu` | Whether to fit the models that can use a GPU (`xgboost`, `catboost`, `lightgbm`, and `tabpfn`) on an NVIDIA GPU. Defaults to false (see "Fitting models on a GPU" below). |
+| | `conserve_memory` | Whether every experiment keeps only the best combination's whole dataset, rather than every combination's, while it tries them. A worker's own `conserve_memory` setting wins. Defaults to false (see "Experiments" below). |
 | `files` | `root_folder` | Folder for the project's files. Defaults to the current folder. |
 | | `input_folder` | Folder (in the root folder) where data files named by a relative path are looked for, and where loaders save downloads. |
 | | `output_folder` | Folder (in the root folder) in which `export` makes a folder for each run. |
@@ -1405,6 +1406,35 @@ a metric for which lower is better (such as `log_loss`). It is negated to rank
 the combinations, but the table shows its real value. The winning dataset also
 keeps a `Branch` for every combination in its `branches`: the technique used at
 each step, its score, and its predictions, which is what a scorecard compares.
+
+Keeping every combination's whole dataset (its features and fitted model) lets
+a `regression_table` show each combination's model, but with many
+combinations, or a large dataset, they may not all fit in memory. If
+`conserve_memory` is true, an experiment keeps only the best dataset so far
+while it tries the combinations, so no more than two are in memory at once.
+Set it for one experiment in its section of the settings, or for every
+experiment (and `contest` or `survey`) in the "general" section:
+
+```ini
+[general]
+conserve_memory = true
+```
+
+The comparison table, the scores, and the branches are the same, but only the
+winner's dataset is in `results`, so a `regression_table` has only the
+winner's model:
+
+```python
+lean = amos.Experiment(
+    name = "models", criteria = amos.metrics.F1(), conserve_memory = True)
+lean.populate([
+    [amos.transformers.Standard(), amos.transformers.Robust()],
+    [amos.models.Baseline(), amos.models.Logit()],
+])
+winner = lean.apply(dataset)
+print(list(lean.results) == [lean.winner], len(winner.branches))
+# True 4
+```
 
 ## Cross-validation
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 
+import pandas as pd
 import pytest
 
 import amos
@@ -64,6 +65,64 @@ def test_experiment_includes_metrics_from_each_path(
     table = result.tables['analyst_comparison']
     assert {'f1', 'roc_auc', 'log_loss'} <= set(table.columns)
     assert len(table) == 2
+
+
+def test_experiment_that_conserves_memory_keeps_only_the_winner(
+    classified: amos.Dataset) -> None:
+    def run(conserve_memory: bool) -> tuple[amos.Experiment, amos.Dataset]:
+        experiment = amos.Experiment(
+            name = 'analyst',
+            criteria = amos.metrics.LogLoss(),
+            conserve_memory = conserve_memory)
+        experiment.populate([
+            [amos.models.Baseline(name = 'baseline'),
+             amos.models.Logit(name = 'logit')],
+            amos.evaluators.Scorecard(name = 'scorecard')])
+        return experiment, experiment.apply(classified)
+
+    keeping, kept = run(conserve_memory = False)
+    conserving, result = run(conserve_memory = True)
+    assert conserving.winner == keeping.winner == 'logit > scorecard'
+    assert list(conserving.results) == ['logit > scorecard']
+    assert conserving.results['logit > scorecard'] is result
+    assert conserving.scores == keeping.scores
+    assert set(conserving.outcomes) == {
+        'baseline > scorecard', 'logit > scorecard'}
+    # The table and the branches are the same either way.
+    pd.testing.assert_frame_equal(
+        result.tables['analyst_comparison'], kept.tables['analyst_comparison'])
+    assert result.history[-1]['paths'] == 2
+    branches = {
+        branch.steps['model']: branch for branch in result.branches}
+    assert branches['baseline'].result.predictions is not None
+    assert branches['baseline'].result.metrics['log_loss'] > 0
+    # Only the winner's whole dataset can be found through its branch.
+    assert branches['logit'].dataset is result
+    assert branches['baseline'].dataset is None
+
+
+def test_conserve_memory_in_the_general_section_reaches_experiments() -> None:
+    settings = {
+        'general': {'label': 'target', 'conserve_memory': True},
+        'study_project': {'study_workers': 'analyst, keeper'},
+        'analyst': {
+            'design': 'experiment',
+            'criterion': 'accuracy',
+            'model_techniques': 'logit, baseline'},
+        'keeper': {
+            'design': 'experiment',
+            'criterion': 'accuracy',
+            'conserve_memory': False,
+            'model_techniques': 'logit, baseline'}}
+    idea = chrisjen.Idea.create(settings)
+
+    class Holder:
+        pass
+
+    holder = Holder()
+    holder.idea = idea  # type: ignore[attr-defined]
+    assert amos.Experiment.build('analyst', holder).conserve_memory
+    assert not amos.Experiment.build('keeper', holder).conserve_memory
 
 
 def test_experiment_works_with_any_criteria_and_item() -> None:

@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* Added a `conserve_memory` setting (from `chrisjen`'s new option for
+  comparing workers), for an experiment's section or for every experiment in
+  the "general" section. An experiment that conserves memory scores each
+  combination as soon as it is tried and keeps only the best whole dataset
+  so far, rather than every combination's dataset until the last one is
+  done, which ran out of memory with many combinations of a large dataset.
+  Its comparison table, scores, and branches are the same, but only the
+  winner's branch has its whole `dataset`, so a `regression_table` has only
+  the winner's model. `Experiment.outcomes` has the outcome of each
+  combination (its label and group columns, predictions, probabilities, and
+  metrics). Requires `chrisjen` 0.4.0 or later.
+
 ## 0.5.0
 
 * A validator resamples only the model's features when it applies the

@@ -197,8 +197,9 @@ Every setting in it is optional.
 | `seed` | A whole number | None | Seed for every random process, which makes the results reproducible. |
 | `groups` | A column name, or a list of them | None | Columns that identify groups of rows, which are not used as features. |
 | `use_gpu` | true or false | false | Whether to fit the models that can use a GPU on an NVIDIA GPU. |
+| `conserve_memory` | true or false | false | Whether every experiment keeps only the best combination's whole dataset while it tries them. |
 
-The settings are given to the `Dataset` that the project makes from your
+The settings (except `conserve_memory`, which is for the workers) are given to the `Dataset` that the project makes from your
 data:
 
 * If you pass data (such as a `DataFrame` or the path to a data file), the
@@ -387,3 +388,30 @@ technique runs on the CPU either way. It must be true or false, or an error
 is raised. See [Fitting models on a GPU](advanced.md#fitting-models-on-a-gpu)
 for the details, including how to keep one model on the CPU and which GPUs
 need older packages.
+
+### conserve_memory
+
+Whether every `experiment` (and `contest` or `survey`) keeps only what it
+still needs while it tries its combinations of techniques. An experiment
+normally keeps every combination's whole dataset, with its features and
+fitted model, until the last one is done, so that a `regression_table` can
+show every combination's model. With many combinations or a large dataset,
+that may not fit in memory. If it is true, an experiment keeps only the best
+dataset so far, so no more than two are in memory at once; its comparison
+table, scores, and branches (and so the scorecard) are the same, but a
+`regression_table` has only the winner's model.
+
+```ini
+[general]
+label = target
+conserve_memory = true
+```
+
+A worker's own setting wins over the general one, so one experiment can keep
+every dataset while the others conserve memory:
+
+```ini
+[analyst]
+design = experiment
+conserve_memory = false
+```
