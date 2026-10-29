@@ -130,6 +130,22 @@ def make_regression(rows: int = 200, seed: int = 7) -> pd.DataFrame:
     return data
 
 
+def make_fixest_courts(rows: int = 240) -> amos.Dataset:
+    """Returns a binary dataset with a court group, fitted by a fixest logit.
+
+    "twice" is twice "x0", so pyfixest drops one of them as collinear.
+    """
+    requires('pyfixest')
+    data = make_numeric(rows = rows)
+    data['twice'] = 2 * data[data.columns[0]]
+    data['court'] = np.repeat(list('abcdef'), rows // 6)
+    dataset = amos.Dataset(
+        data, label = 'target', seed = SEED, groups = ['court'])
+    amos.splitters.Stratified().apply(dataset)
+    amos.models.Fixest().apply(dataset, fixed_effects = 'court')
+    return dataset
+
+
 @pytest.fixture
 def mixed() -> amos.Dataset:
     """A dataset with every kind of column and a text label."""

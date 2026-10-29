@@ -37,6 +37,31 @@ All notable changes to this project will be documented in this file.
   rows. Validators then had no real rows to cross-validate, and choosers
   profiled none. Each row they keep that equals an original row is now
   real.
+* Fixed `fixest` predicting missing values (and so a `scorecard` failing
+  with "Input contains NaN") for rows whose level of a fixed effect has no
+  estimate: a level that was not in the training rows, or one that
+  pyfixest dropped (a singleton, or a level separated by having rows of
+  only one class). Such a row is now predicted with that fixed effect at
+  the average of its estimated levels. The estimates of the levels are in
+  the model's `effect_levels_`. A `fixest` model can therefore be
+  validated by `group_k_fold` (each held-out group is predicted with the
+  average fixed effect), which used to fail with "could not predict".
+* Fixed `permutation_importance`, `shap_partial_dependence`, and
+  `decision_regions` failing for a model that needs columns besides its
+  features, such as the fixed effects and cluster of a `fixest` model.
+  `permutation_importance` and `shap_partial_dependence` hold those columns
+  at each row's own values (as `shap_importance` does), and
+  `decision_regions` holds them at their most common values in the real
+  training rows (as it holds the other features at their medians).
+  `permutation_importance` also works for models that are not scikit-learn
+  estimators, which scikit-learn's scorers rejected.
+* Fixed the report of a project saying that an experiment that conserves
+  memory chose "the best of 1 paths". It now gives the number of paths
+  compared.
+* Inferers (such as `dr_learner` and `partially_linear`) now leave out the
+  rows that a sampler (such as `random_over` or `smote`) added to the
+  training rows, which counted some rows more than once and biased the
+  estimates and their standard errors. The data is put back afterwards.
 
 ## 0.5.1
 

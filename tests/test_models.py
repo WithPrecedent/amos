@@ -340,6 +340,61 @@ def test_fixest_matches_pyfixest() -> None:
         expected.loc['x', 'Std. Error'])
 
 
+def _separated_courts(rows: int = 300) -> pd.DataFrame:
+    """Returns a binary label in which every row of court "f" is 0."""
+    rng = np.random.default_rng(5)
+    x = rng.normal(size = rows)
+    court = np.repeat(list('abcdef'), rows // 6)
+    target = (x + rng.normal(size = rows) > 0).astype(int)
+    target[court == 'f'] = 0
+    return pd.DataFrame({'x': x, 'court': court, 'target': target})
+
+
+def test_fixest_predicts_levels_without_an_estimate_at_the_mean() -> None:
+    requires('pyfixest')
+    data = _separated_courts()
+    model = models.FixedEffects(fixed_effects = 'court', family = 'logit')
+    model.fit(data[['x', 'court']], data['target'])
+    # pyfixest drops court "f" (separation) and never saw court "z".
+    new = pd.DataFrame({'x': [0.5, 0.5, 0.5], 'court': ['a', 'f', 'z']})
+    probabilities = model.predict_proba(new)
+    assert np.isfinite(probabilities).all()
+    np.testing.assert_allclose(probabilities.sum(axis = 1), 1.0)
+    levels = model.effect_levels_[0]
+    assert set(levels) == set('abcde')
+    slope = model.coef_[0]
+    average = np.mean(list(levels.values()))
+    np.testing.assert_allclose(
+        probabilities[:, 1],
+        1 / (1 + np.exp(-(0.5 * slope + np.array(
+            [levels['a'], average, average])))))
+    assert set(model.predict(new)) <= {0, 1}
+
+
+def test_fixest_with_a_separated_level_can_be_scored() -> None:
+    requires('pyfixest')
+    dataset = amos.Dataset(
+        _separated_courts(), label = 'target', seed = SEED,
+        groups = ['court'])
+    amos.splitters.Stratified().apply(dataset)
+    models.Fixest().apply(dataset, fixed_effects = 'court')
+    assert dataset.probabilities.notna().all().all()
+    amos.evaluators.Scorecard().apply(
+        dataset, metrics = ['accuracy', 'roc_auc', 'log_loss'])
+    assert 0.5 < dataset.metrics['roc_auc'] <= 1
+
+
+def test_fixest_poisson_predicts_unseen_levels() -> None:
+    requires('pyfixest')
+    data = _separated_courts()
+    model = models.FixedEffects(fixed_effects = 'court', family = 'poisson')
+    model.fit(data[['x', 'court']], data['target'])
+    predicted = model.predict(
+        pd.DataFrame({'x': [0.0, 0.0], 'court': ['a', 'z']}))
+    assert np.isfinite(predicted).all()
+    assert (predicted > 0).all()
+
+
 def test_fixest_logit_for_classification(classified: amos.Dataset) -> None:
     requires('pyfixest')
     models.Fixest().apply(classified)

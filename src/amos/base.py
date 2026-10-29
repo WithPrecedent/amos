@@ -79,8 +79,8 @@ class Dataset:
             which means that the data has not been split.
         synthetic: index labels of the training rows that a sampler made up
             (synthetic rows and extra copies of a row), which are not real
-            observations. Validators do not score a model on them. Defaults
-            to an empty `Index`.
+            observations. Validators do not score a model on them, and
+            inferers leave them out. Defaults to an empty `Index`.
         model: the fitted model. Defaults to `None`.
         predictions: the model's predictions for the test rows (or for every
             row, if the data has not been split). Defaults to `None`.

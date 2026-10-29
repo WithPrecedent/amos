@@ -20,7 +20,12 @@ causalml, so the `causal` extra installs causalml before Python 3.13 and
 DoWhy after.
 
 Unlike a model, an inferer uses every row (it does not need a split) and
-makes no predictions. The effect of a treatment is a table in the dataset's
+makes no predictions. It uses only real rows, though: the rows that a
+sampler (such as `random_over` or `smote`) added to the training rows, which
+are copies of rows or made up, are left out, since they would count some
+rows more than once and change the estimates and their standard errors. A
+row that a sampler removed (such as with `random_under`) is not brought
+back. The effect of a treatment is a table in the dataset's
 `tables` under the technique's name, with a row for each effect (of each
 treatment, group, quantile, or level) and its estimate ("coefficient"),
 standard error, test statistic, p-value, and 95% confidence interval.
@@ -73,7 +78,7 @@ import io
 import logging
 import sys
 import warnings
-from collections.abc import Generator, Hashable, Sequence
+from collections.abc import Callable, Generator, Hashable, Sequence
 from typing import Any, ClassVar
 
 import chrisjen
@@ -134,6 +139,10 @@ class Inferer(base.Operation, abc.ABC):
     first fitted to a few rows on the GPU, and if that fails, it warns and
     the inferer fits it on the CPU.
 
+    An inferer uses only the real rows: while it is applied, the rows that a
+    sampler added to the training rows (the dataset's `synthetic` rows) are
+    left out of the data, and the data is then restored.
+
     The techniques of each package are a genre within this one: `Doubleml`,
     `Dowhy`, `Causalml`, and `Tigramite`, which write `apply`. To add a
     technique of one of those packages, subclass its genre; to add one of
@@ -149,6 +158,29 @@ class Inferer(base.Operation, abc.ABC):
             `dict`.
 
     """
+
+    """ Private Methods """
+
+    def _call_apply(
+        self,
+        method: Callable[..., Any],
+        item: Any,
+        /,
+        **kwargs: Any) -> base.Dataset:
+        """Calls `apply` with the rows that a sampler added left out.
+
+        Args:
+            method: the `apply` method, before it was wrapped.
+            item: a `Dataset` or anything that `Dataset.create` accepts.
+            **kwargs: parameters that take precedence over `parameters`.
+
+        Returns:
+            The changed `Dataset`, with all of its rows.
+
+        """
+        dataset = base.Dataset.create(item)
+        with _real_rows(dataset):
+            return super()._call_apply(method, dataset, **kwargs)
 
 
 @dataclasses.dataclass(frozen = True)
@@ -2791,6 +2823,34 @@ def _require_values(values: pd.Series, count: int, technique: str) -> None:
             f'but it has {found}'
         )
         raise ValueError(message)
+
+
+@contextlib.contextmanager
+def _real_rows(item: base.Dataset) -> Generator[None, None, None]:
+    """Leaves the rows that a sampler added out of the data in the context.
+
+    A sampler such as `random_over` or `smote` adds copies of training rows
+    or made-up rows (the dataset's `synthetic` rows) so that a model learns
+    as much from each class. An inferer that used them would count some
+    rows more than once, which changes its estimates and makes its standard
+    errors too small.
+
+    Args:
+        item: the dataset. Its `data` is put back as it was afterwards.
+
+    Yields:
+        None: control, to the code in the context.
+
+    """
+    if not len(item.synthetic):
+        yield
+        return
+    data = item.data
+    item.data = data.drop(index = item.synthetic)
+    try:
+        yield
+    finally:
+        item.data = data
 
 
 @contextlib.contextmanager

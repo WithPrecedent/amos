@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from conftest import SEED, make_mixed, make_numeric, requires
+from conftest import (
+    SEED, make_fixest_courts, make_mixed, make_numeric, requires)
 
 import amos
 from amos import evaluators
@@ -245,25 +246,9 @@ def test_evaluators_name_the_columns_that_lightgbm_renamed() -> None:
     assert list(effects.estimates.loc['lightgbm'].index) == dataset.features
 
 
-def _fixest_courts(rows: int = 240) -> amos.Dataset:
-    """Returns a binary dataset with a court group, fitted by a fixest logit.
-
-    "twice" is twice "x", so pyfixest drops one of them as collinear.
-    """
-    requires('pyfixest')
-    data = make_numeric(rows = rows)
-    data['twice'] = 2 * data[data.columns[0]]
-    data['court'] = np.repeat(list('abcdef'), rows // 6)
-    dataset = amos.Dataset(
-        data, label = 'target', seed = SEED, groups = ['court'])
-    amos.splitters.Stratified().apply(dataset)
-    amos.models.Fixest().apply(dataset, fixed_effects = 'court')
-    return dataset
-
-
 def test_shap_importance_explains_fixest_given_its_fixed_effects() -> None:
     requires('shap')
-    dataset = _fixest_courts()
+    dataset = make_fixest_courts()
     table = evaluators.ShapImportance().evaluate(
         dataset, rows = 12, background = 20)
     # Each row is explained with its own court's fixed effect, so every
@@ -274,8 +259,21 @@ def test_shap_importance_explains_fixest_given_its_fixed_effects() -> None:
     assert np.isfinite(np.asarray(explanation.values)).all()
 
 
+def test_permutation_importance_of_fixest_keeps_its_fixed_effects() -> None:
+    dataset = make_fixest_courts()
+    table = evaluators.PermutationImportance().evaluate(
+        dataset, n_repeats = 3)
+    # Only the features are shuffled: each row keeps its own court.
+    assert set(table.index) == set(dataset.features)
+    assert np.isfinite(table['importance']).all()
+    assert table['importance'].max() > 0
+    table = evaluators.PermutationImportance().evaluate(
+        dataset, n_repeats = 2, scoring = 'roc_auc')
+    assert np.isfinite(table['importance']).all()
+
+
 def test_feature_importance_of_fixest_leaves_out_dropped_coefficients() -> None:
-    dataset = _fixest_courts()
+    dataset = make_fixest_courts()
     kept = list(dataset.model.coefficients().dropna(subset = ['coefficient']).index)
     table = evaluators.FeatureImportance().evaluate(dataset)
     # pyfixest drops collinear features, which then have no importance.

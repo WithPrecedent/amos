@@ -1050,7 +1050,9 @@ class PermutationImportance(Evaluator):
 
     This works for any model. By default, the score is accuracy (for
     classification) or R squared (for regression), and each feature is
-    shuffled 10 times.
+    shuffled 10 times. Columns that the model needs besides its features
+    (such as the fixed effects and cluster of a `fixest` model) are not
+    shuffled: each row keeps its own values of them.
 
     Wraps:
         [`sklearn.inspection.permutation_importance`](https://scikit-learn.org/stable/modules/generated/sklearn.inspection.permutation_importance.html)
@@ -1083,8 +1085,12 @@ class PermutationImportance(Evaluator):
         y = item.y.loc[x.index]
         if scoring is None:
             scoring = 'accuracy' if item.task == 'classify' else 'r2'
+        model = _model(item)
+        others = _other_columns(model, item)
+        if others or not hasattr(model, '__sklearn_tags__'):
+            model = _GivenColumns(model, item.data.loc[x.index, others], item.task)
         result = inspection.permutation_importance(
-            _model(item),
+            model,
             x,
             y,
             n_repeats = n_repeats,
@@ -2287,16 +2293,12 @@ class ShapImportance(Evaluator):
             One row for each feature, with an "importance" column.
 
         """
-        # The validators module imports this one, so it is imported when used.
-        from . import validators  # noqa: PLC0415
         shap = utilities.import_tool('shap')
         model = _model(item)
         # Columns that the model needs besides its features, such as the
         # fixed effects of a `fixest` model, are held at each row's own
         # values while its features are explained.
-        others = [
-            c for c in validators._columns(model, item)
-            if c not in set(validators._features(model, item))]
+        others = _other_columns(model, item)
         if isinstance(model, models.LabelCoded):
             model = model.estimator
         train = item.x_train
@@ -2411,6 +2413,145 @@ def _prediction(model: Any, task: str | None) -> Any:
     if task == 'classify' and hasattr(model, 'predict_proba'):
         return model.predict_proba
     return model.predict
+
+
+@dataclasses.dataclass
+class _GivenColumns:
+    """Predicts from features alone, with the model's other columns given.
+
+    scikit-learn's `permutation_importance` passes the model only the
+    features of the rows it scores (with one of them shuffled), in the same
+    order each time. This adds the other columns that the model needs (such
+    as the fixed effects of a `fixest` model) of those rows, by position. It
+    also has the tags of a scikit-learn classifier or regressor, which its
+    scorers need and which models that are not scikit-learn estimators
+    (such as `FixedEffects`) lack.
+
+    Args:
+        model: the fitted model.
+        given: the other columns of the rows that are scored, in order.
+        task: "classify" or "regress".
+
+    """
+
+    model: Any
+    given: pd.DataFrame
+    task: str | None
+
+    """ Properties """
+
+    @property
+    def classes_(self) -> Any:
+        """Returns the model's classes."""
+        return self.model.classes_
+
+    @property
+    def _estimator_type(self) -> str:
+        """Returns the kind of estimator, for scikit-learn before 1.6."""
+        return 'classifier' if self.task == 'classify' else 'regressor'
+
+    """ Public Methods """
+
+    def fit(self, x: Any, y: Any) -> _GivenColumns:  # noqa: ARG002
+        """Does nothing, since the model is fitted.
+
+        scikit-learn's scorers check that an estimator has `fit`.
+
+        Args:
+            x: not used.
+            y: not used.
+
+        Returns:
+            This wrapper.
+
+        """
+        return self
+
+    def predict(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the model's predictions.
+
+        Args:
+            x: the features of the rows of `given`, in order.
+
+        Returns:
+            The predictions.
+
+        """
+        return np.asarray(self.model.predict(_with_given(x, self.given)))
+
+    def predict_proba(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the model's predicted probability of each class.
+
+        Args:
+            x: the features of the rows of `given`, in order.
+
+        Returns:
+            One column for each class.
+
+        """
+        return np.asarray(
+            self.model.predict_proba(_with_given(x, self.given)))
+
+    """ Dunder Methods """
+
+    def __sklearn_tags__(self) -> Any:
+        """Returns scikit-learn's tags for a classifier or regressor.
+
+        Returns:
+            The tags (scikit-learn 1.6 and later).
+
+        """
+        utils = importlib.import_module('sklearn.utils')
+        classify = self.task == 'classify'
+        return utils.Tags(
+            estimator_type = self._estimator_type,
+            target_tags = utils.TargetTags(required = True),
+            classifier_tags = utils.ClassifierTags() if classify else None,
+            regressor_tags = None if classify else utils.RegressorTags())
+
+
+def _other_columns(model: Any, item: base.Dataset) -> list[Any]:
+    """Returns the columns that the model needs besides its features.
+
+    Args:
+        model: the fitted model.
+        item: the dataset it was fitted to.
+
+    Returns:
+        The columns that the model's parameters name, such as the fixed
+            effects and cluster of a `fixest` model (see
+            `validators._columns`), or an empty `list`.
+
+    """
+    # The validators module imports this one, so it is imported when used.
+    from . import validators  # noqa: PLC0415
+    features = set(validators._features(model, item))
+    return [c for c in validators._columns(model, item) if c not in features]
+
+
+def _with_given(x: Any, given: pd.DataFrame) -> pd.DataFrame:
+    """Returns the features `x` with the columns of `given`, by position.
+
+    Args:
+        x: features of the rows of `given`, in the same order.
+        given: other columns of the same rows.
+
+    Raises:
+        ValueError: if `x` and `given` do not have the same number of rows.
+
+    Returns:
+        `x` with the columns of `given`.
+
+    """
+    frame = pd.DataFrame(x).copy()
+    if len(frame) != len(given):
+        message = (
+            f'{len(frame)} rows cannot be given the other columns of '
+            f'{len(given)} rows')
+        raise ValueError(message)
+    for column in given.columns:
+        frame[column] = given[column].to_numpy()
+    return frame
 
 
 def _worst_first(score: float | None) -> float:

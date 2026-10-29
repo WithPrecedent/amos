@@ -557,7 +557,10 @@ class DecisionRegions(Plot):
     that the model predicts at each point, with the test rows (or every row,
     if the data is not split) drawn over it as points of their classes. The
     other features are held at their medians in the training rows, so the
-    regions are a slice of what the model does.
+    regions are a slice of what the model does. Columns that the model needs
+    besides its features (such as the fixed effects and cluster of a
+    `fixest` model) are held at their most common values in the real
+    training rows.
 
     Wraps:
         [`mlxtend.plotting.plot_decision_regions`](https://rasbt.github.io/mlxtend/user_guide/plotting/plot_decision_regions/)
@@ -608,6 +611,12 @@ class DecisionRegions(Plot):
             names.index(n): float(m)
             for n, m in item.x_train[names].astype(float).median().items()
             if n not in chosen}
+        others = evaluators._other_columns(model, item)
+        training = item._train_rows()
+        real = training[~training.isin(item.synthetic)]
+        given = {
+            c: values.iloc[0]
+            for c, values in item.data.loc[real, others].mode().items()}
         cycle = matplotlib.rcParams['axes.prop_cycle'].by_key()['color']
         axes = figure.subplots()
         # mlxtend sizes its grid of points by pyplot's current figure.
@@ -615,7 +624,7 @@ class DecisionRegions(Plot):
             plotting.plot_decision_regions(
                 x.to_numpy(dtype = float),
                 y.to_numpy(dtype = int),
-                clf = _ClassPositions(model, names, classes),
+                clf = _ClassPositions(model, names, classes, given),
                 feature_index = [names.index(n) for n in chosen],
                 filler_feature_values = held or None,
                 filler_feature_ranges = dict.fromkeys(held, np.inf) or None,
@@ -1842,6 +1851,9 @@ class ShapPartialDependence(Plot):
     the outputs of single rows, and the histogram is the distribution of the
     feature. The dashed lines are the average output and the feature's
     average. For a classifier, the output is the probability of `category`.
+    Columns that the model needs besides its features (such as the fixed
+    effects and cluster of a `fixest` model) are held at each row's own
+    values.
 
     Wraps:
         [`shap.plots.partial_dependence`](https://shap.readthedocs.io/en/latest/generated/shap.plots.partial_dependence.html)
@@ -1880,11 +1892,14 @@ class ShapPartialDependence(Plot):
         """
         explanation = _explanation(item, category, rows, background)
         feature = _feature(explanation, feature)
-        x = item.data.loc[_explained_rows(item, explanation), item.features]
+        explained = _explained_rows(item, explanation)
+        x = item.data.loc[explained, item.features]
+        others = evaluators._other_columns(_model(item), item)
+        given = item.data.loc[explained, others] if others else None
         with _pyplot(figure, item.seed) as shap:
             shap.plots.partial_dependence(
                 feature,
-                _predictor(item, category),
+                _predictor(item, category, given = given),
                 x,
                 ice = True,
                 model_expected_value = True,
@@ -2567,18 +2582,23 @@ class _ClassPositions:
 
     mlxtend's `plot_decision_regions` passes the model an array (without the
     names of the features) and needs classes numbered 0 to n - 1. This gives
-    the model its features by name and numbers its predictions.
+    the model its features by name, and any other columns it needs, and
+    numbers its predictions.
 
     Args:
         model: the fitted classifier.
         columns: the names of the model's features, in its order.
         classes: the classes, in the order of their numbers.
+        given: the value of each other column that the model needs (such as
+            the fixed effects of a `fixest` model), given to every row.
+            Defaults to an empty `dict`.
 
     """
 
     model: Any
     columns: list[str]
     classes: list[Any]
+    given: dict[Any, Any] = dataclasses.field(default_factory = dict)
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         """Returns the number of the class predicted for each row of `x`.
@@ -2590,8 +2610,10 @@ class _ClassPositions:
             The position in `classes` of each prediction.
 
         """
-        predictions = pd.Series(
-            np.asarray(self.model.predict(pd.DataFrame(x, columns = self.columns))))
+        frame = pd.DataFrame(x, columns = self.columns)
+        for column, value in self.given.items():
+            frame[column] = value
+        predictions = pd.Series(np.asarray(self.model.predict(frame)))
         positions = {c: i for i, c in enumerate(self.classes)}
         return predictions.map(positions).to_numpy(dtype = int)
 
@@ -3092,13 +3114,18 @@ def _model(item: base.Dataset) -> Any:
 
 def _predictor(
     item: base.Dataset,
-    category: Hashable | None) -> Callable[[pd.DataFrame], np.ndarray]:
+    category: Hashable | None,
+    *,
+    given: pd.DataFrame | None = None) -> Callable[[pd.DataFrame], np.ndarray]:
     """Returns a function of the features that returns the model's output.
 
     Args:
         item: the dataset with a fitted model.
         category: class of the label whose probability is returned (for a
             classifier), or `None` for the last class.
+        given: other columns that the model needs (such as the fixed effects
+            of a `fixest` model) of the rows that the function is given, in
+            the same order. Defaults to `None`.
 
     Returns:
         A function that takes features and returns the model's predictions
@@ -3106,11 +3133,24 @@ def _predictor(
 
     """
     model = _model(item)
+
+    def joined(x: pd.DataFrame) -> pd.DataFrame:
+        """Returns `x` with the columns of `given`, if there are any.
+
+        Args:
+            x: features of the rows of `given`, in the same order.
+
+        Returns:
+            `x`, with the columns of `given`.
+
+        """
+        return x if given is None else evaluators._with_given(x, given)
+
     if item.task != 'classify' or not hasattr(model, 'predict_proba'):
-        return lambda x: np.asarray(model.predict(x), dtype = float)
+        return lambda x: np.asarray(model.predict(joined(x)), dtype = float)
     classes = _classes(item)
     position = -1 if category is None else classes.index(category)
-    return lambda x: np.asarray(model.predict_proba(x))[:, position]
+    return lambda x: np.asarray(model.predict_proba(joined(x)))[:, position]
 
 
 def _prediction_error(item: base.Dataset, figure: Any, kind: str) -> None:

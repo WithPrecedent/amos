@@ -1274,6 +1274,14 @@ class FixedEffects:
     column, as R's fixest does. The `coefficients` method returns the
     coefficients of the features and their statistics as a table.
 
+    pyfixest cannot predict a row whose level of a fixed effect has no
+    estimate: a level that was not in the training rows, or one whose rows
+    it dropped (a singleton, or a level whose rows all have the same class,
+    which separates it in a logit or probit model). Such a row is predicted
+    with that fixed effect at the average of its estimated levels (the
+    unweighted mean), so every row with its features has a prediction and
+    metrics such as the area under the ROC curve can score every row.
+
     Wraps:
         - [`pyfixest.feols`](https://py-econometrics.github.io/pyfixest/reference/estimation.api.feols.feols.html)
           from pyfixest, for the "gaussian" family.
@@ -1295,6 +1303,8 @@ class FixedEffects:
         results: the fitted pyfixest results.
         classes_: the two classes of a "logit" or "probit" model.
         feature_names_in_: the features (not the fixed effects or cluster).
+        effect_levels_: the estimate of each level of each fixed effect, in
+            the order of `fixed_effects`, once a row has needed them.
 
     """
 
@@ -1305,6 +1315,8 @@ class FixedEffects:
     classes_: Any = dataclasses.field(
         default = None, init = False, repr = False)
     feature_names_in_: Any = dataclasses.field(
+        default = None, init = False, repr = False)
+    effect_levels_: list[dict[str, float]] | None = dataclasses.field(
         default = None, init = False, repr = False)
 
     """ Properties """
@@ -1366,6 +1378,7 @@ class FixedEffects:
                 message = f'a {self.family} model needs two classes'
                 raise ValueError(message)
             target = (target == self.classes_[1]).astype(float)
+        self.effect_levels_ = None
         data = self._frame(x)
         data['amos_y'] = target.astype(float)
         regressors = ' + '.join(self._safe_names()) or '1'
@@ -1408,8 +1421,8 @@ class FixedEffects:
     def predict(self, x: pd.DataFrame) -> np.ndarray:
         """Returns predictions (the predicted class of a two-class model).
 
-        Rows with a fixed effect level that was not in the training rows
-        cannot be predicted and are missing.
+        A row whose level of a fixed effect has no estimate is predicted with
+        that fixed effect at the average of its estimated levels.
 
         Args:
             x: features and fixed effect columns.
@@ -1426,6 +1439,9 @@ class FixedEffects:
 
     def predict_proba(self, x: pd.DataFrame) -> np.ndarray:
         """Returns the predicted probability of each class (two classes only).
+
+        A row whose level of a fixed effect has no estimate is predicted with
+        that fixed effect at the average of its estimated levels.
 
         Args:
             x: features and fixed effect columns.
@@ -1464,6 +1480,27 @@ class FixedEffects:
         effects: list[str] = camina.listify(self.fixed_effects)
         return effects
 
+    def _fallback(self, data: pd.DataFrame) -> np.ndarray:
+        """Returns the linear predictor with unestimated levels at the mean.
+
+        Args:
+            data: rows from `_frame`.
+
+        Returns:
+            The linear predictor of each row, with the fixed effect of each
+                level that has no estimate at the average of the estimated
+                levels of that fixed effect.
+
+        """
+        link = np.zeros(len(data))
+        for name, value in self.results.coef().items():
+            link += data[str(name)].to_numpy(dtype = float) * float(value)
+        for position, levels in enumerate(self._levels()):
+            average = float(np.mean(list(levels.values()))) if levels else 0.0
+            effects = data[f'amos_fe{position}'].map(levels)
+            link += effects.fillna(average).to_numpy(dtype = float)
+        return link
+
     def _frame(self, x: pd.DataFrame) -> pd.DataFrame:
         """Returns `x` with names that pyfixest's formulas accept.
 
@@ -1485,8 +1522,30 @@ class FixedEffects:
             frame['amos_cluster'] = x[self.cluster].astype(str)
         return frame
 
+    def _levels(self) -> list[dict[str, float]]:
+        """Returns the estimate of each level of each fixed effect.
+
+        Returns:
+            For each fixed effect, in the order of `fixed_effects`, the
+                estimate of each of its levels, by the level as text.
+
+        """
+        if self.effect_levels_ is None:
+            with utilities.preserved_logging():
+                estimates = self.results.fixef()
+            self.effect_levels_ = [
+                {
+                    str(level): float(value) for level, value in estimates.get(
+                        f'C(amos_fe{position})', {}).items()}
+                for position in range(len(self._effects()))]
+        return self.effect_levels_
+
     def _response(self, x: pd.DataFrame) -> np.ndarray:
         """Returns the model's predicted mean (a probability, for two classes).
+
+        A row whose level of a fixed effect has no estimate is predicted with
+        that fixed effect at the average of its estimated levels (see
+        `_fallback`).
 
         Args:
             x: features and fixed effect columns.
@@ -1497,10 +1556,19 @@ class FixedEffects:
         """
         data = self._frame(x)
         with utilities.preserved_logging():
-            if self.family == 'gaussian':
-                return np.asarray(self.results.predict(newdata = data))
-            return np.asarray(
-                self.results.predict(newdata = data, type = 'response'))
+            link = np.array(
+                self.results.predict(newdata = data, type = 'link'),
+                dtype = float)
+        missing = np.isnan(link)
+        if missing.any() and self._effects():
+            link[missing] = self._fallback(data.loc[missing])
+        if self.family in {'logit', 'probit'}:
+            special = importlib.import_module('scipy.special')
+            inverse = special.expit if self.family == 'logit' else special.ndtr
+            return np.asarray(inverse(link))
+        if self.family == 'poisson':
+            return np.asarray(np.exp(link))
+        return link
 
     def _safe_names(self) -> list[str]:
         """Returns the names of the features in pyfixest's formulas."""

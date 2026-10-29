@@ -159,7 +159,7 @@ def test_the_synthetic_rows_of_a_dataset() -> None:
     assert dataset.synthetic.isin(dataset.data.index).all()
 
 
-def test_a_model_without_new_groups_cannot_be_validated_by_group() -> None:
+def test_fixest_is_validated_by_group_with_its_average_fixed_effect() -> None:
     requires('pyfixest')
     data = make_regression(rows = 240)
     data['court'] = np.repeat(list('abcdef'), 40)
@@ -169,8 +169,10 @@ def test_a_model_without_new_groups_cannot_be_validated_by_group() -> None:
     amos.models.Fixest().apply(dataset, fixed_effects = 'court')
     amos.validators.KFold().apply(dataset)
     assert 'cv_r2' in dataset.metrics
-    with pytest.raises(ValueError, match = 'could not predict'):
-        amos.validators.GroupKFold().apply(dataset, n_splits = 3)
+    # Each fold's courts are new to its copy of the model, which predicts
+    # them with the average of the courts it learned from.
+    amos.validators.GroupKFold().apply(dataset, n_splits = 3)
+    assert np.isfinite(dataset.metrics['cv_r2'])
 
 
 @pytest.mark.parametrize('sampler', ['smote', 'random_under'])

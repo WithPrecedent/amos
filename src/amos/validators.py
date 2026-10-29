@@ -654,8 +654,8 @@ def _predict(
     if missing:
         message = (
             f'a copy of the model could not predict {missing} of the '
-            f'{len(x)} rows it was given (a model with fixed effects, for '
-            f'example, cannot predict a group that it did not learn from)'
+            f'{len(x)} rows it was given (a model may not be able to '
+            f'predict a group that it did not learn from)'
         )
         raise ValueError(message)
     probabilities = None

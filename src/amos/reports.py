@@ -54,8 +54,11 @@ class Findings(chrisjen.Report):
             lines.append(f'result: {result!r}')
         for worker in _comparators(workflow):
             if worker.winner is not None:
+                # A worker that conserves memory keeps only the winner's
+                # result, but it scores every path it compares.
+                compared = getattr(worker, 'scores', None) or worker.results
                 lines.append(
-                    f'{worker.name}: the best of {len(worker.results)} paths '
+                    f'{worker.name}: the best of {len(compared)} paths '
                     f'was {worker.winner}')
         text = '\n'.join(lines)
         self.contents = text

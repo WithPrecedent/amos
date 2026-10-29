@@ -71,6 +71,16 @@ def test_the_report_describes_the_project() -> None:
     assert 'tables: summarize, analyst_comparison, scorecard, confusion' in text
 
 
+def test_the_report_counts_every_path_when_memory_is_conserved() -> None:
+    settings = _settings()
+    settings['analyst']['conserve_memory'] = True
+    project = amos.Project.create(settings, item = make_numeric(), id = 'run')
+    workers = {node.name: node for node in project.workflow}
+    assert len(workers['analyst'].results) == 1
+    text = project.report.contents
+    assert 'analyst: the best of 4 paths was stratified_split' in text
+
+
 def test_the_report_of_a_result_that_is_not_a_dataset() -> None:
     project = chrisjen.Project.create(
         {'count_project': {'techniques': 'none'}},

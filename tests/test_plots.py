@@ -7,7 +7,7 @@ import pathlib
 
 import numpy as np
 import pytest
-from conftest import SEED, make_numeric, requires
+from conftest import SEED, make_fixest_courts, make_numeric, requires
 
 import amos
 from amos import plots
@@ -426,6 +426,22 @@ def test_decision_regions(
     plots.DecisionRegions().apply(multiclass, features = ['x0', 'x1'])
     axes = multiclass.figures['decision_regions'].axes[0]
     assert [axes.get_xlabel(), axes.get_ylabel()] == ['x0', 'x1']
+
+
+def test_decision_regions_of_fixest(tmp_path: pathlib.Path) -> None:
+    requires('mlxtend')
+    dataset = make_fixest_courts()
+    # The court of every point is the most common one in the training rows.
+    plots.DecisionRegions().apply(dataset, features = ['x0', 'x1'])
+    _check(dataset, 'decision_regions', tmp_path)
+
+
+def test_shap_partial_dependence_of_fixest(tmp_path: pathlib.Path) -> None:
+    requires('shap')
+    dataset = make_fixest_courts()
+    # Each row is drawn with its own court.
+    plots.ShapPartialDependence().apply(dataset, rows = 10, background = 10)
+    _check(dataset, 'shap_partial_dependence', tmp_path)
 
 
 def test_decision_regions_of_text_classes(tmp_path: pathlib.Path) -> None:

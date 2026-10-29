@@ -74,6 +74,25 @@ def _covers(table: pd.DataFrame, row: object, value: float) -> bool:
     return bool(table.loc[row, 'ci_lower'] < value < table.loc[row, 'ci_upper'])
 
 
+def test_inferers_leave_out_the_rows_that_a_sampler_added() -> None:
+    requires('doubleml')
+    data = _treated(rows = 300)
+    data['outcome'] = (data['outcome'] > data['outcome'].quantile(0.8)).astype(
+        int)
+    dataset = amos.Dataset(data, label = 'outcome', seed = SEED)
+    amos.splitters.Stratified().apply(dataset)
+    amos.samplers.RandomOver().apply(dataset)
+    rows, synthetic = len(dataset.data), dataset.synthetic
+    assert len(synthetic)
+    inferers.PartiallyLinear().apply(dataset, treatment = 'treated', **FAST)
+    # DoubleML saw only the real rows, and the data was put back.
+    assert dataset.fitted['partially_linear']._dml_data.n_obs == len(data)
+    assert len(dataset.data) == rows
+    assert dataset.synthetic.equals(synthetic)
+    assert np.isfinite(
+        dataset.tables['partially_linear'].loc['treated', 'coefficient'])
+
+
 def test_each_package_is_a_genre_of_inferers() -> None:
     genres = {
         'causalml': {'dr_learner', 's_learner', 't_learner', 'tmle', 'x_learner'},
