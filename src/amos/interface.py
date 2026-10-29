@@ -20,7 +20,7 @@ import nagata
 import numpy as np
 import pandas as pd
 
-from . import auto, base, evaluators, loaders, options, utilities
+from . import auto, base, evaluators, loaders, options, pipelines, utilities
 
 # Arguments of a `nagata.FileManager` that can be set in the "files" section
 # of the settings.
@@ -44,6 +44,9 @@ class Project(chrisjen.Project):
       "general" section of the settings can set the dataset's "label",
       "task", "seed", "groups", and "use_gpu" (which is `False` unless the
       settings set it to true).
+    * A "pipeline" named in the settings (such as `pipeline =
+      classification` in the "general" section) fills in the settings of the
+      analyst, critic, and artist (see the `pipelines` module).
     * A workflow with a loader (see the `loaders` module) loads its own data
       with the project's `clerk`, so it needs no item.
     * Each call to `apply` works on a copy of the item, so applying a project
@@ -121,8 +124,13 @@ class Project(chrisjen.Project):
             A `Project` instance.
 
         """
+        if isinstance(idea, Mapping) and not isinstance(idea, chrisjen.Idea):
+            # A copy, so that filling in pipelines does not change the
+            # caller's settings.
+            idea = dict(idea)
         if not isinstance(idea, chrisjen.Idea):
             idea = chrisjen.Idea.create(idea)
+        pipelines.expand(idea, kwargs.get('name'))
         if not isinstance(clerk, nagata.FileManager):
             clerk = _make_clerk(clerk, idea)
         project = super().create(idea, clerk = clerk, **kwargs)
@@ -133,10 +141,13 @@ class Project(chrisjen.Project):
     def draft(self) -> None:
         """Builds the `workflow` from the settings.
 
-        Each "auto" technique in the workflow is told which kind of technique
-        to choose, from the name of its step or worker (see `auto.resolve`).
+        The settings of any pipeline named in them are filled in first (see
+        `pipelines.expand`). Each "auto" technique in the workflow is told
+        which kind of technique to choose, from the name of its step or
+        worker (see `auto.resolve`).
 
         """
+        pipelines.expand(self.idea, self.name)
         super().draft()
         auto.resolve(self.workflow)
 

@@ -228,16 +228,20 @@ def _leading_copies(
 
     Samplers that report which rows they kept (in `sample_indices_`) do not
     need this. SMOTE and the other over-samplers instead return the original
-    rows first, in order, followed by the synthetic rows.
+    rows first, in order, followed by the synthetic rows. Samplers that then
+    remove rows (`smote_tomek` and `smote_enn`) return only some of the
+    original rows, so if the first rows are not every original row, each
+    resampled row that has the same values as an original row is taken to
+    copy it (a synthetic row is made between two rows, so it almost never
+    equals one).
 
     Args:
         original: the training rows given to the sampler.
-        resampled: the rows it returned.
+        resampled: the rows it returned, with the same columns.
 
     Returns:
         For each resampled row, its position in `original`, or -1 if it is
-            synthetic. If the first rows are not the original rows, every row
-            is -1.
+            synthetic.
 
     """
     positions = np.full(len(resampled), -1)
@@ -247,4 +251,11 @@ def _leading_copies(
         original.to_numpy(dtype = float),
         equal_nan = True):
         positions[:count] = np.arange(count)
-    return positions
+        return positions
+    hashes = pd.util.hash_pandas_object(
+        original.astype(float), index = False).to_numpy()
+    first = pd.Series(np.arange(count), index = hashes)
+    first = first[~first.index.duplicated()]
+    made = pd.util.hash_pandas_object(
+        resampled[original.columns].astype(float), index = False).to_numpy()
+    return pd.Series(made).map(first).fillna(-1).astype(int).to_numpy()

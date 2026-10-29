@@ -62,3 +62,17 @@ def test_samplers_are_reproducible() -> None:
     first = amos.samplers.Smote().apply(_imbalanced())
     second = amos.samplers.Smote().apply(_imbalanced())
     pd.testing.assert_frame_equal(first.data, second.data)
+
+
+@pytest.mark.parametrize('kind', [
+    amos.samplers.SmoteTomek, amos.samplers.SmoteEnn])
+def test_samplers_that_remove_rows_keep_the_real_rows(
+    kind: type[amos.Sampler]) -> None:
+    requires('imblearn')
+    dataset = _imbalanced()
+    rows = len(dataset.train)
+    kind().apply(dataset)
+    real = dataset.train[~dataset.train.isin(dataset.synthetic)]
+    # Some real rows are removed, but those that are kept are not made up.
+    assert 0 < len(real) <= rows
+    assert len(dataset.synthetic) == len(dataset.train) - len(real)

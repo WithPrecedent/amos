@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* Added named pipelines (the new `pipelines` module and `Pipeline` class).
+  `pipeline = classification` in the "general" section (or the project's
+  section) fills in the settings of the analyst, critic, and artist, so a
+  study can be a label, a seed, and a pipeline. The pipelines are
+  `classification`, `regression`, and `count_regression`, which compare
+  models in an experiment, and `classification_inference`,
+  `regression_inference`, `count_inference`, `panel_classification`, and
+  `panel_regression`, which fit one model for its coefficients (without
+  scaling or resampling, and with each category encoded against a
+  reference level). Settings that you write win over the pipeline's, a
+  worker's own section can name a pipeline for that worker, the pipeline
+  sets "task" if it is not set, and the filled-in settings are in
+  `Project.idea` and the exported "settings.json". Add a `Pipeline` to
+  `pipelines.PIPELINES` to name your own.
+* Added three choosers, which the pipelines use and "auto" now resolves to
+  in steps named "impute", "encode", and "evaluate" (and in a worker named
+  "critic"): `auto_imputer` fills missing values (with `iterative_impute`
+  when many numeric values are missing, `median_impute` otherwise, and
+  `mode_impute` for categories); `auto_encoder` encodes each categorical
+  feature by its number of levels (`one_hot` for 15 or fewer, `target` for
+  more with a label of two classes or a regressed one, `count` for a label
+  of more classes, `tfidf` for free text, and `date_parts` for dates); and
+  `auto_evaluator` applies the evaluators that suit the task and the model.
+* `auto_model` knows the needs of `ols`, `logit_sm`, `probit`, and
+  `mnlogit` (such as the number of classes), which it considers when they
+  are named in "choices".
+* Fixed `smote_tomek` and `smote_enn` marking every training row as
+  synthetic, because they remove some of the original rows after adding
+  rows. Validators then had no real rows to cross-validate, and choosers
+  profiled none. Each row they keep that equals an original row is now
+  real.
+
 ## 0.5.1
 
 * Added a `conserve_memory` setting (from `chrisjen`'s new option for

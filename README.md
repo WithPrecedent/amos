@@ -73,6 +73,15 @@ The stages are only a convention: any technique can be used in any worker, and
 you can name your workers whatever you like. And, any step can include `none`, which tests
 whether a technique changes the result versus doing nothing at all.
 
+You do not even have to name the techniques. A [named
+pipeline](https://WithPrecedent.github.io/amos/idea/#pipeline), such as
+`pipeline = classification` or `pipeline = regression_inference`, fills in
+the analyst, critic, and artist for a kind of study, and adapts to your data
+as it runs: it fills missing values, encodes categories with many levels
+differently from those with few, balances rare classes, and chooses the
+models, evaluators, and figures that suit the data, recording why. Any
+setting you write yourself wins.
+
 ### Reproducible
 
 Open scholarship means that others can check your work. `amos` helps by:

@@ -115,7 +115,8 @@ def test_profile_ignores_synthetic_rows() -> None:
 
 @pytest.mark.parametrize(('step', 'genre'), [
     ('sample', 'sampler'), ('resample', 'sampler'), ('model', 'model'),
-    ('fit', 'model'), ('plot', 'plot'), ('draw', 'plot')])
+    ('fit', 'model'), ('plot', 'plot'), ('draw', 'plot'),
+    ('impute', 'imputer'), ('encode', 'encoder'), ('evaluate', 'evaluator')])
 def test_auto_is_resolved_from_its_step(step: str, genre: str) -> None:
     settings = {
         'general': {'label': 'target', 'seed': SEED},
@@ -128,17 +129,19 @@ def test_auto_is_resolved_from_its_step(step: str, genre: str) -> None:
     assert [node.genre for node in found] == [genre]
 
 
-def test_auto_is_resolved_from_its_worker() -> None:
+@pytest.mark.parametrize(('worker', 'genre'), [
+    ('artist', 'plot'), ('critic', 'evaluator')])
+def test_auto_is_resolved_from_its_worker(worker: str, genre: str) -> None:
     settings = {
         'general': {'label': 'target', 'seed': SEED},
-        'demo_project': {'demo_workers': ['artist']},
-        'artist': {'techniques': 'auto'},
+        'demo_project': {'demo_workers': [worker]},
+        worker: {'techniques': 'auto'},
     }
     project = amos.Project.create(settings, automatic = False)
     found = [
         node for node in amos.interface._nodes(project.workflow)
         if isinstance(node, auto.Auto)]
-    assert [node.genre for node in found] == ['plot']
+    assert [node.genre for node in found] == [genre]
 
 
 def test_auto_in_an_unknown_step_is_an_error_when_drafted() -> None:
@@ -172,6 +175,127 @@ def test_named_choosers_need_no_resolving() -> None:
     }
     project = amos.Project.create(settings, item = make_regression())
     assert _chosen(project.result, 'auto_model') == ['linear']
+
+
+""" AutoImputer """
+
+
+def _gaps(missing: float, rows: int = 300) -> pd.DataFrame:
+    """Returns numeric features (and a category) with some values missing."""
+    data = make_numeric(rows = rows)
+    rng = np.random.default_rng(SEED)
+    data.loc[rng.random(rows) < missing, 'x0'] = np.nan
+    data['court'] = rng.choice(['state', 'federal'], rows).astype(object)
+    data.loc[data.index[:5], 'court'] = np.nan
+    return data
+
+
+def test_auto_imputer_leaves_complete_data_alone() -> None:
+    dataset = _split(make_numeric())
+    before = dataset.data.copy()
+    auto.AutoImputer().apply(dataset)
+    assert _chosen(dataset, 'auto_imputer') == ['none']
+    assert dataset.data.equals(before)
+
+
+def test_auto_imputer_uses_the_median_for_a_few_missing_values() -> None:
+    dataset = _split(_gaps(missing = 0.02))
+    auto.AutoImputer().apply(dataset)
+    table = dataset.tables['auto_imputer']
+    assert _chosen(dataset, 'auto_imputer') == ['median_impute', 'mode_impute']
+    assert 'few values are missing' in table.loc['iterative_impute', 'reason']
+    assert not dataset.data[dataset.features].isna().to_numpy().any()
+
+
+def test_auto_imputer_models_features_with_many_missing_values() -> None:
+    dataset = _split(_gaps(missing = 0.2))
+    auto.AutoImputer().apply(dataset)
+    table = dataset.tables['auto_imputer']
+    assert _chosen(dataset, 'auto_imputer') == [
+        'iterative_impute', 'mode_impute']
+    assert 'filled the features it fills' in table.loc[
+        'median_impute', 'reason']
+    assert not dataset.data[dataset.features].isna().to_numpy().any()
+
+
+def test_auto_imputer_warns_about_features_it_cannot_fill() -> None:
+    dataset = _split(_gaps(missing = 0.02))
+    with pytest.warns(UserWarning, match = r"could not fill \['court'\]"):
+        auto.AutoImputer().apply(dataset, choices = ['median_impute'])
+    assert dataset.data['court'].isna().any()
+
+
+""" AutoEncoder """
+
+
+def _levels(rows: int = 400, classes: int = 2) -> pd.DataFrame:
+    """Returns features with few levels, many levels, and free text."""
+    rng = np.random.default_rng(SEED)
+    words = np.array(['the', 'court', 'held', 'that', 'motion', 'denied'])
+    return pd.DataFrame({
+        'x': rng.normal(size = rows),
+        'court': rng.choice(['state', 'federal', 'tribal'], rows),
+        'judge': [f'judge {j}' for j in rng.integers(0, 40, rows)],
+        'note': [' '.join(rng.choice(words, 5)) for _ in range(rows)],
+        'target': rng.integers(0, classes, rows)})
+
+
+def test_auto_encoder_suits_the_levels_of_each_feature() -> None:
+    requires('category_encoders')
+    requires('skrub')
+    dataset = _split(_levels())
+    auto.AutoEncoder().apply(dataset)
+    assert dataset.history[-1]['encoders'] == {
+        'court': 'one_hot', 'judge': 'target', 'note': 'tfidf'}
+    table = dataset.tables['auto_encoder']
+    assert 'court (3 levels)' in table.loc['one_hot', 'reason']
+    assert 'judge (40 levels)' in table.loc['target', 'reason']
+    assert {'court_state', 'judge'} <= set(dataset.features)
+    assert not dataset.categoricals
+
+
+def test_auto_encoder_counts_levels_for_a_label_of_many_classes() -> None:
+    requires('category_encoders')
+    dataset = _split(_levels(classes = 3).drop(columns = 'note'))
+    auto.AutoEncoder().apply(dataset)
+    table = dataset.tables['auto_encoder']
+    assert dataset.history[-1]['encoders']['judge'] == 'count'
+    assert 'not 3 classes' in table.loc['target', 'reason']
+
+
+def test_auto_encoder_limits_dummy_variables_without_other_encoders() -> None:
+    dataset = _split(_levels().drop(columns = 'note'))
+    auto.AutoEncoder().apply(dataset, choices = 'one_hot', levels = 5)
+    judges = [c for c in dataset.features if c.startswith('judge_')]
+    assert len(judges) == 5
+    assert 'at most 5 dummy variables' in dataset.tables[
+        'auto_encoder'].loc['one_hot', 'reason']
+
+
+def test_auto_encoder_passes_parameters_to_the_encoders() -> None:
+    dataset = _split(_levels().drop(columns = ['judge', 'note']))
+    auto.AutoEncoder().apply(dataset, drop = 'first')
+    assert len([c for c in dataset.features if c.startswith('court_')]) == 2
+
+
+def test_auto_encoder_splits_dates_and_leaves_numbers_alone() -> None:
+    requires('skrub')
+    data = make_numeric()
+    data['filed'] = pd.date_range('2020-01-01', periods = len(data))
+    dataset = _split(data)
+    auto.AutoEncoder().apply(dataset)
+    assert _chosen(dataset, 'auto_encoder') == ['date_parts']
+    assert not dataset.dates
+    dataset = _split(make_numeric())
+    auto.AutoEncoder().apply(dataset)
+    assert _chosen(dataset, 'auto_encoder') == ['none']
+
+
+def test_auto_encoder_explains_why_no_encoder_suits_a_feature() -> None:
+    dataset = _split(_levels(classes = 3).drop(columns = 'note'))
+    with pytest.raises(
+        ValueError, match = "no encoder for 'court': target needs a label"):
+        auto.AutoEncoder().apply(dataset, choices = ['target'])
 
 
 """ AutoSampler """
@@ -431,6 +555,58 @@ def test_best_prefers_the_simplest_model_within_one_standard_error() -> None:
     assert auto._best(errors, better = False, simplest = True) == 'linear'
     assert auto._best(errors, better = False, simplest = False) == (
         'random_forest')
+
+
+def test_auto_model_chooses_inference_models_by_the_classes() -> None:
+    requires('statsmodels')
+    choices = ['ordinal_regression', 'logit_sm', 'mnlogit']
+    dataset = _split(make_numeric(rows = 300))
+    auto.AutoModel().apply(dataset, choices = choices, folds = 1)
+    table = dataset.tables['auto_model']
+    assert _chosen(dataset, 'auto_model') == ['logit_sm']
+    assert table.loc['mnlogit', 'reason'] == 'is for 3 or more classes, not 2'
+    data = make_numeric(rows = 300, classes = 3)
+    data['target'] = data['target'].map({0: 'a', 1: 'b', 2: 'c'})
+    dataset = _split(data)
+    auto.AutoModel().apply(dataset, choices = choices, folds = 1)
+    table = dataset.tables['auto_model']
+    assert _chosen(dataset, 'auto_model') == ['mnlogit']
+    assert table.loc['logit_sm', 'reason'] == 'is for 2 classes, not 3'
+
+
+""" AutoEvaluator """
+
+
+def test_auto_evaluator_suits_a_classifier() -> None:
+    requires('shap')
+    dataset = _split(make_numeric(rows = 200))
+    amos.models.RandomForest().apply(dataset, n_estimators = 20)
+    auto.AutoEvaluator().apply(dataset)
+    chosen = _chosen(dataset, 'auto_evaluator')
+    assert chosen == [
+        'scorecard', 'classification_report', 'confusion',
+        'feature_importance', 'permutation_importance', 'shap_importance']
+    assert {'confusion', 'permutation_importance', 'shap_importance'} <= set(
+        dataset.tables)
+    reason = dataset.tables['auto_evaluator'].loc['regression_table', 'reason']
+    assert reason == 'random_forest has no coefficients with standard errors'
+
+
+def test_auto_evaluator_tabulates_coefficients() -> None:
+    requires('statsmodels')
+    dataset = _split(make_regression())
+    amos.models.OLS().apply(dataset)
+    auto.AutoEvaluator().apply(dataset)
+    chosen = _chosen(dataset, 'auto_evaluator')
+    assert 'regression_table' in chosen
+    assert 'classification_report' not in chosen
+    assert 'permutation_importance' not in chosen
+    assert 'regression_table' in dataset.tables
+
+
+def test_auto_evaluator_needs_predictions() -> None:
+    with pytest.raises(ValueError, match = 'needs the predictions'):
+        auto.AutoEvaluator().apply(_split(make_numeric()))
 
 
 """ AutoPlot """
