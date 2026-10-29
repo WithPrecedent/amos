@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.5.1
 
 * Added a `conserve_memory` setting (from `chrisjen`'s new option for
   comparing workers), for an experiment's section or for every experiment in
