@@ -72,6 +72,7 @@ describes the "general" section in detail.
 | | `groups` | Columns that identify groups of rows (see "Groups and fairness" below). |
 | | `use_gpu` | Whether to fit the models that can use a GPU (`xgboost`, `catboost`, `lightgbm`, and `tabpfn`) on an NVIDIA GPU. Defaults to false (see "Fitting models on a GPU" below). |
 | | `conserve_memory` | Whether every experiment keeps only the best combination's whole dataset, rather than every combination's, while it tries them. A worker's own `conserve_memory` setting wins. Defaults to false (see "Experiments" below). |
+| | `pipeline` | A named pipeline (such as `classification` or `regression_inference`) that fills in the settings of the analyst, critic, and artist. It can also be in the project's section, or in the section of one of those workers for that worker alone. Settings that you write win. See [pipeline](idea.md#pipeline). |
 | `files` | `root_folder` | Folder for the project's files. Defaults to the current folder. |
 | | `input_folder` | Folder (in the root folder) where data files named by a relative path are looked for, and where loaders save downloads. |
 | | `output_folder` | Folder (in the root folder) in which `export` makes a folder for each run. |
@@ -893,16 +894,22 @@ print(list(dataset.tables["fixest_coefficients"].index[:3]))
 
 Name "auto" in place of a step's techniques, and `amos` chooses techniques
 that suit the data when the workflow reaches that step. "auto" works in a
-step that samples, models, or plots. The kind of step is found from its name
-("sample", "model", or "plot", and a few others such as "resample", "fit",
-and "draw") or, for a worker without steps, from the worker's name (such as
-"artist"). In a step with another name, name the chooser yourself:
-`auto_sampler`, `auto_model`, or `auto_plot`.
+step that fills missing values, encodes, samples, models, evaluates, or
+plots. The kind of step is found from its name ("impute", "encode",
+"sample", "model", "evaluate", or "plot", and a few others such as "fill",
+"resample", "fit", and "draw") or, for a worker without steps, from the
+worker's name (such as "critic" or "artist"). In a step with another name,
+name the chooser yourself: `auto_imputer`, `auto_encoder`, `auto_sampler`,
+`auto_model`, `auto_evaluator`, or `auto_plot`. The [named
+pipelines](idea.md#pipeline) are built on them.
 
 | Chooser | What it chooses |
 | --- | --- |
+| `auto_imputer` | Nothing if no feature has missing values. Otherwise `iterative_impute` for the numeric features if one misses more than 5% of its values (with at least two numeric features and no more than 10,000 rows), and `median_impute` if not; and `mode_impute` for categorical and boolean features. |
+| `auto_encoder` | For each categorical feature: `one_hot` if it has 15 levels or fewer ("levels"), `tfidf` if it is free text, `target` if it has more levels and the label has two classes or is regressed, `count` if the label has more classes, and `one_hot` with at most 15 columns if category_encoders is not installed. `date_parts` for dates. Its parameters (such as "drop") go to the encoders. |
+| `auto_evaluator` | `scorecard`; `classification_report` and `confusion` for classes; `regression_table` for a model with coefficients and standard errors (not after an experiment); `feature_importance` for a model with its own importances; `permutation_importance` for a scikit-learn model without a regression table; `shap_importance` for a model of trees; and `fairness` for two classes with groups. |
 | `auto_sampler` | Nothing for a regressed label or classes that are balanced (the rarest class has at least half the rows of the most common). Otherwise `random_under` if the rarest class has 10,000 rows or more, `smote_tomek` if the classes overlap, `smote` if the features are numeric, and `random_over` if they are not (or have missing values, are mostly binary, or the rarest class has fewer than 6 rows). |
-| `auto_model` | Rules out the models that cannot do the task or use the features, and those whose assumptions the data does not meet (such as `linear` when the errors are not normal or the features are collinear, `poisson` for overdispersed counts, or `naive_bayes` when the features are not normal), cross-validates the first 4 of the rest ("candidates"), and fits the simplest model whose score is within one standard error of the best. |
+| `auto_model` | Rules out the models that cannot do the task or use the features, and those whose assumptions the data does not meet (such as `linear` when the errors are not normal or the features are collinear, `poisson` for overdispersed counts, or `naive_bayes` when the features are not normal), cross-validates the first 4 of the rest ("candidates"), and fits the simplest model whose score is within one standard error of the best. It also knows the needs of `ols`, `logit_sm`, `probit` (two classes), and `mnlogit` (three or more), which it considers only when they are in "choices". |
 | `auto_plot` | Plots of the data before a model is fitted. After, plots of the model that suit the task and the model, such as a precision-recall curve for imbalanced classes, a Q-Q plot for a model that assumes normal errors, or partial dependence for a model that is not linear. |
 
 Each chooser adds a table to the dataset's `tables`, named for it, with a row
@@ -949,7 +956,8 @@ false to choose the best score instead. The "auto_model_parameters" section
 holds the parameters of the "model" step's "auto" (as for any technique of a
 step). "choices" limits the techniques that a chooser considers (in the
 order to prefer them). Its other parameters ("candidates", "folds", and
-"metric" for `auto_model`, and "data" for `auto_plot`) are described in the
+"metric" for `auto_model`, "levels" for `auto_encoder`, and "data" for
+`auto_plot`) are described in the
 [API reference](reference/amos/auto.md), and any others are passed to the
 techniques it chooses.
 

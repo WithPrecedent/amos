@@ -25,6 +25,7 @@ __all__: list[str] = [
     'Model',
     'Munger',
     'Operation',
+    'Pipeline',
     'Plot',
     'Project',
     'Reducer',
@@ -53,6 +54,7 @@ from .mergers import Merger
 from .metrics import GroupMetric, Metric
 from .models import Model
 from .mungers import Munger
+from .pipelines import Pipeline
 from .plots import Plot
 from .reports import Findings
 from .samplers import Sampler

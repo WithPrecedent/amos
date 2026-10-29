@@ -198,8 +198,10 @@ Every setting in it is optional.
 | `groups` | A column name, or a list of them | None | Columns that identify groups of rows, which are not used as features. |
 | `use_gpu` | true or false | false | Whether to fit the models that can use a GPU on an NVIDIA GPU. |
 | `conserve_memory` | true or false | false | Whether every experiment keeps only the best combination's whole dataset while it tries them. |
+| `pipeline` | The name of a pipeline | None | Fills in the settings of the analyst, critic, and artist for a kind of study. |
 
-The settings (except `conserve_memory`, which is for the workers) are given to the `Dataset` that the project makes from your
+The settings (except `conserve_memory` and `pipeline`, which are for the
+workers) are given to the `Dataset` that the project makes from your
 data:
 
 * If you pass data (such as a `DataFrame` or the path to a data file), the
@@ -414,4 +416,129 @@ every dataset while the others conserve memory:
 [analyst]
 design = experiment
 conserve_memory = false
+```
+
+### pipeline
+
+The name of a pipeline: the settings of an analyst, a critic, and an artist
+for a kind of study, chosen so that you do not have to write them. A whole
+study can be four lines:
+
+<!-- file: pipeline.ini -->
+```ini
+[general]
+label = target
+seed = 43
+pipeline = classification
+```
+
+```python
+project = amos.Project.create("pipeline.ini", item = data)
+print(project.name, project.idea["classification_project"])
+# classification {'classification_workers': ['analyst', 'critic', 'artist']}
+print(project.idea["analyst"]["steps"])
+# ['split', 'impute', 'scale', 'encode', 'sample', 'model']
+print(project.idea["analyst"]["model_techniques"])
+# ['logit', 'random_forest', 'gradient_boosting', 'baseline']
+print(project.idea["critic"], project.idea["artist"])
+# {'techniques': ['stratified_k_fold', 'auto_evaluator']} {'techniques': ['auto_plot']}
+```
+
+Without a project section, one named for the pipeline is added, with the
+analyst, critic, and artist as its workers. A project section that lists
+its own workers keeps them, and the pipeline fills in only the analyst,
+critic, and artist among them. The pipeline also sets "task" (if it is not
+set) and the parameters of some techniques, and `project.idea` (and the
+exported "settings.json") has every setting that it filled in, so the
+methods are still on the record.
+
+The steps whose techniques depend on the data are "auto" (see [Choosing
+techniques automatically](advanced.md#choosing-techniques-automatically)),
+so one pipeline adapts to the data when it runs. Missing values are filled
+(if there are any), categorical features are encoded by how many levels
+they have (dummy variables for a few, the mean label for many), and rare
+classes are balanced (if they are rare). Each choice and its reason is in a
+table:
+
+```python
+result = project.result
+print(result.tables["auto_imputer"].loc["none", "reason"])
+# no feature has missing values
+print(result.tables["auto_sampler"].loc["none", "reason"])
+# the classes are balanced: the rarest has 60% of the rows of the most common
+print(result.tables["analyst_comparison"].index[0])
+# stratified_split > auto_impute > standard_scale > auto_encode > auto_sample > logit_model
+print(result.tables["auto_evaluator"].loc["regression_table", "reason"])
+# logit has no coefficients with standard errors
+```
+
+These are the pipelines:
+
+| Pipeline | Task | What its analyst does |
+| --- | --- | --- |
+| `classification` | classify | Compares `logit`, `random_forest`, `gradient_boosting`, and `baseline` in an experiment, by balanced accuracy, after balancing rare classes. |
+| `regression` | regress | Compares `ridge`, `random_forest`, `gradient_boosting`, and `baseline` in an experiment, by RMSE. |
+| `count_regression` | regress | Compares `poisson`, `negative_binomial`, a random forest and gradient boosting fitted for counts, and `baseline` in an experiment, by RMSE. |
+| `classification_inference` | classify | Fits `logit_sm` for two classes, `ordinal_regression` for ordered classes, or `mnlogit` for others, with `auto_model`. |
+| `regression_inference` | regress | Fits `ols`, or `robust_regression` if the errors have outliers, with `auto_model`. |
+| `count_inference` | regress | Fits `poisson`, `negative_binomial` for overdispersed counts, or `zero_inflated_poisson` for excess zeros, with `auto_model`. |
+| `panel_classification` | classify | Fits a `fixest` logit model with the groups as fixed effects, clustered by the first group. |
+| `panel_regression` | regress | Fits a `fixest` model with the groups as fixed effects, clustered by the first group. |
+
+In each, the critic cross-validates the model (`stratified_k_fold` or
+`k_fold`) and applies the evaluators that suit it with `auto_evaluator`
+(such as `confusion` for classes, `regression_table` for a model with
+coefficients and standard errors, `shap_importance` for a model of trees,
+and `fairness` for two classes with groups), and the artist draws the
+figures that suit it with `auto_plot`.
+
+The pipelines that predict scale the numeric features and balance rare
+classes. The pipelines for inference ("_inference" and "panel_") do
+neither: they keep the coefficients in the units of the features and the
+real share of each class (balancing would distort the coefficients and
+their standard errors), and they encode each categorical feature against
+its first level, so its coefficients are differences from that level. The
+panel pipelines need "groups".
+
+Every setting that you write yourself wins, so a pipeline is a starting
+point. Change what you need and keep the rest:
+
+```python
+settings = {
+    "general": {"label": "target", "seed": 43, "pipeline": "classification"},
+    "analyst": {"model_techniques": ["logit", "random_forest"]},
+    "random_forest_parameters": {"max_depth": 4},
+}
+project = amos.Project.create(settings, item = data)
+print(project.idea["random_forest_parameters"])
+# {'n_estimators': 300, 'max_depth': 4}
+print(len(project.result.tables["analyst_comparison"]))
+# 2
+```
+
+A worker's own section can also name a pipeline, which fills in only that
+worker (and its parameters), such as `pipeline = classification_inference`
+in the "critic" section. To see what a pipeline fills in, look at it in
+`amos.pipelines.PIPELINES`. Add a `Pipeline` to it to name one of your own:
+
+```python
+print(amos.pipelines.PIPELINES["regression_inference"].analyst["steps"])
+# ['split', 'impute', 'encode', 'model']
+amos.pipelines.PIPELINES["quick"] = amos.Pipeline(
+    name = "quick",
+    task = "classify",
+    description = "A logit model and its confusion matrix.",
+    analyst = {
+        "steps": ["split", "model"],
+        "split_techniques": ["stratified"],
+        "model_techniques": ["logit"],
+    },
+    critic = {"techniques": ["confusion"]},
+    artist = {"techniques": ["confusion_heatmap"]},
+)
+settings = {"general": {"label": "target", "seed": 43, "pipeline": "quick"}}
+quick = amos.Project.create(settings, item = data)
+print(sorted(quick.result.figures))
+# ['confusion_heatmap']
+del amos.pipelines.PIPELINES["quick"]
 ```

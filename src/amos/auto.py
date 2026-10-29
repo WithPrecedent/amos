@@ -2,16 +2,23 @@
 
 Name "auto" in place of a technique, and `amos` chooses the techniques that
 suit the data when the workflow reaches it. "auto" works in a step that
-samples, models, or plots (the kind of step is found from its name, such as
-"sample", "model", or "plot", or from the name of a worker such as "artist"),
-or name the chooser yourself: `auto_sampler`, `auto_model`, or `auto_plot`.
+fills missing values, encodes, samples, models, evaluates, or plots (the kind
+of step is found from its name, such as "impute", "encode", "sample",
+"model", or "plot", or from the name of a worker such as "critic" or
+"artist"), or name the chooser yourself: `auto_imputer`, `auto_encoder`,
+`auto_sampler`, `auto_model`, `auto_evaluator`, or `auto_plot`.
 
 ```ini
 [analyst]
-steps = split, sample, model
+steps = split, impute, encode, sample, model
 split_techniques = stratified
+impute_techniques = auto
+encode_techniques = auto
 sample_techniques = auto
 model_techniques = auto
+
+[critic]
+techniques = auto
 
 [artist]
 techniques = auto
@@ -33,6 +40,11 @@ Contents:
         technique to choose, from the name of its step or worker.
     Chooser: base class for techniques that choose other techniques.
     Auto: chooses the techniques of the step that it is in.
+    AutoEncoder: encodes each categorical feature in the way that suits how
+        many levels it has, and dates by their parts.
+    AutoEvaluator: applies the evaluators that suit the task and the model.
+    AutoImputer: fills missing values in the ways that suit the features, or
+        not at all.
     AutoModel: rules out models whose assumptions the data does not meet,
         cross-validates the rest, and fits the best.
     AutoPlot: draws the figures that suit the data and the model.
@@ -58,20 +70,53 @@ import chrisjen
 import numpy as np
 import pandas as pd
 
-from . import base, models, plots
+from . import base, models, plots, transformers
 
 # Names of the steps (and workers) whose "auto" technique each chooser
 # replaces, by the genre of the techniques it chooses. A step named
 # "{technique}_{step}" in a workflow is matched by its step.
 _STEPS: dict[str, frozenset[str]] = {
+    'imputer': frozenset({
+        'fill', 'impute', 'imputer', 'imputers', 'imputation'}),
+    'encoder': frozenset({'encode', 'encoder', 'encoders', 'encoding'}),
     'sampler': frozenset({
         'balance', 'resample', 'sample', 'sampler', 'samplers', 'sampling'}),
     'model': frozenset({
         'estimate', 'estimator', 'fit', 'learn', 'model', 'modeler',
         'modeling', 'models', 'predict'}),
+    'evaluator': frozenset({
+        'assess', 'critic', 'critique', 'evaluate', 'evaluation',
+        'evaluator', 'evaluators'}),
     'plot': frozenset({
         'artist', 'chart', 'charts', 'draw', 'figure', 'figures', 'graph',
         'plot', 'plots', 'plotting', 'visualize'})}
+# Share of the values of a numeric feature that must be missing (in the
+# training rows) for `auto_imputer` to model each feature from the others
+# rather than fill it with its median.
+_MANY_MISSING: float = 0.05
+# Most levels of a categorical feature that `auto_encoder` makes dummy
+# variables for. A feature with more is encoded in fewer columns.
+_LEVELS: int = 15
+# Fewest words in the typical (median) value of a categorical feature with
+# many levels for `auto_encoder` to treat it as free text.
+_WORDS: int = 3
+# Encoders that learn from the label, which must have two classes or be
+# regressed (a label of more classes would be encoded as the position of
+# each class, which means nothing).
+_SUPERVISED: frozenset[str] = frozenset({
+    'cat_boost', 'james_stein', 'leave_one_out', 'm_estimate', 'target',
+    'weight_of_evidence'})
+# The imputers that `auto_imputer` considers, in the order it prefers them.
+_IMPUTERS: tuple[str, ...] = (
+    'iterative_impute', 'median_impute', 'mode_impute')
+# The encoders that `auto_encoder` considers for each kind of feature, in the
+# order it prefers them: dates, categories with few levels, categories with
+# many, and free text.
+_ENCODERS: dict[str, tuple[str, ...]] = {
+    'dates': ('date_parts',),
+    'few': ('one_hot',),
+    'many': ('target', 'count', 'one_hot'),
+    'text': ('tfidf', 'target', 'count', 'one_hot')}
 # The rarest class of a balanced label has at least this share of the rows of
 # its most common class, so it is not resampled.
 _BALANCED: float = 0.5
@@ -161,6 +206,8 @@ class _Traits:
         min_rows: fewest training rows it learns well from.
         max_rows: most training rows it can be fitted to in reasonable time.
         max_features: most features it works well with.
+        min_classes: fewest classes of a classified label it can model.
+        max_classes: most classes of a classified label it can model.
 
     """
 
@@ -180,6 +227,8 @@ class _Traits:
     min_rows: int = 0
     max_rows: int | None = None
     max_features: int | None = None
+    min_classes: int = 0
+    max_classes: int | None = None
 
 
 _BOTH: tuple[str, ...] = ('classify', 'regress')
@@ -221,6 +270,21 @@ _MODELS: dict[str, _Traits] = {
         max_features = 30),
     'neural_network': _Traits(
         _BOTH, 'sklearn', 4, scaled = True, min_rows = 1_000)}
+# Models whose needs and assumptions `auto_model` knows, but which it only
+# considers when they are named in "choices". They report coefficients with
+# standard errors, so they suit a study of the features more than a
+# prediction. `ols` does not need normal errors: its estimates are unbiased
+# without them, and with enough rows its standard errors are about right
+# (the Q-Q plot of `auto_plot` checks them).
+_OTHER_MODELS: dict[str, _Traits] = {
+    'ols': _Traits(
+        ('regress',), 'statsmodels', 1, independent = True, wide = False),
+    'logit_sm': _Traits(
+        ('classify',), 'statsmodels', 1, wide = False, max_classes = 2),
+    'probit': _Traits(
+        ('classify',), 'statsmodels', 1, wide = False, max_classes = 2),
+    'mnlogit': _Traits(
+        ('classify',), 'statsmodels', 2, wide = False, min_classes = 3)}
 # The samplers that `auto_sampler` considers, in the order it prefers them.
 _SAMPLERS: tuple[str, ...] = (
     'random_under', 'smote_tomek', 'smote', 'random_over')
@@ -439,6 +503,60 @@ class Chooser(base.Operation, abc.ABC):
 
     """ Private Methods """
 
+    def _apply_each(
+        self,
+        item: base.Dataset,
+        rows: Sequence[tuple[str, bool, str]],
+        parameters: Mapping[str, Any],
+        *,
+        done: str) -> tuple[pd.DataFrame, list[str]]:
+        """Applies each chosen technique to `item`, leaving out those that fail.
+
+        Args:
+            item: the dataset.
+            rows: for each technique considered: its name, whether it was
+                chosen, and why (or why not).
+            parameters: parameters for the techniques. Each uses those it
+                accepts.
+            done: what a technique that works is (such as "drawn"), for the
+                reason of one that fails.
+
+        Raises:
+            Exception: the error of the first technique, if none could be
+                applied.
+
+        Returns:
+            The table of choices, with a technique that failed marked as not
+                chosen and its error as the reason, and the names of the
+                techniques that were applied.
+
+        """
+        table = pd.DataFrame(
+            {'chosen': [chosen for _, chosen, _ in rows],
+             'reason': [reason for _, _, reason in rows]},
+            index = pd.Index([name for name, _, _ in rows]))
+        applied = []
+        errors = []
+        for name in table.index[table['chosen'].to_numpy(dtype = bool)]:
+            try:
+                _borrow(name)().apply(item, **parameters)
+            # A technique that cannot be applied (because its tool is
+            # missing or cannot handle this model, for example) is left out,
+            # and the reason is kept.
+            except Exception as error:  # noqa: BLE001
+                errors.append(error)
+                table.loc[name, 'chosen'] = False
+                table.loc[name, 'reason'] = f'could not be {done}: {error}'
+                warnings.warn(
+                    f'{self.name!r} left out {name!r}, which could not be '
+                    f'{done}: {error}',
+                    stacklevel = 3)
+                continue
+            applied.append(name)
+        if errors and not applied:
+            raise errors[0]
+        return table, applied
+
     def _record(
         self,
         item: base.Dataset,
@@ -472,18 +590,19 @@ class Auto(Chooser):
 
     This is the technique named "auto" in settings. When a project is
     drafted, its `genre` is found from the name of its step (such as
-    "sample", "model", or "plot") or of its worker (such as "artist"), and
-    it applies the chooser for that genre: `auto_sampler`, `auto_model`, or
-    `auto_plot`. Its table is named for that chooser.
+    "impute", "encode", "sample", "model", or "plot") or of its worker (such
+    as "critic" or "artist"), and it applies the chooser for that genre:
+    `auto_imputer`, `auto_encoder`, `auto_sampler`, `auto_model`,
+    `auto_evaluator`, or `auto_plot`. Its table is named for that chooser.
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
             `None`, in which case it is "auto".
         contents: not used. Defaults to `None`.
         parameters: parameters for the chooser. Defaults to an empty `dict`.
-        genre: "sampler", "model", or "plot". Defaults to `None`, in which
-            case it is found from the name of its step when a project is
-            drafted.
+        genre: "imputer", "encoder", "sampler", "model", "evaluator", or
+            "plot". Defaults to `None`, in which case it is found from the
+            name of its step when a project is drafted.
 
     """
 
@@ -507,8 +626,7 @@ class Auto(Chooser):
             message = (
                 f'{self.name!r} does not know which kind of technique to '
                 f'choose: set its genre or use it in a step named for one '
-                f'(such as "model"), or use auto_sampler, auto_model, or '
-                f'auto_plot'
+                f'(such as "model"), or use {_chooser_names()}'
             )
             raise ValueError(message)
         kind = _CHOOSERS.get(self.genre)
@@ -520,6 +638,285 @@ class Auto(Chooser):
             raise ValueError(message)
         result: base.Dataset = kind().apply(item, **kwargs)
         return result
+
+
+@dataclasses.dataclass
+class AutoEncoder(Chooser):
+    """Encodes each categorical feature in the way that suits it.
+
+    Models need numbers, so every feature of text or categories is encoded,
+    each with the first of these that suits it (the levels of a feature are
+    counted in the training rows):
+
+    * `one_hot` for a feature with 15 levels or fewer ("levels"): a dummy
+      variable for each level, which every model can use and whose
+      coefficients are easy to read.
+    * `tfidf` (with skrub) for free text: a feature with more levels whose
+      typical value has 3 words or more. It encodes the words of each value.
+    * `target` (with category_encoders) for a feature with more levels, if
+      the label has two classes or is regressed: the mean label of each
+      level, shrunk toward the overall mean for rare levels. Dummy variables
+      for so many levels would make the data wide and each level rare.
+    * `count` (with category_encoders) for a feature with more levels and a
+      label of more classes (or none): how often each level is in the
+      training rows.
+    * `one_hot` with at most "levels" columns for a feature with more levels,
+      if category_encoders is not installed. Its rarest levels share one
+      column.
+
+    Dates are split into their parts (year, month, day, and so on) by
+    `date_parts`, with skrub.
+
+    The table (named "auto_encoder") has a row for each encoder considered
+    (or a row for "none"), with whether it was chosen and why (or why not).
+    The history records the encoder of each feature.
+
+    """
+
+    chooses: ClassVar[str] = 'encoder'
+
+    def apply(
+        self,
+        item: base.Dataset,
+        choices: Sequence[str] | str | None = None,
+        levels: int = _LEVELS,
+        **kwargs: Any) -> base.Dataset:
+        """Encodes the categorical features and dates of `item`.
+
+        Args:
+            item: the dataset to encode.
+            choices: names of the encoders to choose from, in the order to
+                prefer them, for every feature. Defaults to `None`, which uses
+                those in `_ENCODERS` for each kind of feature.
+            levels: most levels of a feature for dummy variables. Defaults to
+                15.
+            **kwargs: parameters for the encoders (such as "drop" for
+                `one_hot`). Each encoder uses those it accepts.
+
+        Raises:
+            ValueError: if no encoder suits a feature.
+
+        Returns:
+            The dataset, with its categorical features and dates encoded.
+
+        """
+        found = profile(item)
+        rows = _real_rows(item)
+        counts = {
+            column: int(item.data.loc[rows, column].nunique())
+            for column in item.categoricals}
+        encoders: dict[str, str] = {}
+        reasons: dict[str, str] = {}
+        for column in item.dates + item.categoricals:
+            kind = (
+                'dates' if column in item.dates
+                else _feature_kind(item.data.loc[rows, column], levels))
+            names = (
+                _ENCODERS[kind] if choices is None
+                else camina.listify(choices))
+            tried = {name: _screen_encoder(name, kind, found) for name in names}
+            chosen = next(
+                (name for name, reason in tried.items() if reason is None),
+                None)
+            if chosen is None:
+                message = (
+                    f'{self.name!r} found no encoder for {column!r}: '
+                    + '; '.join(f'{n} {r}' for n, r in tried.items()))
+                raise ValueError(message)
+            encoders[column] = chosen
+            for name, reason in tried.items():
+                if name == chosen:
+                    break
+                reasons.setdefault(name, cast('str', reason))
+        if not encoders:
+            table = pd.DataFrame(
+                {'chosen': [True],
+                 'reason': ['there are no categorical features or dates']},
+                index = pd.Index(['none']))
+            self._record(item, table, found, [])
+            return item
+        groups: dict[str, list[str]] = {}
+        for column, name in encoders.items():
+            groups.setdefault(name, []).append(column)
+        for name, columns in groups.items():
+            parameters = dict(kwargs)
+            if any(counts.get(column, 0) > levels for column in columns):
+                parameters.setdefault('max_categories', levels)
+            _borrow(name)().apply(item, columns = columns, **parameters)
+        explained = {
+            name: _encoder_suits(name, columns, counts, levels, found)
+            for name, columns in groups.items()}
+        for name, reason in reasons.items():
+            explained.setdefault(name, reason)
+        table = pd.DataFrame(
+            {'chosen': [name in groups for name in explained],
+             'reason': list(explained.values())},
+            index = pd.Index(list(explained)))
+        self._record(item, table, found, list(groups), encoders = encoders)
+        return item
+
+
+@dataclasses.dataclass
+class AutoEvaluator(Chooser):
+    """Applies the evaluators that suit the task and the model.
+
+    It needs the predictions of a fitted model, and applies those of these
+    that suit it, in this order:
+
+    * `scorecard`, which compares every branch (or the model) on every
+      metric.
+    * `classification_report` and `confusion`, for a classified label.
+    * `regression_table`, for a model that reports coefficients with
+      standard errors (such as `ols`, `logit_sm`, or `fixest`), unless the
+      data came from an experiment. The table would have a column for each
+      of its models, and estimate the effects of each model without
+      coefficients by refitting it many times.
+    * `feature_importance`, for a model with its own importances (or
+      coefficients).
+    * `permutation_importance`, which works for any scikit-learn model,
+      when there is no regression table (which describes the features
+      better).
+    * `shap_importance`, for a model made of trees (with shap installed).
+    * `fairness`, for a label of two classes with groups (with fairlearn
+      installed).
+
+    Apply it before `auto_plot`, which draws the importances it finds.
+    Evaluators that cannot be applied are left out, with a warning, and the
+    reason is in the table (named "auto_evaluator").
+
+    """
+
+    chooses: ClassVar[str] = 'evaluator'
+
+    def apply(
+        self,
+        item: base.Dataset,
+        choices: Sequence[str] | str | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Applies the evaluators that suit `item`.
+
+        Args:
+            item: the dataset, with predictions.
+            choices: names of the evaluators to choose from. Defaults to
+                `None`, which uses every evaluator that suits the model.
+            **kwargs: parameters for the evaluators (such as "n_repeats").
+                Each evaluator uses those it accepts.
+
+        Raises:
+            ValueError: if there are no predictions.
+            Exception: the error of the first evaluator, if none could be
+                applied.
+
+        Returns:
+            The dataset, with the evaluators' tables and metrics.
+
+        """
+        if item.predictions is None:
+            message = f'{self.name!r} needs the predictions of a fitted model'
+            raise ValueError(message)
+        found = profile(item)
+        rows = _evaluators(item, found)
+        if choices is not None:
+            allowed = set(camina.listify(choices))
+            rows = [row for row in rows if row[0] in allowed]
+        table, applied = self._apply_each(item, rows, kwargs, done = 'applied')
+        self._record(item, table, found, applied)
+        return item
+
+
+@dataclasses.dataclass
+class AutoImputer(Chooser):
+    """Fills missing values in the ways that suit the features.
+
+    Features without missing values are left alone, and so is a dataset
+    without any. The numeric features with missing values are filled by the
+    first of these that suits them:
+
+    * `iterative_impute`, if a numeric feature misses more than 5% of its
+      values in the training rows, there are at least two numeric features,
+      and there are no more than 10,000 training rows. It models each
+      feature from the others, which keeps their relationships better than
+      filling every gap with one value.
+    * `median_impute`, which fills each gap with the median of the training
+      rows, which skewed values and outliers do not pull as they pull the
+      mean.
+
+    The categorical and boolean features are filled with their most common
+    values by `mode_impute`.
+
+    The table (named "auto_imputer") has a row for each imputer considered
+    (or a row for "none"), with whether it was chosen and why (or why not).
+
+    """
+
+    chooses: ClassVar[str] = 'imputer'
+
+    def apply(
+        self,
+        item: base.Dataset,
+        choices: Sequence[str] | str | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Fills the missing values of the features of `item`.
+
+        Args:
+            item: the dataset to fill.
+            choices: names of the imputers to choose from, in the order to
+                prefer them. Defaults to `None`, which uses `_IMPUTERS`.
+            **kwargs: parameters for the imputers. Each imputer uses those
+                it accepts.
+
+        Returns:
+            The dataset, with its missing values filled.
+
+        """
+        found = profile(item)
+        missing = [
+            column for column in item.features
+            if base._kind_of(item.data[column]) != 'dates'
+            and bool(item.data[column].isna().any())]
+        if not missing:
+            table = pd.DataFrame(
+                {'chosen': [True], 'reason': ['no feature has missing values']},
+                index = pd.Index(['none']))
+            self._record(item, table, found, [])
+            return item
+        shares = item.data.loc[_real_rows(item), missing].isna().mean()
+        kinds = {column: base._kind_of(item.data[column]) for column in missing}
+        numeric = [c for c in missing if kinds[c] == 'numerics']
+        most = float(shares[numeric].max()) if numeric else 0.0
+        names = list(_IMPUTERS) if choices is None else camina.listify(choices)
+        left = list(missing)
+        filled: list[str] = []
+        explained: dict[str, str] = {}
+        for name in names:
+            reason = _screen_imputer(
+                name, len(item.numerics), len(_real_rows(item)), most)
+            if reason is None:
+                imputer = cast('type[transformers.Imputer]', _borrow(name))
+                fills = imputer.kinds
+                columns = [c for c in left if kinds[c] in fills]
+                if columns:
+                    _borrow(name)().apply(item, columns = columns, **kwargs)
+                    left = [c for c in left if c not in columns]
+                    filled.append(name)
+                    explained[name] = _imputer_suits(name, columns, shares)
+                    continue
+                reason = (
+                    f'suits the data, but {_names(filled, "and")} filled '
+                    f'the features it fills' if filled
+                    else 'no feature that it fills has missing values')
+            explained[name] = reason
+        if left:
+            warnings.warn(
+                f'{self.name!r} could not fill {left}: none of {names} fills '
+                f'them',
+                stacklevel = 2)
+        table = pd.DataFrame(
+            {'chosen': [name in filled for name in explained],
+             'reason': list(explained.values())},
+            index = pd.Index(list(explained)))
+        self._record(item, table, found, filled)
+        return item
 
 
 @dataclasses.dataclass
@@ -549,6 +946,11 @@ class AutoModel(Chooser):
       features on similar scales (put a scaler before them).
     * `svm`, `knn`, and `neural_network` are ruled out for data that is too
       large, too small, or too wide for them.
+
+    It also knows the needs of `ols` (features that are not collinear),
+    `logit_sm` and `probit` (two classes), and `mnlogit` (three or more
+    classes), which report coefficients with standard errors, but it only
+    considers them when they are named in "choices".
 
     The first `candidates` of the rest are cross-validated on the training
     rows (with `stratified_k_fold` for classification and `k_fold` for
@@ -722,30 +1124,7 @@ class AutoPlot(Chooser):
         if choices is not None:
             allowed = set(camina.listify(choices))
             rows = [row for row in rows if row[0] in allowed]
-        table = pd.DataFrame(
-            {'chosen': [chosen for _, chosen, _ in rows],
-             'reason': [reason for _, _, reason in rows]},
-            index = pd.Index([name for name, _, _ in rows]))
-        drawn = []
-        errors = []
-        for name in table.index[table['chosen'].to_numpy(dtype = bool)]:
-            try:
-                _borrow(name)().apply(item, **kwargs)
-            # A plot that cannot be drawn (because its tool is missing or
-            # cannot draw this model, for example) is left out, and the
-            # reason is kept.
-            except Exception as error:  # noqa: BLE001
-                errors.append(error)
-                table.loc[name, 'chosen'] = False
-                table.loc[name, 'reason'] = f'could not be drawn: {error}'
-                warnings.warn(
-                    f'{self.name!r} left out {name!r}, which could not be '
-                    f'drawn: {error}',
-                    stacklevel = 2)
-                continue
-            drawn.append(name)
-        if errors and not drawn:
-            raise errors[0]
+        table, drawn = self._apply_each(item, rows, kwargs, done = 'drawn')
         self._record(item, table, found, drawn)
         return item
 
@@ -837,11 +1216,15 @@ class AutoSampler(Chooser):
         return item
 
 
-# The chooser for each genre, which an `Auto` technique applies.
+# The chooser for each genre, which an `Auto` technique applies, in the order
+# they are usually applied.
 _CHOOSERS: dict[str, type[Chooser]] = {
+    'imputer': AutoImputer,
+    'encoder': AutoEncoder,
+    'sampler': AutoSampler,
     'model': AutoModel,
-    'plot': AutoPlot,
-    'sampler': AutoSampler}
+    'evaluator': AutoEvaluator,
+    'plot': AutoPlot}
 
 
 """ Private Functions """
@@ -889,6 +1272,17 @@ def _borrow(name: str) -> type[base.Operation]:
     return cast('type[base.Operation]', chrisjen.library.borrow(name))
 
 
+def _chooser_names() -> str:
+    """Returns the names of the choosers, as a list in words.
+
+    Returns:
+        The name of the chooser of each genre, such as "auto_model", in the
+            order of `_CHOOSERS`.
+
+    """
+    return _names([f'auto_{genre}' for genre in _CHOOSERS])
+
+
 def _complexity(name: str) -> int:
     """Returns how complex a model is, from 1 (the simplest) up.
 
@@ -896,10 +1290,11 @@ def _complexity(name: str) -> int:
         name: name of a model.
 
     Returns:
-        Its complexity in `_MODELS`, or 3 for a model that is not in it.
+        Its complexity in `_MODELS` or `_OTHER_MODELS`, or 3 for a model that
+            is in neither.
 
     """
-    traits = _MODELS.get(name)
+    traits = _traits_of(name)
     return 3 if traits is None else traits.complexity
 
 
@@ -940,6 +1335,163 @@ def _cross_validate(
     return float(scores['mean']), float(error)
 
 
+def _described(columns: Sequence[str], counts: Mapping[str, int]) -> str:
+    """Returns the names of features with how many levels each has.
+
+    Args:
+        columns: names of the features.
+        counts: number of levels of each categorical feature.
+
+    Returns:
+        The features as a list in words, such as "court (3 levels) and judge
+            (212 levels)". A feature without a count is named alone.
+
+    """
+    return _names(
+        [f'{column} ({counts[column]} levels)' if column in counts else column
+         for column in columns],
+        'and')
+
+
+def _encoder_suits(
+    name: str,
+    columns: Sequence[str],
+    counts: Mapping[str, int],
+    levels: int,
+    found: Profile) -> str:
+    """Returns why an encoder suits the features that it encoded.
+
+    Args:
+        name: name of the encoder.
+        columns: names of the features it encoded.
+        counts: number of levels of each categorical feature.
+        levels: most levels of a feature for dummy variables.
+        found: the profile of the dataset.
+
+    Returns:
+        The reason.
+
+    """
+    features = _described(columns, counts)
+    if name == 'date_parts':
+        return f'splits {features} into their parts (year, month, and so on)'
+    if name == 'tfidf':
+        return f'encodes the words of {features}, which are free text'
+    if name in _SUPERVISED:
+        return (
+            f'encodes {features} by the mean label of each level, since '
+            f'dummy variables for more than {levels} levels would make each '
+            f'level rare')
+    if name == 'count':
+        why = (
+            'there is no label' if found.task is None
+            else f'the label has {found.classes} classes, too many to '
+            f'encode by the mean label')
+        return (
+            f'encodes {features} by how often each level occurs, since they '
+            f'have more than {levels} levels and {why}')
+    if name == 'one_hot':
+        few = [c for c in columns if counts.get(c, 0) <= levels]
+        many = [c for c in columns if counts.get(c, 0) > levels]
+        reasons = []
+        if few:
+            reasons.append(
+                f'makes dummy variables for {_described(few, counts)}, which '
+                f'have {levels} levels or fewer')
+        if many:
+            reasons.append(
+                f'makes at most {levels} dummy variables for '
+                f'{_described(many, counts)}, whose rarest levels share one')
+        return '; '.join(reasons)
+    return f'encodes {features}'
+
+
+def _evaluators(
+    item: base.Dataset,
+    found: Profile) -> list[tuple[str, bool, str]]:
+    """Returns the evaluators that suit the model of `item`, and why (or not).
+
+    Args:
+        item: the dataset with predictions.
+        found: its profile.
+
+    Returns:
+        For each evaluator considered: its name, whether it suits the model,
+            and why (or why not).
+
+    """
+    model = _model_name(item)
+    fitted = plots._unwrapped(item) if item.model is not None else None
+    classify = found.task == 'classify'
+    coefficients = _has_coefficients(item)
+    # A regression table has a column for each branch of an experiment, and
+    # estimates the marginal effects of a model without coefficients by
+    # refitting it many times, which is slow for several such models.
+    tabulated = coefficients and len(item.branches) < 2  # noqa: PLR2004
+    # scikit-learn shuffles the features only of its own estimators.
+    shuffled = not tabulated and hasattr(item.model, '__sklearn_tags__')
+    importances = (
+        hasattr(fitted, 'feature_importances_') or hasattr(fitted, 'coef_'))
+    trees = model in _TREES and _importable('shap')
+    fair = (
+        classify and found.classes == 2 and bool(item.groups)  # noqa: PLR2004
+        and _importable('fairlearn'))
+    return [
+        ('scorecard', True, 'compares the models on every metric'),
+        ('classification_report', classify,
+         'reports precision, recall, and F1 for each class' if classify
+         else 'needs a classified label'),
+        ('confusion', classify,
+         'counts which classes the model confuses' if classify
+         else 'needs a classified label'),
+        ('regression_table', tabulated,
+         'reports the coefficients with their standard errors, ready to '
+         'publish' if tabulated
+         else f'{model} has no coefficients with standard errors'
+         if not coefficients
+         else 'the models of an experiment are compared by the scorecard '
+         '(add regression_table to the critic to estimate the effects of '
+         'each)'),
+        ('feature_importance', importances,
+         f'reports the importance that {model} gives each feature'
+         if importances
+         else f'{model} does not report the importance of features'),
+        ('permutation_importance', shuffled,
+         'measures how much the score drops when each feature is shuffled, '
+         'which works for any scikit-learn model' if shuffled
+         else 'the coefficients and their standard errors describe the '
+         'features' if tabulated
+         else f'needs a scikit-learn model, not {model}'),
+        ('shap_importance', trees,
+         'explains how each feature moves each prediction' if trees
+         else 'needs a model of trees and shap'),
+        ('fairness', fair,
+         'compares the model across the groups' if fair
+         else 'needs a label of two classes, groups, and fairlearn')]
+
+
+def _feature_kind(values: pd.Series, levels: int) -> str:
+    """Returns the kind of a categorical feature, for choosing its encoder.
+
+    Args:
+        values: the values of the feature in the training rows.
+        levels: most levels of a feature for dummy variables.
+
+    Returns:
+        "few" if it has no more than `levels` levels, "text" if it has more
+            and its typical value has at least `_WORDS` words, and "many"
+            otherwise.
+
+    """
+    values = values.dropna()
+    if values.nunique() <= levels:
+        return 'few'
+    words = values.astype(str).str.count(r'\S+')
+    if words.median() >= _WORDS:
+        return 'text'
+    return 'many'
+
+
 def _genre_of(name: str) -> str:
     """Returns the genre of the techniques that a step or worker applies.
 
@@ -958,10 +1510,60 @@ def _genre_of(name: str) -> str:
             return genre
     message = (
         f'"auto" cannot tell which techniques to choose for {name!r}: name '
-        f'the step for them (such as "sample", "model", or "plot") or use '
-        f'auto_sampler, auto_model, or auto_plot'
+        f'the step for them (such as "encode", "sample", "model", or '
+        f'"plot") or use {_chooser_names()}'
     )
     raise ValueError(message)
+
+
+def _has_coefficients(item: base.Dataset) -> bool:
+    """Returns whether the model of `item` reported coefficients with intervals.
+
+    Args:
+        item: the dataset.
+
+    Returns:
+        Whether any of its tables has coefficients with confidence intervals
+            (as the statsmodels and pyfixest models make).
+
+    """
+    return any(
+        set(plots._INTERVAL_COLUMNS) <= set(table.columns)
+        for table in item.tables.values())
+
+
+def _imputer_suits(
+    name: str,
+    columns: Sequence[str],
+    shares: pd.Series) -> str:
+    """Returns why an imputer suits the features that it filled.
+
+    Args:
+        name: name of the imputer.
+        columns: names of the features it filled.
+        shares: share of the values of each feature with missing values that
+            are missing in the training rows.
+
+    Returns:
+        The reason.
+
+    """
+    features = _names(list(columns), 'and')
+    if name == 'iterative_impute':
+        filled = shares[list(columns)]
+        worst = str(filled.idxmax())
+        verb = 'is' if len(columns) == 1 else 'are each'
+        return (
+            f'{filled.max():.0%} of the values of {worst} are missing, so '
+            f'{features} {verb} modeled from the other features, which keeps '
+            f'their relationships')
+    if name == 'median_impute':
+        return (
+            f'fills {features} with the median of each, which skewed values '
+            f'and outliers do not pull')
+    if name == 'mode_impute':
+        return f'fills {features} with the most common value of each'
+    return f'fills {features}'
 
 
 @functools.cache
@@ -1021,19 +1623,20 @@ def _largest_vif(matrix: pd.DataFrame) -> float | None:
     return float(np.max(np.diag(np.linalg.inv(correlations))))
 
 
-def _names(items: Sequence[str]) -> str:
+def _names(items: Sequence[str], conjunction: str = 'or') -> str:
     """Returns the items as a list in words, such as "a, b, or c".
 
     Args:
         items: the items.
+        conjunction: the word before the last item. Defaults to "or".
 
     Returns:
-        The items joined by commas and "or".
+        The items joined by commas and `conjunction`.
 
     """
     if len(items) < 3:  # noqa: PLR2004
-        return ' or '.join(items)
-    return f'{", ".join(items[:-1])}, or {items[-1]}'
+        return f' {conjunction} '.join(items)
+    return f'{", ".join(items[:-1])}, {conjunction} {items[-1]}'
 
 
 def _no_sampling(found: Profile) -> str | None:
@@ -1225,9 +1828,7 @@ def _model_plots(
             ('influence_plot', influence,
              'shows the rows that sway the coefficients' if influence
              else 'needs an ols or glm model')])
-    coefficients = any(
-        set(plots._INTERVAL_COLUMNS) <= set(table.columns)
-        for table in item.tables.values())
+    coefficients = _has_coefficients(item)
     importances = (
         any(name in item.tables for name in plots._IMPORTANCE_LABELS)
         or hasattr(fitted, 'feature_importances_')
@@ -1443,6 +2044,86 @@ def _sampler_suits(name: str, found: Profile, overlap: float | None) -> str:
     return f'{balance} of the most common'
 
 
+def _screen_encoder(name: str, kind: str, found: Profile) -> str | None:
+    """Returns why an encoder does not suit a feature, or `None` if it does.
+
+    Args:
+        name: name of the encoder.
+        kind: the kind of the feature: "dates", or "few", "many", or "text"
+            for a categorical feature (see `_feature_kind`).
+        found: the profile of the dataset.
+
+    Returns:
+        The reason the encoder is ruled out, or `None`.
+
+    """
+    try:
+        technique = _borrow(name)
+    except KeyError:
+        return 'is not a technique'
+    if not issubclass(technique, transformers.Encoder):
+        return 'is not an encoder'
+    dates = 'dates' in technique.kinds
+    if kind == 'dates' and not dates:
+        return 'cannot encode dates'
+    if kind != 'dates' and dates:
+        return 'only encodes dates'
+    source = getattr(technique, 'contents', None)
+    package = source.split('.')[0] if isinstance(source, str) else None
+    if package is not None and not _importable(package):
+        return f'needs {package}, which is not installed'
+    if name in _SUPERVISED:
+        classes = found.classes or 0
+        if found.task is None:
+            return 'needs a label to learn from'
+        if found.task == 'classify' and classes > 2:  # noqa: PLR2004
+            return (
+                f'needs a label of two classes or a regressed one, not '
+                f'{found.classes} classes')
+        if name == 'weight_of_evidence' and found.task == 'regress':
+            return 'needs a label of two classes'
+    return None
+
+
+def _screen_imputer(
+    name: str,
+    numerics: int,
+    rows: int,
+    most: float) -> str | None:
+    """Returns why an imputer does not suit the data, or `None` if it does.
+
+    Args:
+        name: name of the imputer.
+        numerics: number of numeric features.
+        rows: number of real training rows.
+        most: largest share of the values of a numeric feature that are
+            missing in the training rows.
+
+    Returns:
+        The reason the imputer is ruled out, or `None`.
+
+    """
+    try:
+        technique = _borrow(name)
+    except KeyError:
+        return 'is not a technique'
+    if not issubclass(technique, transformers.Imputer):
+        return 'is not an imputer'
+    if name != 'iterative_impute':
+        return None
+    if most == 0:
+        return 'no numeric feature has missing values'
+    if numerics < 2:  # noqa: PLR2004
+        return 'needs at least two numeric features to model each from others'
+    if rows > _PLENTY:
+        return f'is slow for more than {_PLENTY} rows'
+    if most <= _MANY_MISSING:
+        return (
+            f'few values are missing (at most {most:.0%} of a numeric '
+            f'feature), so filling them with one value changes little')
+    return None
+
+
 def _screen_model(name: str, found: Profile) -> str | None:
     """Returns why a model does not suit the data, or `None` if it does.
 
@@ -1462,9 +2143,9 @@ def _screen_model(name: str, found: Profile) -> str | None:
         return 'is not a model'
     task = found.task or ''
     tools = getattr(kind, 'tools', {})
-    traits = _MODELS.get(name, _Traits(
+    traits = _traits_of(name) or _Traits(
         tuple(tools) or _BOTH, 'sklearn', 3, missing = True,
-        categories = True))
+        categories = True)
     if task not in traits.tasks or (tools and task not in tools):
         return f'cannot {task}'
     reason = None
@@ -1498,6 +2179,11 @@ def _screen_assumptions(traits: _Traits, found: Profile) -> str | None:
         The reason the model is ruled out, or `None`.
 
     """
+    classes = found.classes or 0
+    if traits.max_classes is not None and classes > traits.max_classes:
+        return f'is for {traits.max_classes} classes, not {classes}'
+    if classes < traits.min_classes:
+        return f'is for {traits.min_classes} or more classes, not {classes}'
     if traits.ordinal and not found.ordinal:
         return 'is for three or more ordered classes'
     if traits.counts is not None and not found.counts:
@@ -1643,7 +2329,7 @@ def _suits(name: str, found: Profile) -> str:
         The reason.
 
     """
-    traits = _MODELS.get(name)
+    traits = _traits_of(name)
     if traits is None:
         return 'was named in "choices"'
     if traits.counts == 'equidispersed':
@@ -1662,11 +2348,29 @@ def _suits(name: str, found: Profile) -> str:
         return 'the errors have outliers, which it weighs less'
     if traits.normal_errors:
         return 'the errors are about normal and the features are not collinear'
+    if traits.independent and not traits.normal_features:
+        return 'the features are not collinear'
+    if traits.max_classes is not None or traits.min_classes:
+        return f'the label has {found.classes} classes'
     if traits.missing and found.missing:
         return 'uses missing values directly'
     if traits.categories and found.categories:
         return 'uses categorical features directly'
     return 'its needs and assumptions are met'
+
+
+def _traits_of(name: str) -> _Traits | None:
+    """Returns what a model needs from the data and assumes about it.
+
+    Args:
+        name: name of a model.
+
+    Returns:
+        Its traits in `_MODELS` or `_OTHER_MODELS`, or `None` if it is in
+            neither.
+
+    """
+    return _MODELS.get(name) or _OTHER_MODELS.get(name)
 
 
 def _unscaled(continuous: pd.DataFrame) -> bool:

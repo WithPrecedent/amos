@@ -378,6 +378,9 @@ imported when a technique that needs them is used (see the extras in the
 | Name | Description |
 | --- | --- |
 | [`auto`][amos.auto.Auto] | Chooses the techniques of the step that it is in. |
+| [`auto_encoder`][amos.auto.AutoEncoder] | Encodes each categorical feature in the way that suits it. |
+| [`auto_evaluator`][amos.auto.AutoEvaluator] | Applies the evaluators that suit the task and the model. |
+| [`auto_imputer`][amos.auto.AutoImputer] | Fills missing values in the ways that suit the features. |
 | [`auto_model`][amos.auto.AutoModel] | Fits the best of the models whose needs and assumptions the data meets. |
 | [`auto_plot`][amos.auto.AutoPlot] | Draws the figures that suit the data and the model. |
 | [`auto_sampler`][amos.auto.AutoSampler] | Chooses a sampler that suits the classes and the features, or none. |
