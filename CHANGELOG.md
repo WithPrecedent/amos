@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.6.0
 
 * Added `Clerk` (in the new `clerks` module), a `nagata.FileManager` that is
   now the `clerk` of every `Project` and loader. It keeps data and results
