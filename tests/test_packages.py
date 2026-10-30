@@ -507,7 +507,7 @@ def test_mlxtend(classified: amos.Dataset) -> None:
     feature_selection = importlib.import_module('mlxtend.feature_selection')
     linear_model = importlib.import_module('sklearn.linear_model')
     x_train, y_train = classified.x_train, classified.y_train
-    amos.transformers.SequentialSelection().apply(
+    amos.selectors.SequentialSelection().apply(
         classified, k_features = 3, cv = 3)
     selector = feature_selection.SequentialFeatureSelector(
         linear_model.LogisticRegression(max_iter = 1000, random_state = SEED),

@@ -24,7 +24,7 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Project` | A `chrisjen.Project` that makes your data into a `Dataset`, applies the workflow to a copy of it, and can `export` the results. |
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
-| `Loader`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, and `Reducer`, `Metric` has the genre `GroupMetric` (fairness metrics), and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
+| `Loader`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, `Selector`, and `Reducer`, `Metric` has the genre `GroupMetric` (fairness metrics), and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
 | `Chooser` | The genre of the techniques that choose other techniques to suit the data (`auto`, `auto_sampler`, `auto_model`, and `auto_plot`). See [Choosing techniques automatically](#choosing-techniques-automatically). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
 | `Findings` | The default report. |
@@ -58,7 +58,7 @@ catalog](catalog.md) lists every technique by genre.
 
 ## Settings reference
 
-A project's settings are sections of settings. `amos` reads two special
+A project's settings are sections of settings. `amos` reads three special
 sections. Every other section is read by `chrisjen`.
 
 The [idea file](idea.md) page shows how to write settings in a file and
@@ -77,6 +77,7 @@ describes the "general" section in detail.
 | | `input_folder` | Folder (in the root folder) where data files named by a relative path are looked for, and where loaders save downloads. |
 | | `output_folder` | Folder (in the root folder) in which `export` makes a folder for each run. |
 | | `export_results` | Whether to export the results after every run. Defaults to `False`. |
+| `feature_groups` | `{group}` | The features (columns) in a group, which is then a technique that keeps only them (see "Selecting features" below). |
 
 The `chrisjen` settings, in brief:
 
@@ -622,8 +623,9 @@ set, the seed is used. Every random process in a project is reproducible.
 Each genre of transformer changes the features of some kinds by default:
 imputers change the numeric features with missing values (`mode_impute`
 changes features of every kind), scalers and mixers change the numeric
-features, encoders change the categorical and text features, and reducers
-change the numeric and boolean features. Pass `columns` to choose others:
+features, encoders change the categorical and text features, and selectors
+and reducers change the numeric and boolean features. Pass `columns` to
+choose others:
 
 ```python
 cancer = sklearn.datasets.load_breast_cancer(as_frame = True)
@@ -698,36 +700,114 @@ print(list(dataset.tables["random_forest_search"].columns[:2]))
 # ['param_max_depth', 'param_n_estimators']
 ```
 
-### Searching for features
+### Selecting features
 
-Two reducers wrap mlxtend's searches for the set of features with which a
-model scores best, in cross-validation on the training rows.
+Selectors keep some of the features and remove the rest. They are usually
+the techniques of a step of their own (such as "select"), so an experiment
+can compare them. Most wrap scikit-learn's `feature_selection` module and,
+like other transformers, learn which features to keep from the training rows
+only:
+
+| Selector | Keeps |
+| --- | --- |
+| `variance_threshold` | The features whose variance is above a threshold (0). |
+| `k_best`, `select_percentile` | The k features (or the percentile of them) most related to the label, by an F test or another "score_func". |
+| `select_fpr`, `select_fdr`, `select_fwe` | The features whose p-values pass a test at "alpha" (0.05), controlling the false positive rate, the false discovery rate, or the family-wise error rate. |
+| `generic_univariate` | The features most related to the label, by a "mode" (one of the above) and its "param". |
+| `select_from_model` | The features that a model finds most important. |
+| `recursive_elimination` | The features left after removing a model's least important feature again and again. |
+| `recursive_elimination_cv` | The number of features left by `recursive_elimination` that scores best in cross-validation. |
+| `sequential_selection_sk` | The features chosen by adding (or removing) one at a time, in cross-validation. |
+| `sequential_selection`, `exhaustive_selection` | The set of features that scores best in mlxtend's sequential or exhaustive search. |
+| `feature_group` | The features that the settings list. |
+
+A selector that would keep none of the features (such as `select_fwe` with
+a small "alpha") raises an error instead.
+
+#### Searching with a model
+
+The selectors that fit a model take:
+
+| Parameter | Meaning |
+| --- | --- |
+| `estimator` | The model: the name of a model in the library (such as `random_forest`), which is built for the task, or an estimator, its class, or its import path. Defaults to a logistic regression (to classify) or a linear regression. `select_from_model` and the recursive selectors need a model that reports the importance of each feature (as `coef_` or `feature_importances_`). |
+| `scoring` | For the selectors that cross-validate: the scikit-learn scorer to compare with. Defaults to accuracy or R². |
+| `cv` | For the selectors that cross-validate: the number of folds. Defaults to 5. As in a hyperparameter search, a fold keeps the rows of every group of the first group column together. |
+
 `sequential_selection` adds the feature that most improves the score, one at
 a time (or, with `forward = false`, removes them), and keeps `k_features`
 features, or by default the number of features that scored best.
 `exhaustive_selection` tries every set of `min_features` to `max_features`
-features (1 to 3 by default), which is slow when there are many. Both take:
-
-| Parameter | Meaning |
-| --- | --- |
-| `estimator` | The model to score each set with: an estimator, its class, or its import path. Defaults to a logistic regression (to classify) or a linear regression. |
-| `scoring` | The scikit-learn scorer to compare with. Defaults to accuracy or R². |
-| `cv` | Number of cross-validation folds. Defaults to 5. As in a hyperparameter search, a fold keeps the rows of every group of the first group column together. |
-
-The score of every set that was tried is stored in `tables` as
-"{name}_search", best first.
+features (1 to 3 by default), which is slow when there are many. Both need
+mlxtend. They, and `recursive_elimination_cv`, store the score of every set
+(or number of features) that they tried in `tables` as "{name}_search",
+best first.
 
 ```python
 features = amos.Dataset.create(cancer, seed = 43)
 amos.splitters.Stratified().apply(features)
-amos.transformers.SequentialSelection().apply(
+amos.selectors.SequentialSelection().apply(
     features, k_features = 3, cv = 3,
     estimator = "sklearn.tree.DecisionTreeClassifier")
 print(len(features.features))
 # 3
 print(sorted(features.tables["sequential_selection_search"]["size"]))
 # [1, 2, 3]
+ranked = amos.Dataset.create(cancer, seed = 43)
+amos.splitters.Stratified().apply(ranked)
+amos.selectors.RecursiveElimination().apply(
+    ranked, estimator = "random_forest", n_features_to_select = 4)
+print(len(ranked.features))
+# 4
 ```
+
+#### Groups of features
+
+To compare groups of features that you choose, name each group in a
+"feature_groups" section of the settings, and then name the groups as
+techniques. Each group keeps only the features listed for it (the label and
+groups are always kept), so an experiment compares them like any other
+techniques:
+
+<!-- file: groups.ini -->
+```ini
+[general]
+label = target
+seed = 43
+
+[cancer_project]
+design = experiment
+criterion = roc_auc
+steps = split, scale, select, model
+split_techniques = stratified
+scale_techniques = standard
+select_techniques = size, texture, k_best
+model_techniques = logit
+
+[feature_groups]
+size = mean radius, mean perimeter, mean area
+texture = mean texture, worst texture
+
+[k_best_parameters]
+k = 3
+```
+
+```python
+data = cancer.frame
+project = amos.Project.create("groups.ini", item = data)
+print(sorted(b.steps["select"] for b in project.result.branches))
+# ['k_best', 'size', 'texture']
+print(project.result.features)
+# ['worst radius', 'worst perimeter', 'worst concave points']
+```
+
+A listed name that is not a feature keeps the features made from it, whose
+names start with it and an underscore, so a group can name a column before
+it is encoded ("court" keeps "court_federal" and "court_state" after
+`one_hot`). A group's name must not be the name of another technique. To
+use a group without the section, pass its features as `columns` to
+`feature_group` (or to a numbered copy, such as `feature_group2`, with its
+own parameters section).
 
 ### Fitting models on a GPU
 

@@ -2029,6 +2029,7 @@ class Scorecard(_Published, Evaluator):
         'scaler',
         'encoder',
         'mixer',
+        'selector',
         'reducer',
         'sampler',
         'model',

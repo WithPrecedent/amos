@@ -36,6 +36,7 @@ GENRES: tuple[tuple[str, str], ...] = (
     ('scaler', 'Scalers (analyst)'),
     ('encoder', 'Encoders (analyst)'),
     ('mixer', 'Mixers (analyst)'),
+    ('selector', 'Selectors (analyst)'),
     ('reducer', 'Reducers (analyst)'),
     ('sampler', 'Samplers (analyst)'),
     ('model', 'Models (analyst)'),

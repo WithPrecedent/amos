@@ -184,6 +184,7 @@ A few things follow from these rules:
 | `{name}_project` | The project. Its `{name}_workers` setting lists the workers, in order. |
 | A section named for a worker | The worker's steps, techniques, and design (see the [settings reference](advanced.md#settings-reference)). |
 | `{name}_parameters` | Parameters for the technique, step, or worker `name` (see [Set parameters](tutorial.md#6-set-parameters)). |
+| `feature_groups` | Groups of features, each named as a technique that keeps only its features (see [Groups of features](advanced.md#groups-of-features)). |
 
 ## The general section
 
