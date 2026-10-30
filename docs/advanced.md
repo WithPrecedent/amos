@@ -73,9 +73,11 @@ describes the "general" section in detail.
 | | `use_gpu` | Whether to fit the models that can use a GPU (`xgboost`, `catboost`, `lightgbm`, and `tabpfn`) on an NVIDIA GPU. Defaults to false (see "Fitting models on a GPU" below). |
 | | `conserve_memory` | Whether every experiment keeps only the best combination's whole dataset, rather than every combination's, while it tries them. A worker's own `conserve_memory` setting wins. Defaults to false (see "Experiments" below). |
 | | `pipeline` | A named pipeline (such as `classification` or `regression_inference`) that fills in the settings of the analyst, critic, and artist. It can also be in the project's section, or in the section of one of those workers for that worker alone. Settings that you write win. See [pipeline](idea.md#pipeline). |
-| `files` | `root_folder` | Folder for the project's files. Defaults to the current folder. |
-| | `input_folder` | Folder (in the root folder) where data files named by a relative path are looked for, and where loaders save downloads. |
-| | `output_folder` | Folder (in the root folder) in which `export` makes a folder for each run. |
+| `files` | `root_folder` | The workspace, which the other folders are in. Defaults to the folder that holds the "code" folder (see "Where data and results are kept" below). |
+| | `input_folder` | Folder (in the root folder) where data files named by a relative path are looked for, and where loaders save downloads. Defaults to "data". |
+| | `data_subfolder` | The subfolder of the input folder that holds the project's data (such as "crime/nibrs"), which becomes the input folder. |
+| | `interim_folder` | Folder (in the root folder) for intermediate files. Defaults to the input folder. |
+| | `output_folder` | Folder (in the root folder) in which `export` makes a folder for each run. Defaults to "studies". |
 | | `export_results` | Whether to export the results after every run. Defaults to `False`. |
 
 The `chrisjen` settings, in brief:
@@ -100,6 +102,39 @@ The designs:
 | `contest` | Like `experiment`, without the table. |
 | `survey` | Tries every combination and averages the results. The results must be numbers, so it is rarely used with a `Dataset`. |
 | `benchmark` | Repeats its nodes until its criterion is met. |
+
+## Where data and results are kept
+
+A project's `clerk` is an `amos.Clerk` (a `nagata.FileManager`), which keeps
+the data and results outside the project's code, in the "workspace" that
+holds the "code" folder:
+
+```text
+projects/                (the workspace)
+    code/
+        my_study/        (the project's code, where it is run)
+    data/
+        crime/nibrs/     (a project's data, in its own subfolder)
+    studies/
+        my_study_2026-10-30_09-15-00/   (each run's results)
+```
+
+So data that many projects use is kept once, and neither data nor results
+have to be left out of a repository by hand. The workspace is the folder
+that holds the nearest folder named "code" at or above the current folder
+(or the current folder, if there is none). The environment variable
+`AMOS_WORKSPACE` names another, and so does `amos.options._DEFAULT_ROOT`
+(for a package built on `amos`). The "files" section of the settings can
+name the project's data subfolder and change any folder:
+
+```toml
+[files]
+data_subfolder = "crime/nibrs"
+```
+
+A `Clerk` can also be made and passed as the `clerk` of `Project.create`,
+for example `amos.Clerk(data_subfolder = "crime/nibrs")`. Each folder is
+made if it does not exist.
 
 ## The dataset
 
@@ -159,7 +194,7 @@ then in the clerk's input folder.
 
 A loader makes the dataset from a source named in the settings, so a project
 with a loader needs no `item`. Loaders are usually the first step of the
-wrangler. They work through the project's `clerk` (a `nagata.FileManager`): a
+wrangler. They work through the project's `clerk` (an `amos.Clerk`): a
 file named by a relative path is looked for in the current folder and then in
 the clerk's input folder (the `input_folder` of the "files" section), and
 downloads are saved in the input folder.
@@ -1661,8 +1696,9 @@ the winner of each experiment or contest, the model, the metrics, and the
 tables and figures. To use another report, pass a `chrisjen.Report` as
 `report` to `Project.create`.
 
-`Project.export` saves these files with the project's `clerk` (a
-`nagata.FileManager`), in a folder named for the run in the output folder:
+`Project.export` saves these files with the project's `clerk` (an
+`amos.Clerk`), in a folder named for the run in the output folder (the
+"studies" folder of the workspace, unless the settings name another):
 
 | File | Contents |
 | --- | --- |

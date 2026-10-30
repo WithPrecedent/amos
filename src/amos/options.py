@@ -9,8 +9,11 @@ Contents:
         and still be treated as classes.
     _CATEGORY_THRESHOLD: most unique values that a column can have for
         `auto_categorize` to make it categorical.
+    _CODE_FOLDER: name of the folder that holds projects' code.
+    _DATA_FOLDER: folder of the workspace that holds data.
     _DEFAULT_REPORT: name of the report that a `Project` generates.
-    _DEFAULT_ROOT: root folder for a project's files.
+    _DEFAULT_ROOT: root folder for a project's files (the workspace), or
+        `None` to find it.
     _DEFAULT_TEST_SIZE: share of the rows that a splitter puts in the test set.
     _DOWNLOAD_TIMEOUT: seconds that `download` waits for a server to answer.
     _EXTRAS: optional `amos` extras that install each optional package.
@@ -21,6 +24,8 @@ Contents:
     _PLOT_STYLE: the style of figures.
     _RECORDED_PACKAGES: packages whose versions are recorded by
         `Project.export`.
+    _STUDIES_FOLDER: folder of the workspace for each run's results.
+    _WORKSPACE_VARIABLE: environment variable that can name the workspace.
 
 """
 
@@ -37,10 +42,19 @@ _CLASSIFY_THRESHOLD: int = 10
 _CATEGORY_THRESHOLD: int = 10
 # Name (in the library) of the report that an `amos.Project` generates.
 _DEFAULT_REPORT: str = 'findings'
-# Root folder for a project's files. Unlike `chrisjen`, which uses a folder
-# beside the current one, `amos` keeps a project's files in the current
-# folder unless the "files" section of the settings says otherwise.
-_DEFAULT_ROOT: pathlib.Path = pathlib.Path()
+# Root folder for a project's files (the workspace, which holds the data and
+# studies folders). `None` finds it (see `clerks.workspace`): the folder
+# named by `_WORKSPACE_VARIABLE`, or the folder that holds the nearest
+# `_CODE_FOLDER` above the current folder, or the current folder.
+_DEFAULT_ROOT: pathlib.Path | str | None = None
+# The environment variable that can name the workspace.
+_WORKSPACE_VARIABLE: str = 'AMOS_WORKSPACE'
+# Name of the folder that holds projects' code. The workspace holds it.
+_CODE_FOLDER: str = 'code'
+# Folder of the workspace that holds data (each project's in a subfolder).
+_DATA_FOLDER: str = 'data'
+# Folder of the workspace in which each run's results are saved.
+_STUDIES_FOLDER: str = 'studies'
 # Share of the rows that a splitter puts in the test set.
 _DEFAULT_TEST_SIZE: float = 0.25
 # Seconds that `download` waits for a server to answer before giving up.

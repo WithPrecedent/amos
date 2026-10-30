@@ -21,10 +21,12 @@ import numpy as np
 import pandas as pd
 
 from . import auto, base, evaluators, loaders, options, pipelines, utilities
+from .clerks import Clerk
 
-# Arguments of a `nagata.FileManager` that can be set in the "files" section
-# of the settings.
-_FOLDERS: tuple[str, ...] = ('input_folder', 'interim_folder', 'output_folder')
+# Arguments of a `Clerk` that can be set in the "files" section of the
+# settings.
+_FOLDERS: tuple[str, ...] = (
+    'input_folder', 'interim_folder', 'output_folder', 'data_subfolder')
 # Formats of the scorecard (and of regression tables) that need an optional
 # package, and the package.
 _SCORECARD_FORMATS: tuple[tuple[str, str], ...] = (
@@ -53,8 +55,13 @@ class Project(chrisjen.Project):
       twice gives the same result, and the item is never changed. A project
       created without an item or a loader is drafted but not applied.
     * The default report is `Findings`.
-    * Files are kept in the current folder unless the "files" section of the
-      settings sets a "root_folder" (or other folders).
+    * Its `clerk` is a `Clerk`, which keeps data and results outside the
+      project's code: data in the "data" folder of the workspace (the
+      folder that holds the "code" folder, see `clerks.workspace`), or a
+      subfolder of it named by "data_subfolder" (such as "crime/nibrs"), and
+      each run's results in its "studies" folder. The "files" section of the
+      settings can set the "root_folder" (the workspace) and the other
+      folders.
     * `export` saves everything needed to report and reproduce the results.
       If "export_results" is true in the "files" section, the results are
       exported after each call to `apply`.
@@ -114,9 +121,10 @@ class Project(chrisjen.Project):
         Args:
             idea: settings that describe the project: an `Idea`, a `dict`, or
                 the path to a settings file.
-            clerk: file manager, or the root folder for one. Defaults to
-                `None`, in which case the "root_folder" of the "files" section
-                of the settings (or `options._DEFAULT_ROOT`) is used.
+            clerk: file manager, or the root folder (the workspace) for a
+                `Clerk`. Defaults to `None`, in which case the "root_folder"
+                of the "files" section of the settings (or the workspace that
+                `clerks.workspace` finds) is used.
             **kwargs: other arguments for `chrisjen.Project.create`, such as
                 `item`, `name`, `id`, and `automatic`.
 
@@ -413,20 +421,21 @@ def _make_clerk(
     """Returns a file manager for a project.
 
     Args:
-        root: the root folder, or `None` to use the "root_folder" of the
-            "files" section of `idea` (or `options._DEFAULT_ROOT`).
+        root: the root folder (the workspace), or `None` to use the
+            "root_folder" of the "files" section of `idea`, or else the
+            workspace that `clerks.workspace` finds.
         idea: settings of the project.
 
     Returns:
-        A file manager. Folders in the "files" section of `idea` (such as
-            "output_folder") are passed to it.
+        A `Clerk`. Folders in the "files" section of `idea` (such as
+            "output_folder" and "data_subfolder") are passed to it.
 
     """
     files = dict(idea.get('files', {}))
     if root is None:
-        root = files.get('root_folder', options._DEFAULT_ROOT)
+        root = files.get('root_folder')
     folders = {k: v for k, v in files.items() if k in _FOLDERS}
-    return nagata.FileManager(root_folder = pathlib.Path(root), **folders)
+    return Clerk(root_folder = root, **folders)
 
 
 def _importable(package: str) -> bool:

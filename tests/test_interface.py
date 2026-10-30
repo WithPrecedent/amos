@@ -171,7 +171,8 @@ def test_export_saves_everything(tmp_path: pathlib.Path) -> None:
     settings['critic']['techniques'] = 'scorecard, confusion, confusion_heatmap'
     project = amos.Project.create(settings, item = make_numeric(), id = 'run')
     folder = project.export(data = True)
-    assert folder == tmp_path / 'run'
+    # Each run is saved in a folder of the workspace's "studies" folder.
+    assert folder == tmp_path / 'studies' / 'run'
     files = sorted(p.relative_to(folder).as_posix() for p in folder.rglob('*.*'))
     assert files == [
         'data.csv',
@@ -222,7 +223,7 @@ def test_export_after_each_apply_if_the_settings_say_so(
     tmp_path: pathlib.Path) -> None:
     settings = _settings(files = {'export_results': True})
     amos.Project.create(settings, item = make_numeric(), id = 'auto')
-    assert (tmp_path / 'auto' / 'report.txt').is_file()
+    assert (tmp_path / 'studies' / 'auto' / 'report.txt').is_file()
 
 
 def test_export_before_apply_raises() -> None:

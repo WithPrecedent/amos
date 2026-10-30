@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* Added `Clerk` (in the new `clerks` module), a `nagata.FileManager` that is
+  now the `clerk` of every `Project` and loader. It keeps data and results
+  outside a project's code, in the "workspace" that holds the "code"
+  folder: data in its "data" folder (or in a subfolder of it named by the
+  new "data_subfolder" setting of the "files" section, such as
+  "crime/nibrs"), and each run's results in its "studies" folder. The
+  workspace is the folder that holds the nearest "code" folder above the
+  current folder (or the current folder, if there is none), unless the
+  `AMOS_WORKSPACE` environment variable or `options._DEFAULT_ROOT` names
+  another. Before, a project kept its files in the current folder, so a
+  project that relied on that should set "root_folder", "input_folder", or
+  "output_folder" in its "files" section.
+
 ## 0.5.2
 
 * Added named pipelines (the new `pipelines` module and `Pipeline` class).

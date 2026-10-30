@@ -9,6 +9,7 @@ __author__: str = 'Corey Rayburn Yung'
 __all__: list[str] = [
     'Chooser',
     'Cleaner',
+    'Clerk',
     'Dataset',
     'Describer',
     'Encoder',
@@ -45,6 +46,7 @@ from chrisjen import library
 from .auto import Chooser
 from .base import Dataset, Operation
 from .cleaners import Cleaner
+from .clerks import Clerk
 from .describers import Describer
 from .evaluators import Evaluator
 from .inferers import Inferer
