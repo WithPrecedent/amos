@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.6.1
 
 * Added selectors, a new genre of analyst techniques that keep some of the
   features and remove the rest (the new `selectors` module and `Selector`
@@ -52,6 +52,11 @@ All notable changes to this project will be documented in this file.
   counts of `histograms` and `count_plots`, the scores of `search_plot`, and
   the contributions of `shape_functions`. In a `pair_plot`, each feature has
   one range, on the x axes of its column and the y axes of its row.
+* The lock file uses category-encoders 2.11.2, coverage 7.17.0, fairlearn
+  0.15.0, great-tables 1.1.0, mapie 1.6.0, markdown-exec 1.12.6,
+  mkdocs-coverage 2.0.1, mkdocs-material 9.8.0, pandas 3.1.0, polars
+  2.1.0, pre-commit 4.7.0, pyarrow 26.0.0, ruff 0.17.3, statsmodels 0.15.0,
+  and uv 0.13.6, and the workflows use astral-sh/setup-uv 10.3.2.
 
 ## 0.6.0
 
