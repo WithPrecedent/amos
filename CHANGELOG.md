@@ -7,8 +7,10 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 * The axes of plots start at 0 (or end at 0, for negative numbers), unless
-  they show something with no natural zero, such as the values of the
-  features, or are axes of names, dates, a logarithmic scale, or a heatmap.
+  they show something with no natural zero (the values of the features, the
+  label of a regression or the model's predictions of it, or the parameters
+  of a model in `search_plot` and `validation_curve`), or are axes of names,
+  dates, a logarithmic scale, or a heatmap.
   The new "start_at_zero" parameter of every plot ("x", "y", "xy", or "")
   picks the axes (anything else raises a `ValueError`).
 * The panels of a plot that measure the same thing share their ranges: the

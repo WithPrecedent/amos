@@ -1287,14 +1287,21 @@ print(sorted(trees.figures))
 
 The axes of a figure start at 0, so that the heights and lengths of what it
 draws can be compared, unless the axis shows something with no natural zero:
-the values of the features (in `histograms`, `box_plots`, `pair_plot`,
-`partial_dependence`, `decision_regions`, `tree_feature_space`,
-`shape_functions`, `shap_scatter`, and `shap_partial_dependence`), or the
-model's output in shap's `shap_decision`, `shap_waterfall`, `shap_force`, and
-`shap_embedding`. An axis of negative numbers ends at 0, and one that already
-holds 0 is left as it is, as are axes of names, dates, a logarithmic scale,
-or a heatmap. "start_at_zero" picks the axes: "x", "y", "xy", or "" for
-neither.
+
+- the values of the features (in `histograms`, `box_plots`, `pair_plot`,
+  `partial_dependence`, `decision_regions`, `tree_feature_space`,
+  `shape_functions`, `shap_scatter`, and `shap_partial_dependence`);
+- the model's output in shap's `shap_decision`, `shap_waterfall`,
+  `shap_force`, and `shap_embedding`;
+- the label of a regression, or the model's predictions of it (in
+  `label_plot`, `actual_vs_predicted`, `residual_plot`,
+  `prediction_intervals`, `partial_dependence`, `shap_partial_dependence`,
+  and `tree_leaf_distributions`);
+- the parameters of the model (in `search_plot` and `validation_curve`).
+
+An axis of negative numbers ends at 0, and one that already holds 0 is left
+as it is, as are axes of names, dates, a logarithmic scale, or a heatmap.
+"start_at_zero" picks the axes: "x", "y", "xy", or "" for neither.
 
 The panels of a plot that measure the same thing share their ranges: the
 counts of `histograms` and `count_plots`, the scores of `search_plot` and

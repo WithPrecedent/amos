@@ -542,6 +542,8 @@ def test_search_plot(classified: amos.Dataset, tmp_path: pathlib.Path) -> None:
     _check(classified, 'search_plot', tmp_path)
     axes = classified.figures['search_plot'].axes
     assert [a.get_xlabel() for a in axes] == ['max_features', 'n_estimators']
+    # The values of a parameter have no natural zero.
+    assert axes[1].get_xlim()[0] > 0
 
 
 def test_shape_functions(
@@ -661,6 +663,20 @@ def test_axes_start_at_zero(fitted: amos.Dataset) -> None:
     assert axes.get_ylim()[0] > 0
     with pytest.raises(ValueError, match = 'not "z"'):
         plots.LearningCurve().apply(fitted, cv = 3, start_at_zero = 'z')
+
+
+def test_axes_of_a_regression_label_do_not_start_at_zero(
+    fitted_regression: amos.Dataset) -> None:
+    plots.LabelPlot().apply(fitted_regression)
+    axes = fitted_regression.figures['label_plot'].axes[0]
+    assert axes.get_xlim()[0] > 0
+    assert axes.get_ylim()[0] == 0
+    plots.LabelPlot().apply(fitted_regression, start_at_zero = 'xy')
+    axes = fitted_regression.figures['label_plot'].axes[0]
+    assert axes.get_xlim()[0] == 0
+    plots.ResidualPlot().apply(fitted_regression)
+    axes = fitted_regression.figures['residual_plot'].axes[0]
+    assert axes.get_xlim()[0] > 0
 
 
 def test_axes_that_are_not_ranges_of_numbers_are_left_alone() -> None:

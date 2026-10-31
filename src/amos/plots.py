@@ -12,10 +12,12 @@ shown by making it the last line of a cell.
 Every plot accepts "width" and "height" (in inches) and "title" parameters,
 and "style", "colors", "latex", and "start_at_zero" parameters that set how
 it looks (see `Plot.apply`). The axes start at 0 unless they show something
-with no natural zero (such as the values of a feature), and the panels of a
-plot that measure the same thing share their ranges. By default, figures have SciencePlots' style for
-scientific figures, with the size and fonts of a figure in Nature, and a
-cycle of colors that people with color blindness can tell apart.
+with no natural zero (such as the values of a feature, the label of a
+regression, or the parameters of a model), and the panels of a plot that
+measure the same thing share their ranges. By default, figures have
+SciencePlots' style for scientific figures, with the size and fonts of a
+figure in Nature, and a cycle of colors that people with color blindness can
+tell apart.
 
 Contents:
     Plot: base class for techniques that draw a figure.
@@ -152,6 +154,11 @@ class Plot(base.Operation, abc.ABC):
     # The axes ("x", "y", or both) that measure the same thing in every
     # panel of the plot, so that the panels share their ranges.
     shared_axes: ClassVar[str] = ''
+    # The axes ("x", "y", or both) that show the label (or the model's
+    # predictions of it). A regression's label has no natural zero, so for a
+    # regression these axes do not start at 0, unless the plot is given
+    # "start_at_zero".
+    label_axes: ClassVar[str] = ''
 
     """ Required Methods """
 
@@ -217,7 +224,7 @@ class Plot(base.Operation, abc.ABC):
                 sets the text (and math), whatever `style` says.
             start_at_zero: the axes ("x", "y", "xy", or "" for neither) whose
                 ranges start at 0. Defaults to `None`, which uses the plot's
-                `starts_at_zero`.
+                `starts_at_zero`, without its `label_axes` for a regression.
             **kwargs: parameters for `draw`.
 
         Returns:
@@ -258,10 +265,12 @@ class Plot(base.Operation, abc.ABC):
                 figure = drawn
             if title is not None:
                 figure.suptitle(title)
-            _start_at_zero(
-                figure,
-                self.starts_at_zero if start_at_zero is None
-                else start_at_zero)
+            if start_at_zero is None:
+                start_at_zero = self.starts_at_zero
+                if item.task == 'regress':
+                    start_at_zero = ''.join(
+                        a for a in start_at_zero if a not in self.label_axes)
+            _start_at_zero(figure, start_at_zero)
             _share_ranges(figure, self.shared_axes)
             # `matplotlib` makes some parts of a figure (such as most of its
             # ticks) only when the figure is drawn, and finds the colors of
@@ -284,6 +293,8 @@ class ActualVsPredicted(Plot):
         from scikit-learn.
 
     """
+
+    label_axes: ClassVar[str] = 'xy'
 
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
         """Draws the actual labels against the predictions.
@@ -902,6 +913,8 @@ class LabelPlot(Plot):
 
     """
 
+    label_axes: ClassVar[str] = 'x'
+
     def draw(
         self,
         item: base.Dataset,
@@ -1147,6 +1160,7 @@ class PartialDependence(Plot):
 
     size: ClassVar[tuple[float, float]] = (9.6, 3.6)
     starts_at_zero: ClassVar[str] = 'y'
+    label_axes: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -1247,6 +1261,8 @@ class PredictionIntervals(Plot):
     holds the true class.
 
     """
+
+    label_axes: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -1364,6 +1380,8 @@ class ResidualPlot(Plot):
 
     """
 
+    label_axes: ClassVar[str] = 'x'
+
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
         """Draws the residuals against the predictions.
 
@@ -1416,6 +1434,8 @@ class SearchPlot(Plot):
     """
 
     shared_axes: ClassVar[str] = 'y'
+    # The parameters of the model have no natural zero.
+    starts_at_zero: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -1920,6 +1940,7 @@ class ShapPartialDependence(Plot):
 
     scaled: ClassVar[bool] = False
     starts_at_zero: ClassVar[str] = 'y'
+    label_axes: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -2361,6 +2382,8 @@ class TreeLeafDistributions(Plot):
 
     """
 
+    label_axes: ClassVar[str] = 'x'
+
     def draw(
         self,
         item: base.Dataset,
@@ -2592,6 +2615,9 @@ class ValidationCurve(Plot):
         from scikit-learn.
 
     """
+
+    # The parameters of the model have no natural zero.
+    starts_at_zero: ClassVar[str] = 'y'
 
     def draw(
         self,
