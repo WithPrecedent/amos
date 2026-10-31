@@ -384,8 +384,11 @@ class FeatureGroup(Selector):
         chosen = {f for found in kept.values() for f in found}
         removed = [c for c in item.features if c not in chosen]
         item.update_features(removed, pd.DataFrame(index = item.data.index))
+        # A group is often only in a project's own library, so it records its
+        # genre for the scorecard (which looks names up in chrisjen.library).
         item.record(
             self.name,
+            genre = 'selector',
             listed = names,
             kept = [c for c in item.features if c in chosen],
             removed = removed)

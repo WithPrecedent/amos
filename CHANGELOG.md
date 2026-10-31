@@ -30,7 +30,9 @@ All notable changes to this project will be documented in this file.
   `feature_group` technique does the same with the features passed as its
   "columns".
 * The scorecard of a dataset that did not come from an experiment lists its
-  selectors as a step.
+  selectors as a step, including feature groups that are only in a
+  project's own library (a technique that is not in `chrisjen.library` is
+  listed under the "genre" in its history entry, if it has one).
 
 ## 0.6.0
 

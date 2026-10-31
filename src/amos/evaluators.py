@@ -2170,8 +2170,10 @@ class Scorecard(_Published, Evaluator):
 
         Returns:
             The names of the techniques in `history` whose genres are in
-                `steps`, by genre. Several techniques of one genre are
-                joined with commas.
+                `steps`, by genre. A technique that is not in
+                `chrisjen.library` is placed by the "genre" that it
+                recorded, if any. Several techniques of one genre are joined
+                with commas.
 
         """
         found: dict[str, str] = {}
@@ -2180,7 +2182,9 @@ class Scorecard(_Published, Evaluator):
             try:
                 genre = chrisjen.library.classify(technique)
             except ValueError:
-                continue
+                # A technique that is only in a project's own library (such
+                # as a feature group) may record its genre.
+                genre = str(entry.get('genre'))
             if genre in self.step_genres:
                 found[genre] = (
                     f'{found[genre]}, {technique}' if genre in found

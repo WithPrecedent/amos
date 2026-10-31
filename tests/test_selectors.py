@@ -9,7 +9,7 @@ from conftest import SEED, make_mixed, make_numeric, package_of, requires
 
 import amos
 import chrisjen
-from amos import selectors, transformers
+from amos import evaluators, selectors, transformers
 
 # `feature_group` keeps the features that it is given, so it is tested on its
 # own.
@@ -47,6 +47,25 @@ def _group_settings(
             'split_techniques': 'stratified',
             'select_techniques': techniques,
             'model_techniques': 'logit'}}
+
+
+def _features_by_group(project: amos.Project) -> dict[str, list[str]]:
+    """Returns the features that each branch of an experiment kept.
+
+    Args:
+        project: an applied project whose experiment has a "select" step.
+
+    Returns:
+        The features of the dataset that each branch made, by the name of
+            its "select" technique.
+
+    """
+    found = {}
+    for branch in project.result.branches:
+        source = branch.source() if branch.source else None
+        assert source is not None
+        found[branch.steps['select']] = source.features
+    return found
 
 
 @pytest.mark.parametrize(('name', 'kind'), SELECTORS)
@@ -142,6 +161,17 @@ def test_feature_group_keeps_the_listed_features(
     assert 'target' in classified.data.columns
 
 
+def test_the_scorecard_lists_a_group_that_is_not_in_the_library(
+    classified: amos.Dataset) -> None:
+    # A group registered only in a project's own library.
+    selectors.FeatureGroup(name = 'mine').apply(
+        classified, columns = ['x0', 'x1'])
+    with pytest.raises(ValueError, match = 'not in the library'):
+        chrisjen.library.classify('mine')
+    steps = evaluators.Scorecard()._history_steps(classified)
+    assert steps['selector'] == 'mine'
+
+
 def test_feature_group_keeps_the_features_made_from_a_listed_one() -> None:
     dataset = _split_mixed()
     transformers.OneHot().apply(dataset, columns = ['region'])
@@ -168,10 +198,8 @@ def test_feature_groups_in_the_settings_are_techniques() -> None:
     assert project.name == 'study'
     assert chrisjen.library.all['first'] is selectors.FeatureGroup
     assert chrisjen.library.classify('last') == 'selector'
-    branches = project.result.branches
-    labels = sorted(branch.steps['select'] for branch in branches)
-    assert labels == ['first', 'last']
-    assert project.result.features in (['x0', 'x1'], ['x5'])
+    assert _features_by_group(project) == {
+        'first': ['x0', 'x1'], 'last': ['x5']}
 
 
 def test_the_feature_groups_section_is_not_a_worker() -> None:
@@ -194,7 +222,8 @@ def test_feature_groups_can_be_numbered_techniques() -> None:
     settings['feature_group1_parameters'] = {'columns': ['x0', 'x1']}
     settings['feature_group2_parameters'] = {'columns': ['x2']}
     project = amos.Project.create(settings, item = make_numeric())
-    assert project.result.features in (['x0', 'x1'], ['x2'])
+    assert _features_by_group(project) == {
+        'feature_group1': ['x0', 'x1'], 'feature_group2': ['x2']}
 
 
 @pytest.mark.parametrize(('groups', 'error', 'match'), [
@@ -299,5 +328,3 @@ def test_k_best_imports_a_scoring_function(classified: amos.Dataset) -> None:
         score_func = 'sklearn.feature_selection.mutual_info_classif')
     tool = classified.fitted['k_best']
     assert tool.score_func.__name__ == 'mutual_info_classif'
-
-
