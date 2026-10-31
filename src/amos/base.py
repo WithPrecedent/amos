@@ -15,7 +15,6 @@ import pathlib
 import weakref
 from collections.abc import (
     Callable,
-    Hashable,
     Iterable,
     Mapping,
     MutableMapping,
@@ -30,8 +29,9 @@ import pandas as pd
 
 from . import options, utilities
 
-# Parameters of a technique, as `chrisjen` stores them.
-GenericDict: TypeAlias = MutableMapping[Hashable, Any]
+# Parameters of a technique, as `chrisjen` stores them (keyword arguments, so
+# their keys are `str`).
+GenericDict: TypeAlias = MutableMapping[str, Any]
 # Tasks that a `Dataset` can have.
 _TASKS: tuple[str, ...] = ('classify', 'regress')
 

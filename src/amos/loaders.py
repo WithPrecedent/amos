@@ -120,8 +120,7 @@ class Loader(base.Operation, abc.ABC):
 
         """
         kwargs.setdefault('clerk', project.clerk)
-        loader = cast('Loader', super().build(
-            name, project, parameters, **kwargs))
+        loader = super().build(name, project, parameters, **kwargs)
         general = project.idea.get('general', {})
         for key in _GENERAL:
             if key in general:

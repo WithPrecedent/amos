@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* Requires chrisjen 0.4.2, camina 0.2.4, and nagata 0.2.1 or later, and the
+  lock file uses the latest chrisjen, camina, nagata, bobbie, bunches,
+  holden, miller, and wonka. All of them ship the `py.typed` marker, so the
+  `mypy` override that followed their untyped imports is gone.
+* The parameters of techniques (`base.GenericDict`) have `str` keys, as
+  chrisjen now types them, and the casts of `Loader.build` and
+  `Merger.build` are gone, since chrisjen's `build` returns the class it is
+  called on.
+
 ## 0.6.0
 
 * Added `Clerk` (in the new `clerks` module), a `nagata.FileManager` that is

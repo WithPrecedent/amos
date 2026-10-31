@@ -137,7 +137,9 @@ class Project(chrisjen.Project):
             # caller's settings.
             idea = dict(idea)
         if not isinstance(idea, chrisjen.Idea):
-            idea = chrisjen.Idea.create(idea)
+            # bobbie annotates `create` as returning its base class, but it
+            # returns an instance of the class it is called on.
+            idea = cast('chrisjen.Idea', chrisjen.Idea.create(idea))
         pipelines.expand(idea, kwargs.get('name'))
         if not isinstance(clerk, nagata.FileManager):
             clerk = _make_clerk(clerk, idea)
