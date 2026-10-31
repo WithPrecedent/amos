@@ -162,8 +162,7 @@ class Merger(base.Operation, abc.ABC):
 
         """
         kwargs.setdefault('clerk', project.clerk)
-        return cast('Merger', super().build(
-            name, project, parameters, **kwargs))
+        return super().build(name, project, parameters, **kwargs)
 
     """ Public Methods """
 

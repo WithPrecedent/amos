@@ -33,6 +33,14 @@ All notable changes to this project will be documented in this file.
   selectors as a step, including feature groups that are only in a
   project's own library (a technique that is not in `chrisjen.library` is
   listed under the "genre" in its history entry, if it has one).
+* Requires chrisjen 0.4.2, camina 0.2.4, and nagata 0.2.1 or later, and the
+  lock file uses the latest chrisjen, camina, nagata, bobbie, bunches,
+  holden, miller, and wonka. All of them ship the `py.typed` marker, so the
+  `mypy` override that followed their untyped imports is gone.
+* The parameters of techniques (`base.GenericDict`) have `str` keys, as
+  chrisjen now types them, and the casts of `Loader.build` and
+  `Merger.build` are gone, since chrisjen's `build` returns the class it is
+  called on.
 
 ## 0.6.0
 
