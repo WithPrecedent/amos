@@ -659,6 +659,8 @@ def test_axes_start_at_zero(fitted: amos.Dataset) -> None:
     axes = fitted.figures['learning_curve'].axes[0]
     assert axes.get_xlim()[0] == 0
     assert axes.get_ylim()[0] > 0
+    with pytest.raises(ValueError, match = 'not "z"'):
+        plots.LearningCurve().apply(fitted, cv = 3, start_at_zero = 'z')
 
 
 def test_axes_that_are_not_ranges_of_numbers_are_left_alone() -> None:

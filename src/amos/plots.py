@@ -223,7 +223,16 @@ class Plot(base.Operation, abc.ABC):
         Returns:
             The dataset, with the new figure.
 
+        Raises:
+            ValueError: if `start_at_zero` names an axis that is not "x" or
+                "y".
+
         """
+        if start_at_zero is not None and set(start_at_zero) - set('xy'):
+            message = (
+                f'start_at_zero must be "x", "y", "xy", or "", not '
+                f'"{start_at_zero}"')
+            raise ValueError(message)
         figures = utilities.import_tool('matplotlib.figure')
         with contextlib.ExitStack() as stack:
             matplotlib = stack.enter_context(

@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
   they show something with no natural zero, such as the values of the
   features, or are axes of names, dates, a logarithmic scale, or a heatmap.
   The new "start_at_zero" parameter of every plot ("x", "y", "xy", or "")
-  picks the axes.
+  picks the axes (anything else raises a `ValueError`).
 * The panels of a plot that measure the same thing share their ranges: the
   counts of `histograms` and `count_plots`, the scores of `search_plot`, and
   the contributions of `shape_functions`. In a `pair_plot`, each feature has
