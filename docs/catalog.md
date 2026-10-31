@@ -159,16 +159,30 @@ imported when a technique that needs them is used (see the extras in the
 | [`polynomial`][amos.transformers.Polynomial] | <code>sklearn.<wbr>preprocessing.<wbr>PolynomialFeatures</code> | Adds the squares and products of the features (degree 2 by default). |
 | [`splines`][amos.transformers.Splines] | <code>sklearn.<wbr>preprocessing.<wbr>SplineTransformer</code> | Replaces each feature with a set of spline curves. |
 
+## Selectors (analyst)
+
+| Name | Tool | Description |
+| --- | --- | --- |
+| [`exhaustive_selection`][amos.selectors.ExhaustiveSelection] | <code>mlxtend.<wbr>feature_selection.<wbr>ExhaustiveFeatureSelector</code> | Keeps the best of every set of 1 to 3 features (by cross-validation). |
+| [`feature_group`][amos.selectors.FeatureGroup] |  | Keeps the features that the settings list, and removes the others. |
+| [`generic_univariate`][amos.selectors.GenericUnivariate] | <code>sklearn.<wbr>feature_selection.<wbr>GenericUnivariateSelect</code> | Keeps the features most related to the label, by a mode it is given. |
+| [`k_best`][amos.selectors.KBest] | <code>sklearn.<wbr>feature_selection.<wbr>SelectKBest</code> | Keeps the k features (10 by default) most related to the label. |
+| [`recursive_elimination`][amos.selectors.RecursiveElimination] | <code>sklearn.<wbr>feature_selection.<wbr>RFE</code> | Removes the least important feature of a model, again and again. |
+| [`recursive_elimination_cv`][amos.selectors.RecursiveEliminationCV] | <code>sklearn.<wbr>feature_selection.<wbr>RFECV</code> | Removes features as `recursive_elimination` does, keeping the best. |
+| [`select_fdr`][amos.selectors.SelectFdr] | <code>sklearn.<wbr>feature_selection.<wbr>SelectFdr</code> | Keeps the features related to the label, controlling false discovery. |
+| [`select_fpr`][amos.selectors.SelectFpr] | <code>sklearn.<wbr>feature_selection.<wbr>SelectFpr</code> | Keeps the features related to the label, controlling false positives. |
+| [`select_from_model`][amos.selectors.SelectFromModel] | <code>sklearn.<wbr>feature_selection.<wbr>SelectFromModel</code> | Keeps the features that a model finds most important. |
+| [`select_fwe`][amos.selectors.SelectFwe] | <code>sklearn.<wbr>feature_selection.<wbr>SelectFwe</code> | Keeps the features related to the label, controlling family-wise error. |
+| [`select_percentile`][amos.selectors.SelectPercentile] | <code>sklearn.<wbr>feature_selection.<wbr>SelectPercentile</code> | Keeps the features (50% by default) most related to the label. |
+| [`sequential_selection`][amos.selectors.SequentialSelection] | <code>mlxtend.<wbr>feature_selection.<wbr>SequentialFeatureSelector</code> | Adds (or removes) features one at a time while the score improves. |
+| [`sequential_selection_sk`][amos.selectors.SequentialSelectionSK] | <code>sklearn.<wbr>feature_selection.<wbr>SequentialFeatureSelector</code> | Adds (or removes) features one at a time until it keeps enough. |
+| [`variance_threshold`][amos.selectors.VarianceThreshold] | <code>sklearn.<wbr>feature_selection.<wbr>VarianceThreshold</code> | Removes features whose variance is at or below a threshold (0). |
+
 ## Reducers (analyst)
 
 | Name | Tool | Description |
 | --- | --- | --- |
-| [`exhaustive_selection`][amos.transformers.ExhaustiveSelection] | <code>mlxtend.<wbr>feature_selection.<wbr>ExhaustiveFeatureSelector</code> | Keeps the best of every set of 1 to 3 features (by cross-validation). |
-| [`k_best`][amos.transformers.KBest] | <code>sklearn.<wbr>feature_selection.<wbr>SelectKBest</code> | Keeps the k features (10 by default) most related to the label. |
 | [`pca_reduce`][amos.transformers.PCAReduce] | <code>sklearn.<wbr>decomposition.<wbr>PCA</code> | Replaces the features with their principal components. |
-| [`select_percentile`][amos.transformers.SelectPercentile] | <code>sklearn.<wbr>feature_selection.<wbr>SelectPercentile</code> | Keeps the features (50% by default) most related to the label. |
-| [`sequential_selection`][amos.transformers.SequentialSelection] | <code>mlxtend.<wbr>feature_selection.<wbr>SequentialFeatureSelector</code> | Adds (or removes) features one at a time while the score improves. |
-| [`variance_threshold`][amos.transformers.VarianceThreshold] | <code>sklearn.<wbr>feature_selection.<wbr>VarianceThreshold</code> | Removes features whose variance is at or below a threshold (0). |
 
 ## Samplers (analyst)
 

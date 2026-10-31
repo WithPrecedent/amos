@@ -32,6 +32,7 @@ __all__: list[str] = [
     'Reducer',
     'Sampler',
     'Scaler',
+    'Selector',
     'Shaper',
     'Splitter',
     'Transformer',
@@ -60,6 +61,7 @@ from .pipelines import Pipeline
 from .plots import Plot
 from .reports import Findings
 from .samplers import Sampler
+from .selectors import Selector
 from .shapers import Shaper
 from .splitters import Splitter
 from .transformers import Encoder, Imputer, Mixer, Reducer, Scaler, Transformer

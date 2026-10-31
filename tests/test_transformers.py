@@ -82,104 +82,14 @@ def test_mixers_add_features(name: str, kind: type[amos.Mixer]) -> None:
 
 
 @pytest.mark.parametrize(('name', 'kind'), REDUCERS)
-def test_reducers_select_or_combine_features(
+def test_reducers_combine_features(
     name: str,
     kind: type[amos.Reducer],
     classified: amos.Dataset) -> None:
-    requires(package_of(kind))
     classified.data['constant'] = 1.0
-    kind().apply(classified, **({'k': 3} if name == 'k_best' else {}))
+    kind().apply(classified)
     assert 0 < len(classified.features) < 7
     assert classified.history[-1]['technique'] == name
-
-
-def test_sequential_selection_keeps_the_best_features(
-    classified: amos.Dataset) -> None:
-    requires('mlxtend')
-    transformers.SequentialSelection().apply(classified, k_features = 3, cv = 3)
-    assert len(classified.features) == 3
-    table = classified.tables['sequential_selection_search']
-    assert list(table.columns) == ['features', 'size', 'score', 'std']
-    assert sorted(table['size']) == [1, 2, 3]
-    assert table['score'].is_monotonic_decreasing
-    chosen = table.loc[table['size'] == 3, 'features'].iloc[0]
-    assert chosen.split(', ') == classified.features
-    selector = classified.fitted['sequential_selection']
-    assert selector.estimator.random_state == SEED
-    assert selector.scoring == 'accuracy'
-
-
-def test_selectors_score_by_the_task(regressed: amos.Dataset) -> None:
-    requires('mlxtend')
-    transformers.SequentialSelection().apply(
-        regressed, k_features = 2, forward = False, cv = 3)
-    selector = regressed.fitted['sequential_selection']
-    assert type(selector.estimator).__name__ == 'LinearRegression'
-    assert selector.scoring == 'r2'
-    assert len(regressed.features) == 2
-
-
-def test_selectors_keep_groups_in_one_fold(classified: amos.Dataset) -> None:
-    requires('mlxtend')
-    classified.data['case'] = np.arange(len(classified.data)) // 3
-    classified.groups = ['case']
-    transformers.SequentialSelection().apply(classified, k_features = 2, cv = 3)
-    folds = classified.fitted['sequential_selection'].cv
-    cases = classified.data.loc[classified.y_train.index, 'case'].to_numpy()
-    assert len(folds) == 3
-    for train, test in folds:
-        assert not set(cases[train]) & set(cases[test])
-
-
-def test_exhaustive_selection_tries_every_set(
-    classified: amos.Dataset) -> None:
-    requires('mlxtend')
-    transformers.ExhaustiveSelection().apply(
-        classified, columns = ['x0', 'x1', 'x2'], max_features = 5, cv = 3)
-    table = classified.tables['exhaustive_selection_search']
-    # Every set of 1 to 3 of the 3 columns.
-    assert len(table) == 7
-    assert table['score'].is_monotonic_decreasing
-    kept = [c for c in classified.features if c in {'x0', 'x1', 'x2'}]
-    assert ', '.join(kept) == table['features'].iloc[0]
-    assert {'x3', 'x4', 'x5'} <= set(classified.features)
-
-
-def test_selectors_take_a_model_and_text_classes() -> None:
-    requires('mlxtend')
-    dataset = _split_mixed()
-    transformers.OneHot().apply(dataset)
-    transformers.SequentialSelection().apply(
-        dataset, k_features = 2, cv = 3,
-        estimator = 'sklearn.tree.DecisionTreeClassifier')
-    selector = dataset.fitted['sequential_selection']
-    assert type(selector.estimator).__name__ == 'DecisionTreeClassifier'
-    assert selector.estimator.random_state == SEED
-    # The dates are not chosen from, so they are kept.
-    assert 'joined' in dataset.features
-    assert len(dataset.numerics + dataset.booleans) == 2
-
-
-def test_k_best_keeps_every_feature_if_there_are_fewer_than_k(
-    classified: amos.Dataset) -> None:
-    transformers.KBest().apply(classified, k = 50)
-    assert len(classified.features) == 6
-
-
-def test_k_best_scores_by_the_task(regressed: amos.Dataset) -> None:
-    transformers.KBest().apply(regressed, k = 2)
-    tool = regressed.fitted['k_best']
-    assert tool.score_func.__name__ == 'f_regression'
-    assert len(regressed.features) == 2
-
-
-def test_k_best_imports_a_scoring_function(classified: amos.Dataset) -> None:
-    transformers.KBest().apply(
-        classified,
-        k = 2,
-        score_func = 'sklearn.feature_selection.mutual_info_classif')
-    tool = classified.fitted['k_best']
-    assert tool.score_func.__name__ == 'mutual_info_classif'
 
 
 def test_transformers_learn_from_the_training_rows_only(

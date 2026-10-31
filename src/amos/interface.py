@@ -20,7 +20,16 @@ import nagata
 import numpy as np
 import pandas as pd
 
-from . import auto, base, evaluators, loaders, options, pipelines, utilities
+from . import (
+    auto,
+    base,
+    evaluators,
+    loaders,
+    options,
+    pipelines,
+    selectors,
+    utilities,
+)
 from .clerks import Clerk
 
 # Arguments of a `Clerk` that can be set in the "files" section of the
@@ -49,6 +58,9 @@ class Project(chrisjen.Project):
     * A "pipeline" named in the settings (such as `pipeline =
       classification` in the "general" section) fills in the settings of the
       analyst, critic, and artist (see the `pipelines` module).
+    * Each group named in a "feature_groups" section of the settings is a
+      technique that keeps the features listed for it (see the `selectors`
+      module).
     * A workflow with a loader (see the `loaders` module) loads its own data
       with the project's `clerk`, so it needs no item.
     * Each call to `apply` works on a copy of the item, so applying a project
@@ -150,12 +162,15 @@ class Project(chrisjen.Project):
         """Builds the `workflow` from the settings.
 
         The settings of any pipeline named in them are filled in first (see
-        `pipelines.expand`). Each "auto" technique in the workflow is told
-        which kind of technique to choose, from the name of its step or
-        worker (see `auto.resolve`).
+        `pipelines.expand`), and the groups of any "feature_groups" section
+        are added to the library as techniques (see
+        `selectors.register_feature_groups`). Each "auto" technique in the
+        workflow is told which kind of technique to choose, from the name of
+        its step or worker (see `auto.resolve`).
 
         """
         pipelines.expand(self.idea, self.name)
+        selectors.register_feature_groups(self.idea, self.library)
         super().draft()
         auto.resolve(self.workflow)
 

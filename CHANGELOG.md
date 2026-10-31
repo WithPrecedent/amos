@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* Added selectors, a new genre of analyst techniques that keep some of the
+  features and remove the rest (the new `selectors` module and `Selector`
+  class), usually in a step of their own such as "select". `k_best`,
+  `select_percentile`, `variance_threshold`, `sequential_selection`, and
+  `exhaustive_selection` moved there from the reducers (their names in
+  settings are unchanged, but their classes are now in `amos.selectors`, and
+  the `Reducer` genre has only `pca_reduce`). New selectors wrap the rest
+  of scikit-learn's `feature_selection` module: `select_fpr`, `select_fdr`,
+  `select_fwe`, `generic_univariate`, `select_from_model`,
+  `recursive_elimination`, `recursive_elimination_cv` (which adds a
+  "{name}_search" table of the score of each number of features), and
+  `sequential_selection_sk` (which needs no optional package). The
+  selectors that fit a model take the name of a model in the library as
+  their "estimator" (such as `random_forest`, which is built for the task),
+  and a selector that would keep no features raises an error.
+* Added feature groups: each group named in a new "feature_groups" section of
+  the settings (such as `demographics = age, sex, race`) is a technique that
+  keeps only its features, so an experiment can compare groups of features
+  that you chose (`select_techniques = demographics, case_facts`). A listed
+  column that has been encoded keeps the columns made from it (so "court"
+  keeps "court_federal" and "court_state" after `one_hot`). The
+  `feature_group` technique does the same with the features passed as its
+  "columns".
+* The scorecard of a dataset that did not come from an experiment lists its
+  selectors as a step, including feature groups that are only in a
+  project's own library (a technique that is not in `chrisjen.library` is
+  listed under the "genre" in its history entry, if it has one).
+
 ## 0.6.0
 
 * Added `Clerk` (in the new `clerks` module), a `nagata.FileManager` that is
