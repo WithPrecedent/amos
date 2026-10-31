@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import importlib
+import pathlib
 from collections.abc import Iterator
 
 import numpy as np
@@ -12,8 +13,23 @@ import pytest
 
 import amos
 import chrisjen
+from amos import options
 
 SEED = 43
+
+
+@pytest.fixture(autouse = True)
+def workspace(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
+    """Keeps each test's data and results in its own temporary folder.
+
+    A `Clerk` (the file manager of every project) would otherwise keep them
+    in the workspace that holds the "code" folder of this repository.
+
+    """
+    monkeypatch.setenv(options._WORKSPACE_VARIABLE, str(tmp_path))
+    return tmp_path
 
 
 @pytest.fixture(autouse = True)

@@ -452,7 +452,9 @@ and a feature that no tree splits on has an effect of exactly 0.
 #### Export the results
 
 `export` saves everything needed to report and reproduce the results in a
-folder named for the run.
+folder named for the run. The project's `clerk` (an `amos.Clerk`) keeps data
+and results outside your code, in the "data" and "studies" folders beside
+the "code" folder that holds it.
 
 There is much more to `amos`, including hyperparameter searches, statistical
 inference with `statsmodels`, every technique and its parameters, and how to
@@ -501,7 +503,7 @@ repository" button reads the same information from
 @software{yung_amos,
   author  = {Yung, Corey Rayburn},
   title   = {amos: Automated Modeling for Open Scholarship},
-  version = {0.5.2},
+  version = {0.6.0},
   year    = {2026},
   url     = {https://github.com/WithPrecedent/amos},
   license = {Apache-2.0}

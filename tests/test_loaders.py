@@ -198,8 +198,9 @@ def test_download_names_and_unpacks_the_file(
         file_name = 'raw/cases.zip',
         member = 'cases.csv')
     assert dataset.data.shape == (1500, 8)
-    assert pathlib.Path('raw/cases.zip').is_file()
-    assert pathlib.Path('raw/cases/cases.csv').is_file()
+    # Without a clerk, the file is saved in the workspace's data folder.
+    assert pathlib.Path('data/raw/cases.zip').is_file()
+    assert pathlib.Path('data/raw/cases/cases.csv').is_file()
 
 
 def test_download_errors_leave_no_file(server: _Server) -> None:

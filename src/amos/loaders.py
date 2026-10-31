@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, cast
 import nagata
 import pandas as pd
 
-from . import base, options, utilities
+from . import base, clerks, options, utilities
 
 if TYPE_CHECKING:
     import chrisjen
@@ -243,15 +243,14 @@ class Loader(base.Operation, abc.ABC):
         return super()._call_apply(method, start, **kwargs)
 
     def _get_clerk(self) -> nagata.FileManager:
-        """Returns `clerk`, making one for the current folder if there is none.
+        """Returns `clerk`, making a `Clerk` of the workspace if there is none.
 
         Returns:
             The file manager.
 
         """
         if self.clerk is None:
-            self.clerk = nagata.FileManager(
-                root_folder = options._DEFAULT_ROOT)
+            self.clerk = clerks.Clerk()
         return self.clerk
 
 
