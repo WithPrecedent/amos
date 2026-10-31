@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* The axes of plots start at 0 (or end at 0, for negative numbers), unless
+  they show something with no natural zero, such as the values of the
+  features, or are axes of names, dates, a logarithmic scale, or a heatmap.
+  The new "start_at_zero" parameter of every plot ("x", "y", "xy", or "")
+  picks the axes.
+* The panels of a plot that measure the same thing share their ranges: the
+  counts of `histograms` and `count_plots`, the scores of `search_plot`, and
+  the contributions of `shape_functions`. In a `pair_plot`, each feature has
+  one range, on the x axes of its column and the y axes of its row.
+
 ## 0.6.0
 
 * Added `Clerk` (in the new `clerks` module), a `nagata.FileManager` that is

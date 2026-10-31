@@ -648,3 +648,53 @@ def test_label_plot_counts_each_class() -> None:
     axes = dataset.figures['label_plot'].axes[0]
     heights = [p.get_height() for p in axes.patches]
     assert heights == list(dataset.y.value_counts().sort_index())
+
+
+def test_axes_start_at_zero(fitted: amos.Dataset) -> None:
+    plots.LearningCurve().apply(fitted, cv = 3)
+    axes = fitted.figures['learning_curve'].axes[0]
+    assert axes.get_xlim()[0] == 0
+    assert axes.get_ylim()[0] == 0
+    plots.LearningCurve().apply(fitted, cv = 3, start_at_zero = 'x')
+    axes = fitted.figures['learning_curve'].axes[0]
+    assert axes.get_xlim()[0] == 0
+    assert axes.get_ylim()[0] > 0
+
+
+def test_axes_that_are_not_ranges_of_numbers_are_left_alone() -> None:
+    figures = importlib.import_module('matplotlib.figure')
+    figure = figures.Figure()
+    named, logged, negative, inverted = figure.subplots(1, 4)
+    named.barh([1, 2, 3], [4, 5, 6])
+    named.set_yticks([1, 2, 3], ['a', 'b', 'c'])
+    logged.plot([1, 10], [1, 2])
+    logged.set_xscale('log')
+    negative.plot([-5, -3], [1, 2])
+    inverted.plot([1, 2], [3, 4])
+    inverted.invert_xaxis()
+    before = named.get_ylim(), logged.get_xlim()
+    plots._start_at_zero(figure, 'xy')
+    assert (named.get_ylim(), logged.get_xlim()) == before
+    assert named.get_xlim()[0] == 0
+    assert negative.get_xlim()[1] == 0
+    assert inverted.get_xlim()[1] == 0
+    assert inverted.get_xlim()[0] > 0
+
+
+def test_panels_that_measure_the_same_thing_share_their_ranges(
+    mixed: amos.Dataset) -> None:
+    plots.Histograms().apply(mixed, columns = ['age', 'income'])
+    left, right = mixed.figures['histograms'].axes
+    assert left.get_ylim() == right.get_ylim()
+    assert left.get_ylim()[0] == 0
+    # The values of different features keep their own ranges.
+    assert left.get_xlim() != right.get_xlim()
+    assert left.get_xlim()[0] > 0
+    plots.CountPlots().apply(mixed)
+    first, *others = mixed.figures['count_plots'].axes
+    assert all(a.get_xlim() == first.get_xlim() for a in others)
+    plots.PairPlot().apply(mixed, columns = ['age', 'income'])
+    grid = np.array(mixed.figures['pair_plot'].axes).reshape(2, 2)
+    assert grid[0, 0].get_xlim() == grid[1, 0].get_xlim()
+    assert grid[0, 1].get_xlim() == grid[1, 1].get_xlim()
+    assert grid[0, 1].get_ylim() == grid[1, 0].get_xlim()

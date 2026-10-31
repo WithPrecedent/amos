@@ -1283,6 +1283,32 @@ print(sorted(trees.figures))
 # ['decision_regions', 'tree_leaf_sizes']
 ```
 
+### Axes
+
+The axes of a figure start at 0, so that the heights and lengths of what it
+draws can be compared, unless the axis shows something with no natural zero:
+the values of the features (in `histograms`, `box_plots`, `pair_plot`,
+`partial_dependence`, `decision_regions`, `tree_feature_space`,
+`shape_functions`, `shap_scatter`, and `shap_partial_dependence`), or the
+model's output in shap's `shap_decision`, `shap_waterfall`, `shap_force`, and
+`shap_embedding`. An axis of negative numbers ends at 0, and one that already
+holds 0 is left as it is, as are axes of names, dates, a logarithmic scale,
+or a heatmap. "start_at_zero" picks the axes: "x", "y", "xy", or "" for
+neither.
+
+The panels of a plot that measure the same thing share their ranges: the
+counts of `histograms` and `count_plots`, the scores of `search_plot` and
+`fairness_plot`, and the contributions of `shape_functions`. In a
+`pair_plot`, each feature has one range, on the x axes of its column and the
+y axes of its row.
+
+```python
+amos.plots.LearningCurve().apply(trees, start_at_zero = "x")
+axes = trees.figures["learning_curve"].axes[0]
+print(axes.get_xlim()[0] == 0, axes.get_ylim()[0] == 0)
+# True False
+```
+
 ### Styles
 
 Every figure has the same style, so that a paper's figures match. By
