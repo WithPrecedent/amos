@@ -10,10 +10,14 @@ mlxtend's and dtreeviz's plots draw on the figure's axes.
 shown by making it the last line of a cell.
 
 Every plot accepts "width" and "height" (in inches) and "title" parameters,
-and "style", "colors", and "latex" parameters that set how it looks (see
-`Plot.apply`). By default, figures have SciencePlots' style for
-scientific figures, with the size and fonts of a figure in Nature, and a
-cycle of colors that people with color blindness can tell apart.
+and "style", "colors", "latex", and "start_at_zero" parameters that set how
+it looks (see `Plot.apply`). The axes start at 0 unless they show something
+with no natural zero (such as the values of a feature, the label of a
+regression, or the parameters of a model), and the panels of a plot that
+measure the same thing share their ranges. By default, figures have
+SciencePlots' style for scientific figures, with the size and fonts of a
+figure in Nature, and a cycle of colors that people with color blindness can
+tell apart.
 
 Contents:
     Plot: base class for techniques that draw a figure.
@@ -142,6 +146,19 @@ class Plot(base.Operation, abc.ABC):
     # so that the text fits, and the style's sizes of text are enlarged to
     # match.
     scaled: ClassVar[bool] = True
+    # The axes ("x", "y", or both) whose ranges start at 0 (or end at 0, if
+    # their values are all negative), unless the plot is given
+    # "start_at_zero". A plot leaves out an axis whose values have no natural
+    # zero, such as the values of a feature.
+    starts_at_zero: ClassVar[str] = 'xy'
+    # The axes ("x", "y", or both) that measure the same thing in every
+    # panel of the plot, so that the panels share their ranges.
+    shared_axes: ClassVar[str] = ''
+    # The axes ("x", "y", or both) that show the label (or the model's
+    # predictions of it). A regression's label has no natural zero, so for a
+    # regression these axes do not start at 0, unless the plot is given
+    # "start_at_zero".
+    label_axes: ClassVar[str] = ''
 
     """ Required Methods """
 
@@ -172,8 +189,15 @@ class Plot(base.Operation, abc.ABC):
         style: str | Sequence[str] | None = options._PLOT_STYLE,
         colors: str | None = options._PLOT_COLORS,
         latex: bool = False,
+        start_at_zero: str | None = None,
         **kwargs: Any) -> base.Dataset:
         """Draws a figure in a style and adds it to the figures of `item`.
+
+        The ranges of the axes in `starts_at_zero` are widened to start at 0,
+        and the panels of a plot share the ranges of its `shared_axes`. An
+        axis that is not a linear scale of numbers (such as one of names,
+        dates, or a logarithmic scale), and an axis of an image (such as a
+        heatmap), are left as they are.
 
         Args:
             item: the dataset to draw.
@@ -198,12 +222,24 @@ class Plot(base.Operation, abc.ABC):
             latex: whether to set the text with LaTeX, which must be
                 installed. Defaults to `False`, in which case `matplotlib`
                 sets the text (and math), whatever `style` says.
+            start_at_zero: the axes ("x", "y", "xy", or "" for neither) whose
+                ranges start at 0. Defaults to `None`, which uses the plot's
+                `starts_at_zero`, without its `label_axes` for a regression.
             **kwargs: parameters for `draw`.
 
         Returns:
             The dataset, with the new figure.
 
+        Raises:
+            ValueError: if `start_at_zero` names an axis that is not "x" or
+                "y".
+
         """
+        if start_at_zero is not None and set(start_at_zero) - set('xy'):
+            message = (
+                f'start_at_zero must be "x", "y", "xy", or "", not '
+                f'"{start_at_zero}"')
+            raise ValueError(message)
         figures = utilities.import_tool('matplotlib.figure')
         with contextlib.ExitStack() as stack:
             matplotlib = stack.enter_context(
@@ -229,6 +265,13 @@ class Plot(base.Operation, abc.ABC):
                 figure = drawn
             if title is not None:
                 figure.suptitle(title)
+            if start_at_zero is None:
+                start_at_zero = self.starts_at_zero
+                if item.task == 'regress':
+                    start_at_zero = ''.join(
+                        a for a in start_at_zero if a not in self.label_axes)
+            _start_at_zero(figure, start_at_zero)
+            _share_ranges(figure, self.shared_axes)
             # `matplotlib` makes some parts of a figure (such as most of its
             # ticks) only when the figure is drawn, and finds the colors of
             # lines in the cycle (such as "C0") then too, so both are done
@@ -250,6 +293,8 @@ class ActualVsPredicted(Plot):
         from scikit-learn.
 
     """
+
+    label_axes: ClassVar[str] = 'xy'
 
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
         """Draws the actual labels against the predictions.
@@ -276,6 +321,8 @@ class BoxPlots(Plot):
         from seaborn.
 
     """
+
+    starts_at_zero: ClassVar[str] = ''
 
     def draw(
         self,
@@ -501,6 +548,8 @@ class CountPlots(Plot):
 
     """
 
+    shared_axes: ClassVar[str] = 'x'
+
     def draw(
         self,
         item: base.Dataset,
@@ -567,6 +616,8 @@ class DecisionRegions(Plot):
         from mlxtend.
 
     """
+
+    starts_at_zero: ClassVar[str] = ''
 
     def draw(
         self,
@@ -687,6 +738,7 @@ class FairnessPlot(Plot):
     """
 
     size: ClassVar[tuple[float, float]] = (9.6, 3.6)
+    shared_axes: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -726,6 +778,9 @@ class Histograms(Plot):
         from matplotlib.
 
     """
+
+    starts_at_zero: ClassVar[str] = 'y'
+    shared_axes: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -857,6 +912,8 @@ class LabelPlot(Plot):
           from seaborn, for values.
 
     """
+
+    label_axes: ClassVar[str] = 'x'
 
     def draw(
         self,
@@ -1022,6 +1079,7 @@ class PairPlot(Plot):
     """
 
     size: ClassVar[tuple[float, float]] = (8.0, 8.0)
+    starts_at_zero: ClassVar[str] = ''
 
     def draw(
         self,
@@ -1071,6 +1129,12 @@ class PairPlot(Plot):
                         ax = axes)
                 axes.set_xlabel(str(column) if i == count - 1 else '')
                 axes.set_ylabel(str(row) if j == 0 else '')
+        # Each feature has one range: on the x axes of its column, and on the
+        # y axes of its row (but for the histogram, which shows densities).
+        for k in range(count):
+            _match_ranges([
+                *((grid[i, k], 'x') for i in range(count)),
+                *((grid[k, j], 'y') for j in range(count) if j != k)])
         if count > 1:
             _figure_legend(figure, grid[0, 1], by)
 
@@ -1095,6 +1159,8 @@ class PartialDependence(Plot):
     """
 
     size: ClassVar[tuple[float, float]] = (9.6, 3.6)
+    starts_at_zero: ClassVar[str] = 'y'
+    label_axes: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -1195,6 +1261,8 @@ class PredictionIntervals(Plot):
     holds the true class.
 
     """
+
+    label_axes: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -1312,6 +1380,8 @@ class ResidualPlot(Plot):
 
     """
 
+    label_axes: ClassVar[str] = 'x'
+
     def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
         """Draws the residuals against the predictions.
 
@@ -1362,6 +1432,10 @@ class SearchPlot(Plot):
     marked with a star. The table is `source`, or the last search made.
 
     """
+
+    shared_axes: ClassVar[str] = 'y'
+    # The parameters of the model have no natural zero.
+    starts_at_zero: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -1534,6 +1608,7 @@ class ShapDecision(Plot):
     """
 
     scaled: ClassVar[bool] = False
+    starts_at_zero: ClassVar[str] = ''
 
     def draw(
         self,
@@ -1593,6 +1668,7 @@ class ShapEmbedding(Plot):
     """
 
     scaled: ClassVar[bool] = False
+    starts_at_zero: ClassVar[str] = ''
 
     def draw(
         self,
@@ -1657,6 +1733,7 @@ class ShapForce(Plot):
 
     size: ClassVar[tuple[float, float]] = (14.0, 4.0)
     scaled: ClassVar[bool] = False
+    starts_at_zero: ClassVar[str] = ''
 
     def draw(
         self,
@@ -1862,6 +1939,8 @@ class ShapPartialDependence(Plot):
     """
 
     scaled: ClassVar[bool] = False
+    starts_at_zero: ClassVar[str] = 'y'
+    label_axes: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -1924,6 +2003,7 @@ class ShapScatter(Plot):
     """
 
     scaled: ClassVar[bool] = False
+    starts_at_zero: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -2041,6 +2121,7 @@ class ShapWaterfall(Plot):
     """
 
     scaled: ClassVar[bool] = False
+    starts_at_zero: ClassVar[str] = ''
 
     def draw(
         self,
@@ -2109,6 +2190,8 @@ class ShapeFunctions(Plot):
     """
 
     size: ClassVar[tuple[float, float]] = (9.6, 6.4)
+    starts_at_zero: ClassVar[str] = 'y'
+    shared_axes: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -2250,6 +2333,8 @@ class TreeFeatureSpace(Plot):
 
     """
 
+    starts_at_zero: ClassVar[str] = ''
+
     def draw(
         self,
         item: base.Dataset,
@@ -2296,6 +2381,8 @@ class TreeLeafDistributions(Plot):
           from dtreeviz, for values.
 
     """
+
+    label_axes: ClassVar[str] = 'x'
 
     def draw(
         self,
@@ -2528,6 +2615,9 @@ class ValidationCurve(Plot):
         from scikit-learn.
 
     """
+
+    # The parameters of the model have no natural zero.
+    starts_at_zero: ClassVar[str] = 'y'
 
     def draw(
         self,
@@ -3093,6 +3183,62 @@ def _lent(figure: Any) -> Generator[Any, None, None]:
         matplotlib.interactive(interactive)
 
 
+def _linear_axes(figure: Any, name: str) -> list[Any]:
+    """Returns the axes of `figure` whose axis `name` is a range of numbers.
+
+    Args:
+        figure: a drawn figure.
+        name: "x" or "y".
+
+    Returns:
+        The visible axes of the figure whose axis `name` is a linear scale of
+            numbers. Colorbars, axes with an image or contours (such as a
+            heatmap or a map of the regions of a classifier), and axes whose
+            axis has units (such as names or dates) or ticks at fixed
+            positions (such as the names of the features in a SHAP plot)
+            are left out.
+
+    """
+    contour = importlib.import_module('matplotlib.contour')
+    ticker = importlib.import_module('matplotlib.ticker')
+    found = []
+    for axes in figure.axes:
+        axis = getattr(axes, f'{name}axis')
+        if (
+            not axes.get_visible()
+            or not axes.axison
+            or axes.images
+            or any(
+                isinstance(c, contour.ContourSet) for c in axes.collections)
+            or getattr(axes, '_colorbar', None) is not None
+            or axis.get_scale() != 'linear'
+            or axis.get_converter() is not None
+            or isinstance(axis.get_major_locator(), ticker.FixedLocator)):
+            continue
+        found.append(axes)
+    return found
+
+
+def _match_ranges(panels: Sequence[tuple[Any, str]]) -> None:
+    """Gives `panels` the range that holds all of their ranges.
+
+    Args:
+        panels: pairs of axes and the name of one of their axes ("x" or
+            "y"), which all measure the same thing. They are changed in
+            place.
+
+    """
+    if len(panels) < 2:  # noqa: PLR2004
+        return
+    limits = [getattr(a, f'get_{name}lim')() for a, name in panels]
+    lower = min(min(pair) for pair in limits)
+    upper = max(max(pair) for pair in limits)
+    for (axes, name), (start, end) in zip(panels, limits, strict = True):
+        # An inverted axis stays inverted.
+        shared = (upper, lower) if start > end else (lower, upper)
+        getattr(axes, f'set_{name}lim')(shared)
+
+
 def _model(item: base.Dataset) -> Any:
     """Returns the dataset's fitted model.
 
@@ -3287,6 +3433,19 @@ def _scoring(item: base.Dataset) -> str:
     return 'accuracy' if item.task == 'classify' else 'r2'
 
 
+def _share_ranges(figure: Any, names: str) -> None:
+    """Gives the panels of `figure` the same ranges on the axes in `names`.
+
+    Args:
+        figure: a drawn figure. It is changed in place.
+        names: the axes ("x", "y", or both) that measure the same thing in
+            every panel.
+
+    """
+    for name in names:
+        _match_ranges([(a, name) for a in _linear_axes(figure, name)])
+
+
 def _shap_colors(matplotlib: Any) -> dict[str, tuple[float, ...]]:
     """Returns the colors of the style for shap's bar and waterfall plots.
 
@@ -3346,6 +3505,29 @@ def _split(
     else:
         order = sorted(values.dropna().unique())
     return data.assign(**{by: values}), by, order
+
+
+def _start_at_zero(figure: Any, names: str) -> None:
+    """Widens the ranges of the axes in `names` to reach 0.
+
+    A range of positive numbers is widened to start at 0, and a range of
+    negative numbers to end at 0. A range that holds 0 is left as it is.
+
+    Args:
+        figure: a drawn figure. It is changed in place.
+        names: the axes ("x", "y", or both) to widen.
+
+    """
+    for name in names:
+        for axes in _linear_axes(figure, name):
+            start, end = getattr(axes, f'get_{name}lim')()
+            lower, upper = min(start, end), max(start, end)
+            if lower <= 0 <= upper:
+                continue
+            lower, upper = min(lower, 0.0), max(upper, 0.0)
+            # An inverted axis stays inverted.
+            widened = (upper, lower) if start > end else (lower, upper)
+            getattr(axes, f'set_{name}lim')(widened)
 
 
 @contextlib.contextmanager

@@ -41,6 +41,17 @@ All notable changes to this project will be documented in this file.
   chrisjen now types them, and the casts of `Loader.build` and
   `Merger.build` are gone, since chrisjen's `build` returns the class it is
   called on.
+* The axes of plots start at 0 (or end at 0, for negative numbers), unless
+  they show something with no natural zero (the values of the features, the
+  label of a regression or the model's predictions of it, or the parameters
+  of a model in `search_plot` and `validation_curve`), or are axes of names,
+  dates, a logarithmic scale, or a heatmap.
+  The new "start_at_zero" parameter of every plot ("x", "y", "xy", or "")
+  picks the axes (anything else raises a `ValueError`).
+* The panels of a plot that measure the same thing share their ranges: the
+  counts of `histograms` and `count_plots`, the scores of `search_plot`, and
+  the contributions of `shape_functions`. In a `pair_plot`, each feature has
+  one range, on the x axes of its column and the y axes of its row.
 
 ## 0.6.0
 
