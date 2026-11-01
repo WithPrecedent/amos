@@ -1,16 +1,16 @@
 """Metrics that score a model's predictions.
 
-These are techniques of the "critic" stage. Each one wraps a scoring function
-(from `sklearn.metrics` or fairlearn), compares the model's
-predictions (or predicted probabilities) with the true labels of the same
-rows, and stores the score in the dataset's `metrics` under the technique's
-name.
+Metrics are not steps of a workflow: they are used by techniques that are.
+Each one wraps a scoring function (from `sklearn.metrics` or fairlearn) and
+`measure` compares the model's predictions (or predicted probabilities) with
+the true labels of the same rows. The `scorecard` and other evaluators report
+them, and validators score each fold with them.
 
-Every metric is also a `chrisjen.Criteria`, so the same name can be the
-"criterion" of an `experiment` or `contest`, which keeps the combination of
-techniques with the best score. Metrics for which lower is better (such as
-`log_loss` and `rmse`) are negated when they are used as criteria, so the best
-combination still has the highest score.
+Every metric is a `chrisjen.Criteria`, so its name can be the "criterion" of
+an `experiment` or `contest`, which keeps the combination of techniques with
+the best score. Metrics for which lower is better (such as `log_loss` and
+`rmse`) are negated when they are used as criteria, so the best combination
+still has the highest score.
 
 The details of each scoring function are handled for you. For a binary label,
 the positive class is the last of `Dataset.classes` (such as 1 or `True`), and
@@ -37,8 +37,9 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any, ClassVar
+from typing import Any, ClassVar, NoReturn
 
+import camina
 import chrisjen
 import numpy as np
 import pandas as pd
@@ -47,21 +48,27 @@ from . import base, utilities
 
 
 @dataclasses.dataclass
-class Metric(base.Operation, chrisjen.Criteria, abc.ABC):
+class Metric(chrisjen.Criteria, abc.ABC):
     """Base class for metrics, which score a model's predictions.
+
+    A metric is not a step of a workflow, so it cannot be one of a worker's
+    techniques. Name it as a "criterion" instead, or pass it to a technique
+    that uses metrics (such as the "metrics" of a `scorecard` or validator).
 
     `contents` is the scoring function (or its import path). It is called with
     the true labels, the predictions (or probabilities), and the parameters it
     accepts. A subclass can instead override `measure`.
 
     Args:
-        name: name used to refer to the metric in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
         contents: the scoring function or its import path. Defaults to `None`.
         parameters: keyword arguments for the scoring function. Defaults to
             an empty `dict`.
+        name: name used to refer to the metric. Defaults to an empty `str`,
+            in which case it is the snake case name of the class.
 
     """
+
+    name: str = ''
 
     # Whether a higher score is better.
     greater_is_better: ClassVar[bool] = True
@@ -71,35 +78,49 @@ class Metric(base.Operation, chrisjen.Criteria, abc.ABC):
     # predictions).
     uses_probabilities: ClassVar[bool] = False
 
-    """ Public Methods """
+    """ Initialization Methods """
 
-    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
-        """Stores the score of the model's predictions in `metrics`.
+    def __post_init__(self) -> None:
+        """Names the metric after its class if it was not given a name."""
+        self.name = self.name or str(camina.snakify(type(self).__name__))
+
+    """ Class Methods """
+
+    @classmethod
+    def build(cls, name: str, *args: Any, **kwargs: Any) -> NoReturn:
+        """Refuses to make the metric a node of a workflow.
+
+        `chrisjen` builds each technique that a worker lists with its class's
+        `build` method, so this is called when a metric is listed as one.
 
         Args:
-            item: the dataset to score. It must have predictions.
-            **kwargs: parameters for the scoring function.
+            name: the name listed in the settings.
+            *args: ignored.
+            **kwargs: ignored.
 
-        Returns:
-            The dataset, with the score in `metrics`.
+        Raises:
+            TypeError: always, since a metric is not a step of a workflow.
 
         """
-        value = self.measure(item, **kwargs)
-        item.metrics[self.name] = value
-        item.record(
-            self.name,
-            tool = utilities.describe_tool(self.contents),
-            value = value)
-        return item
+        message = (
+            f'{name!r} is a metric, not a technique, so it cannot be a step '
+            f'of a workflow: name it as a "criterion" or in the "metrics" of '
+            f'a technique such as "scorecard"'
+        )
+        raise TypeError(message)
+
+    """ Public Methods """
 
     def measure(self, item: base.Dataset, **kwargs: Any) -> float:
         """Returns the score of the model's predictions.
 
         Args:
             item: the dataset to score. It must have predictions.
-            **kwargs: parameters for the scoring function.
+            **kwargs: parameters for the scoring function, which take
+                precedence over `parameters`.
 
         Raises:
+            NotImplementedError: if there is no scoring function.
             ValueError: if the metric does not score the dataset's task.
 
         Returns:
@@ -117,7 +138,8 @@ class Metric(base.Operation, chrisjen.Criteria, abc.ABC):
             message = f'{self.name!r} has no scoring function in contents'
             raise NotImplementedError(message)
         tool = utilities.import_tool(self.contents)
-        parameters = self._prepare(item, dict(kwargs))
+        parameters = self._prepare(
+            item, {**{str(k): v for k, v in self.parameters.items()}, **kwargs})
         arguments = utilities.accepted_parameters(tool, parameters)
         return float(tool(y_true, y_score, **arguments))
 
@@ -133,7 +155,7 @@ class Metric(base.Operation, chrisjen.Criteria, abc.ABC):
             The score, negated if lower scores are better.
 
         """
-        value = self.measure(item, **self._keywords())
+        value = self.measure(item)
         return value if self.greater_is_better else -value
 
     """ Private Methods """

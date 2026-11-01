@@ -160,20 +160,33 @@ the text in a JSON file):
 | Any other number | A `float` | `test_size = 0.25` |
 | "true" or "yes" (in any case) | `True` | `use_gpu = true` |
 | "false" or "no" (in any case) | `False` | `use_gpu = false` |
-| Items separated by a comma and a space | A `list`, with each item converted | `steps = split, scale, model` |
+| Items in square brackets | A `list`, with each item converted | `n_estimators = [200, 1000]` |
+| Items separated by a comma and a space (or a line break) | A `list`, with each item converted | `steps = split, scale, model` |
 | Anything else | Text | `label = target` |
 
 A few things follow from these rules:
 
-* A list needs a comma and a space between its items. "split,scale" is a
-  single piece of text.
+* A list needs a comma and a space (or a line break) between its items.
+  "split,scale" is a single piece of text.
+* A list can go on over several lines, if each line but the last ends with a
+  comma and the lines after the first are indented.
+* Commas inside brackets, parentheses, or quotes do not split text, so a
+  condition such as `state = not in ['GU', 'PR']` stays one piece of text.
 * A list of one item is written as the item alone. Every setting that takes
   a list (such as "groups" or "techniques") also takes one name.
 * Text that looks like a number, true, or false is converted, so an ini or
   JSON file cannot name a column "yes" or "2020". Use a TOML, YAML (with
   quotes), or Python file for those.
 * Names of settings are case sensitive, and `%` has no special meaning.
-  Lines that start with `#` or `;` are comments.
+  Lines that start with `#` or `;` are comments, and so is the rest of a line
+  after a `#` that has spaces on both sides (as in `label = won # the
+  outcome`).
+
+```ini
+[analyst]
+steps = split, encode,  # the first two steps
+    model
+```
 
 ### Sections
 

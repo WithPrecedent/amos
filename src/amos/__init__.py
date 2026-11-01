@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = '0.6.1'
+__version__ = '0.6.2'
 
 __author__: str = 'Corey Rayburn Yung'
 
@@ -38,6 +38,7 @@ __all__: list[str] = [
     'Transformer',
     'Validator',
     'library',
+    'register_value_map',
 ]
 
 # Importing each module adds its techniques to the `chrisjen` library, so
@@ -56,7 +57,7 @@ from .loaders import Loader
 from .mergers import Merger
 from .metrics import GroupMetric, Metric
 from .models import Model
-from .mungers import Munger
+from .mungers import Munger, register_value_map
 from .pipelines import Pipeline
 from .plots import Plot
 from .reports import Findings

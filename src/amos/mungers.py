@@ -38,8 +38,11 @@ Contents:
     ParseDates: turns text into dates.
     ParseNumbers: turns text such as "$1,234.50" into numbers.
     ReplaceText: replaces the matches of patterns in text.
+    SetKinds: sets the kind of each column (dummy, categorical, or
+        numerical), with the smallest type that holds it.
     SplitText: splits text into columns where a pattern matches.
     StripText: trims spaces from (and optionally lowercases) text.
+    register_value_map: registers the values that `MapValues` gives columns.
 
 """
 
@@ -49,7 +52,7 @@ import abc
 import dataclasses
 import re
 import warnings
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -70,6 +73,21 @@ _FALSE: tuple[str, ...] = ('false', 'f', 'no', 'n', '0')
 _TRUE: tuple[str, ...] = ('true', 't', 'yes', 'y', '1')
 # The ways that `CombineFlags` can combine flags.
 _HOWS: frozenset[str] = frozenset({'all', 'any', 'count'})
+# The kinds that `SetKinds` sets, and the kind of `Dataset` column that each
+# is (see `Dataset.kinds`).
+_KINDS: dict[str, str] = {
+    'dummy': 'booleans',
+    'categorical': 'categoricals',
+    'numerical': 'numerics'}
+# Relative difference allowed between a number and the same number as a
+# `float32`, which `SetKinds` uses if every number of a column is within it.
+_FLOAT32_TOLERANCE: float = 1e-6
+# Whole numbers stored as floats at or above this size are not made integers
+# by `SetKinds`, since `int64` cannot hold them.
+_LARGEST_INTEGER: float = 2.0 ** 63
+# Columns of data mapped to the values or function that `MapValues` uses for
+# them when it is not given "values" (see `register_value_map`).
+_VALUE_MAPS: dict[str, Mapping[Any, Any] | Callable[[Any], Any]] = {}
 # Inline flags (such as "(?i)") at the start of a pattern, which must stay at
 # the start when the rest of the pattern is put in a group.
 _LEADING_FLAGS: re.Pattern[str] = re.compile(r'(?:\(\?[aiLmsux]+\))*')
@@ -377,6 +395,13 @@ class CountPatterns(Munger):
 class DeriveColumns(Munger):
     """Makes columns from expressions of other columns, such as "a / b".
 
+    The expressions are "expressions", a `dict` of the names of the new
+    columns and their expressions, and any other parameter, whose name is the
+    name of a new column and whose value is its expression (as in
+    "victim_under_eighteen = victim_age < 18"). Words that are not columns are
+    values, so they need no quotes, as in "offender_race == B" (see
+    `utilities.quote_bare_values`).
+
     Wraps:
         [`pandas.DataFrame.eval`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.eval.html)
         from pandas.
@@ -388,7 +413,7 @@ class DeriveColumns(Munger):
         data: pd.DataFrame,
         *,
         expressions: Mapping[str, str] | None = None,
-        **kwargs: Any) -> pd.DataFrame:
+        **named: str) -> pd.DataFrame:
         """Makes a column from each expression, in order.
 
         Args:
@@ -397,9 +422,9 @@ class DeriveColumns(Munger):
                 `pandas` expressions of other columns, such as "damages /
                 judges" or "age >= 18" (see `pandas.DataFrame.eval`). Column
                 names with spaces go inside backticks. An expression can use
-                the columns made before it. Defaults to `None`, which changes
-                nothing.
-            **kwargs: not used.
+                the columns made before it. Defaults to `None`.
+            **named: more expressions, by the names of the columns to make,
+                which are made after those in `expressions`.
 
         Raises:
             ValueError: if an expression is an assignment (such as "a = b"),
@@ -409,8 +434,9 @@ class DeriveColumns(Munger):
             The data, with the new columns.
 
         """
-        for name, expression in dict(expressions or {}).items():
-            values = data.eval(str(expression))
+        for name, expression in {**dict(expressions or {}), **named}.items():
+            values = data.eval(
+                utilities.quote_bare_values(str(expression), data))
             if isinstance(values, pd.DataFrame):
                 message = (
                     f'{expression!r} is an assignment: name the column in the '
@@ -666,13 +692,18 @@ class MapValues(Munger):
     `replace_text` to change part of the text). Other values are kept. A
     categorical column stays categorical.
 
+    Without "values", each column in "columns" is changed by the map or
+    function registered for it with `register_value_map` (so a package can
+    register the meanings of its codes once, and the settings only name the
+    columns). A function is applied to each value that is not missing.
+
     """
 
     def munge(
         self,
         data: pd.DataFrame,
         *,
-        columns: Sequence[str] | None = None,
+        columns: Sequence[str] | str | None = None,
         values: Mapping[Any, Any] | None = None,
         **kwargs: Any) -> pd.DataFrame:
         """Replaces the values in `columns` that are keys of `values`.
@@ -680,22 +711,44 @@ class MapValues(Munger):
         Args:
             data: the data to change.
             columns: columns to change. Defaults to `None`, which changes
-                every column.
+                every column if `values` is given, and nothing otherwise.
             values: `dict` mapping values to the values that replace them.
-                `None` makes a value missing. Defaults to `None`, which
-                changes nothing.
+                `None` makes a value missing. Defaults to `None`, in which
+                case each column in `columns` is changed by the map or
+                function registered for it (see `register_value_map`).
             **kwargs: not used.
+
+        Raises:
+            KeyError: if `values` is not given and a column in `columns` has
+                no registered map or function.
 
         Returns:
             The data, with the new values. The type of a changed column is
                 found from its new values, as `pandas` does.
 
         """
-        if not values:
+        if values:
+            mapping = dict(values)
+            for column in utilities.select_columns(data, columns):
+                data[column] = _recode(data[column], mapping)
             return data
-        mapping = dict(values)
-        for column in utilities.select_columns(data, columns):
-            data[column] = _recode(data[column], mapping)
+        if columns is None:
+            return data
+        names = utilities.select_columns(data, columns)
+        unknown = [c for c in names if c not in _VALUE_MAPS]
+        if unknown:
+            message = (
+                f'map_values has no values for the columns {unknown}: pass '
+                f'"values" or register them with amos.register_value_map'
+            )
+            raise KeyError(message)
+        for column in names:
+            registered = _VALUE_MAPS[column]
+            if isinstance(registered, Mapping):
+                data[column] = _recode(data[column], dict(registered))
+            else:
+                data[column] = data[column].map(
+                    registered, na_action = 'ignore')
         return data
 
 
@@ -989,6 +1042,88 @@ class ReplaceText(Munger):
 
 
 @dataclasses.dataclass
+class SetKinds(Munger):
+    """Sets the kind of each column, with the smallest type that holds it.
+
+    The kinds are "dummy" (0 and 1, or false and true), "categorical", and
+    "numerical". Each is a parameter that lists its columns, as in "dummy =
+    rape, murder". A column that is not listed gets the kind of its values:
+    a boolean column, or a column of numbers that are all 0 or 1 (with none
+    missing), is a dummy; any other column of numbers is numerical; and a
+    categorical column, or text with `options._CATEGORY_THRESHOLD` unique
+    values or fewer, is categorical. Other columns (such as dates and longer
+    text) and the groups are not changed unless they are listed. If the label
+    is not listed, it is a dummy when it is classified and its values are
+    booleans (or 0 and 1), and is otherwise not changed.
+
+    Each kind is stored in the smallest type that holds its values exactly:
+
+    * dummy: `int8`, with 0 for false and 1 for true.
+    * categorical: the `pandas` "category" type, whose codes are the smallest
+      integer type that holds them.
+    * numerical: the smallest signed integer type (such as `int8`) if every
+      value is a whole number and none is missing. Otherwise `float32` if it
+      holds every value to about 7 significant digits, and `float64` if it
+      does not.
+
+    The kinds are kept in `Dataset.kinds`, so a dummy is one of the dataset's
+    `booleans` (not its `numerics`). Arithmetic on small integer types can
+    overflow (`int8` only holds -128 to 127), so make new columns from
+    numbers (as `derive_columns` does) before setting their kinds.
+
+    """
+
+    def munge(
+        self,
+        data: pd.DataFrame,
+        *,
+        kinds: Mapping[str, str] | None = None,
+        **listed: Any) -> pd.DataFrame:
+        """Gives each column the smallest type of its kind.
+
+        Args:
+            data: the data to change.
+            kinds: the kind of each column to change ("booleans",
+                "categoricals", or "numerics"), as `apply` finds them.
+                Defaults to `None`, in which case they are found from
+                `listed`, without a label.
+            **listed: the columns of each kind ("dummy", "categorical", and
+                "numerical").
+
+        Returns:
+            The data, with the new types.
+
+        """
+        if kinds is None:
+            kinds = _find_kinds(data, listed)
+        for column, kind in kinds.items():
+            data[column] = _shrink(data[column], column, kind)
+        return data
+
+    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+        """Sets the kinds of the columns of `item`, and keeps them in `kinds`.
+
+        Args:
+            item: the dataset to change.
+            **kwargs: the columns of each kind ("dummy", "categorical", and
+                "numerical").
+
+        Returns:
+            The changed dataset.
+
+        """
+        kinds = _find_kinds(
+            item.data,
+            kwargs,
+            label = item.label if item.has_label else None,
+            task = item.task,
+            groups = item.groups)
+        item = super().apply(item, kinds = kinds)
+        item.kinds.update(kinds)
+        return item
+
+
+@dataclasses.dataclass
 class SplitText(Munger):
     r"""Splits text into columns where a pattern matches.
 
@@ -1104,6 +1239,41 @@ class StripText(Munger):
         return data
 
 
+""" Public Functions """
+
+
+def register_value_map(
+    columns: str | Sequence[str],
+    values: Mapping[Any, Any] | Callable[[Any], Any]) -> None:
+    """Registers the values that `map_values` gives `columns`.
+
+    `map_values` uses the map or function registered for a column when its
+    settings name the column but give no "values". A package built on `amos`
+    can register the meanings of its codes once (such as "W" for "white"), so
+    that every project can map them by naming the columns. A column that is
+    registered again gets the new map or function.
+
+    Args:
+        columns: a column name, or a sequence of them, that `values` is for.
+        values: a `dict` mapping values to the values that replace them (other
+            values are kept), or a function that takes a value and returns
+            the value that replaces it (which is not applied to missing
+            values).
+
+    Raises:
+        TypeError: if `values` is neither a mapping nor callable.
+
+    """
+    if not isinstance(values, Mapping) and not callable(values):
+        message = (
+            f'the values for {columns!r} must be a dict or a function, not '
+            f'{type(values).__name__}'
+        )
+        raise TypeError(message)
+    for column in _sequence(columns):
+        _VALUE_MAPS[column] = values
+
+
 """ Private Functions """
 
 
@@ -1167,6 +1337,115 @@ def _contains(text: pd.Series, pattern: str, flags: int) -> np.ndarray:
     return found.to_numpy(dtype = bool)
 
 
+def _find_kinds(
+    data: pd.DataFrame,
+    listed: Mapping[str, Any],
+    *,
+    label: str | None = None,
+    task: str | None = None,
+    groups: Sequence[str] = ()) -> dict[str, str]:
+    """Returns the kind of each column that `SetKinds` changes.
+
+    Args:
+        data: the data.
+        listed: the columns of each kind ("dummy", "categorical", and
+            "numerical"), as a column name or a sequence of them.
+        label: name of the label, if it is a column. Defaults to `None`.
+        task: the task of the dataset. Defaults to `None`.
+        groups: names of the group columns, which are only changed if they
+            are listed. Defaults to an empty tuple.
+
+    Raises:
+        KeyError: if a listed column is not in `data`.
+        ValueError: if a kind is not known, or a column is listed as two
+            kinds.
+
+    Returns:
+        "booleans", "categoricals", or "numerics" for each column to change,
+            by its name.
+
+    """
+    unknown = [k for k in listed if k not in _KINDS]
+    if unknown:
+        message = (
+            f'set_kinds does not know the kinds {unknown}: they must be '
+            f'{sorted(_KINDS)}'
+        )
+        raise ValueError(message)
+    kinds: dict[str, str] = {}
+    for name, columns in listed.items():
+        if columns is None:
+            continue
+        for column in utilities.select_columns(data, _sequence(columns)):
+            if kinds.get(column, _KINDS[name]) != _KINDS[name]:
+                message = f'set_kinds lists {column!r} as two kinds'
+                raise ValueError(message)
+            kinds[column] = _KINDS[name]
+    for column in data.columns:
+        if column in kinds or column in groups:
+            continue
+        values = data[column]
+        if column == label:
+            if task == 'classify' and _is_dummy(values):
+                kinds[column] = 'booleans'
+            continue
+        found = _infer_kind(values)
+        if found is not None:
+            kinds[column] = found
+    return kinds
+
+
+def _infer_kind(values: pd.Series) -> str | None:
+    """Returns the kind that `SetKinds` gives a column that is not listed.
+
+    Args:
+        values: a column of data.
+
+    Returns:
+        "booleans" for a dummy, "numerics" for other numbers, "categoricals"
+            for a categorical column or text with few unique values, or
+            `None` for a column that is not changed (such as dates or text
+            with many unique values).
+
+    """
+    dtype = values.dtype
+    if isinstance(dtype, pd.CategoricalDtype):
+        return 'categoricals'
+    if _is_dummy(values):
+        return 'booleans'
+    if pd.api.types.is_bool_dtype(dtype):
+        # A boolean column with missing values cannot be a dummy.
+        return None
+    if pd.api.types.is_numeric_dtype(dtype):
+        return 'numerics'
+    if base._kind_of(values) == 'dates':
+        return None
+    if values.nunique(dropna = True) <= options._CATEGORY_THRESHOLD:
+        return 'categoricals'
+    return None
+
+
+def _is_dummy(values: pd.Series) -> bool:
+    """Returns whether `values` are all 0 or 1 (or false or true).
+
+    Args:
+        values: a column of data.
+
+    Returns:
+        Whether no value is missing and every value is 0, 1, `False`, or
+            `True`.
+
+    """
+    if isinstance(values.dtype, pd.CategoricalDtype) or values.isna().any():
+        return False
+    unique = pd.unique(values.to_numpy())
+    # `True` and `False` equal 1 and 0, but text such as "1" does not.
+    return all(
+        isinstance(v, bool | int | float | np.bool_ | np.number)
+        and v in {0, 1}
+        for v in unique)
+
+
 def _recode(values: pd.Series, mapping: Mapping[Any, Any]) -> pd.Series:
     """Returns `values` with those that are keys of `mapping` replaced.
 
@@ -1206,6 +1485,94 @@ def _sequence(item: str | Sequence[str]) -> list[str]:
 
     """
     return [item] if isinstance(item, str) else list(item)
+
+
+def _shrink(values: pd.Series, column: Any, kind: str) -> pd.Series:
+    """Returns `values` in the smallest type of `kind` that holds them.
+
+    Args:
+        values: a column of data.
+        column: name of the column, for error messages.
+        kind: "booleans" (a dummy), "categoricals", or "numerics".
+
+    Raises:
+        ValueError: if a dummy has missing values or values other than 0 and
+            1 (or false and true), or a numerical column has values that are
+            not numbers.
+
+    Returns:
+        The column, with its new type.
+
+    """
+    if kind == 'categoricals':
+        if isinstance(values.dtype, pd.CategoricalDtype):
+            return values
+        return values.astype('category')
+    if kind == 'booleans':
+        if values.isna().any():
+            message = f'the dummy {column!r} has missing values'
+            raise ValueError(message)
+        if not _is_dummy(values):
+            examples = [
+                v for v in pd.unique(values.to_numpy()) if v not in {0, 1}][:5]
+            message = (
+                f'the dummy {column!r} has values other than 0 and 1 (or '
+                f'false and true), such as {examples}'
+            )
+            raise ValueError(message)
+        return values.astype('int8')
+    return _shrink_numbers(values, column)
+
+
+def _shrink_numbers(values: pd.Series, column: Any) -> pd.Series:
+    """Returns numbers in the smallest type that holds them exactly.
+
+    Whole numbers with none missing become the smallest signed integer type.
+    Other numbers become `float32` if each is within `_FLOAT32_TOLERANCE` of
+    itself as a `float32`, and `float64` otherwise.
+
+    Args:
+        values: a column of numbers (or of text or categories that are
+            numbers).
+        column: name of the column, for error messages.
+
+    Raises:
+        ValueError: if a value is not a number.
+
+    Returns:
+        The column, with its new type.
+
+    """
+    if isinstance(values.dtype, pd.CategoricalDtype):
+        values = values.astype(object)
+    if pd.api.types.is_bool_dtype(values.dtype):
+        values = values.astype('Int8' if values.isna().any() else 'int8')
+    try:
+        numbers = pd.to_numeric(values)
+    except (TypeError, ValueError) as error:
+        message = (
+            f'the numerical column {column!r} has values that are not numbers')
+        raise ValueError(message) from error
+    missing = bool(numbers.isna().any())
+    if pd.api.types.is_integer_dtype(numbers.dtype) and not missing:
+        return pd.to_numeric(numbers.astype('int64'), downcast = 'integer')
+    floats = numbers.astype('float64')
+    whole = (
+        not missing
+        and bool(np.isfinite(floats).all())
+        and bool((floats == floats.round()).all())
+        and (floats.empty or float(floats.abs().max()) < _LARGEST_INTEGER))
+    if whole:
+        return pd.to_numeric(floats.astype('int64'), downcast = 'integer')
+    single = floats.astype('float32')
+    if np.allclose(
+        single.to_numpy(dtype = 'float64'),
+        floats.to_numpy(),
+        rtol = _FLOAT32_TOLERANCE,
+        atol = 0,
+        equal_nan = True):
+        return single
+    return floats
 
 
 def _text(data: pd.DataFrame, column: Any, technique: str) -> pd.Series:

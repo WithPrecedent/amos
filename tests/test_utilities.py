@@ -6,6 +6,7 @@ import importlib
 import logging
 import statistics
 
+import pandas as pd
 import pytest
 import scipy.stats
 import sklearn.preprocessing
@@ -150,3 +151,25 @@ def test_feature_names_gives_back_the_columns_a_tool_renamed() -> None:
 
 def test_feature_names_is_none_for_a_model_without_names() -> None:
     assert utilities.feature_names(object(), ['a', 'b']) is None
+
+
+@pytest.mark.parametrize(('expression', 'expected'), [
+    ('race == W and sex == F', "race == 'W' and sex == 'F'"),
+    ("race in ['W', 'B']", "race in ['W', 'B']"),
+    ('race == "W" or race == `sex`', 'race == "W" or race == `sex`'),
+    ('abs(age) > 1e5 and race.str.len() > @size',
+     'abs(age) > 1e5 and race.str.len() > @size'),
+    ('not member and age < 18', 'not member and age < 18'),
+    ('total = age * 2', 'total = age * 2')])
+def test_quote_bare_values(expression: str, expected: str) -> None:
+    data = pd.DataFrame({
+        'race': ['W', 'B'], 'sex': ['M', 'F'], 'age': [20, 30],
+        'member': [True, False]})
+    assert utilities.quote_bare_values(expression, data) == expected
+
+
+def test_quote_bare_values_raises_for_a_value_that_is_a_column() -> None:
+    data = pd.DataFrame({'race': ['W', 'B'], 'W': [1, 2]})
+    with pytest.raises(ValueError, match = 'both a column and a value'):
+        utilities.quote_bare_values('race == W', data)
+    assert utilities.quote_bare_values('race == `W`', data) == 'race == `W`'

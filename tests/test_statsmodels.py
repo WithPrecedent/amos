@@ -110,8 +110,7 @@ def test_ordinal_regression_keeps_the_order_of_its_classes() -> None:
     # scikit-learn.
     assert list(dataset.probabilities.columns) == sorted(order)
     assert set(dataset.predictions) <= set(order)
-    amos.metrics.RocAuc().apply(dataset)
-    assert dataset.metrics['roc_auc'] > 0.7
+    assert amos.metrics.RocAuc().measure(dataset) > 0.7
 
 
 def test_models_of_counts_need_counts(regressed: amos.Dataset) -> None:

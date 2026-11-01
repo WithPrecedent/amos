@@ -16,7 +16,8 @@ Contents:
     DropConstant: removes columns that have only one value.
     DropDuplicates: removes duplicate rows.
     DropMissing: removes rows with missing values.
-    FilterRows: keeps the rows that match a query.
+    FilterRows: keeps the rows that match a query, or a condition for each
+        column.
     KeepColumns: keeps only some columns (and the label).
     RenameColumns: renames columns.
 
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -33,6 +35,9 @@ import pandas as pd
 
 from . import base, utilities
 
+# The start of a condition of `filter_rows` that compares a column to a value:
+# an operator, or "in" or "not in" as words.
+_COMPARISON: re.Pattern[str] = re.compile(r'(==|!=|<=|>=|<|>|in\b|not\s+in\b)')
 
 @dataclasses.dataclass
 class Cleaner(base.Operation, abc.ABC):
@@ -208,7 +213,16 @@ class DropMissing(Cleaner):
 
 @dataclasses.dataclass
 class FilterRows(Cleaner):
-    """Keeps the rows that match a query.
+    """Keeps the rows that match a query, or a condition for each column.
+
+    Each parameter other than "query" is a column, and its value is a
+    condition for that column, so "state = not in ['GU', 'PR']" keeps the
+    rows whose state is not "GU" or "PR". A condition can start with a
+    comparison ("==", "!=", "<", "<=", ">", ">=", "in", or "not in"); "not"
+    and a value (as in "not 1") means "!="; a list means "in"; and a value
+    alone means "==". Words that are not columns are values, so they need no
+    quotes (see `utilities.quote_bare_values`). The rows kept match the query
+    and every condition.
 
     Wraps:
         [`pandas.DataFrame.query`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html)
@@ -220,21 +234,37 @@ class FilterRows(Cleaner):
         self,
         data: pd.DataFrame,
         query: str | None = None,
-        **kwargs: Any) -> pd.DataFrame:
-        """Keeps the rows that match `query`.
+        **conditions: Any) -> pd.DataFrame:
+        """Keeps the rows that match `query` and every condition.
 
         Args:
             data: the data to clean.
             query: a `pandas` query, such as "age >= 18". Column names with
-                spaces go inside backticks. Defaults to `None`, which keeps
-                every row.
-            **kwargs: not used.
+                spaces go inside backticks. Defaults to `None`.
+            **conditions: a condition for each column, by its name (see the
+                class docstring).
+
+        Raises:
+            KeyError: if a condition is for a column that is not in the data.
 
         Returns:
-            The rows that match `query`.
+            The rows that match `query` and every condition. If there are
+                neither, every row.
 
         """
-        return data if query is None else data.query(query)
+        missing = [c for c in conditions if c not in data.columns]
+        if missing:
+            message = (
+                f'the columns {missing} that filter_rows has conditions for '
+                f'are not in the data'
+            )
+            raise KeyError(message)
+        parts = [] if query is None else [str(query)]
+        parts.extend(_condition_query(c, v) for c, v in conditions.items())
+        if not parts:
+            return data
+        joined = ' and '.join(f'({p})' for p in parts)
+        return data.query(utilities.quote_bare_values(joined, data))
 
 
 @dataclasses.dataclass
@@ -290,6 +320,10 @@ class KeepColumns(Cleaner):
 class RenameColumns(Cleaner):
     """Renames columns, including the label and groups of the dataset.
 
+    The names are "names", a `dict` of current names and new names, and any
+    other parameter, whose name is a current name and whose value is the new
+    name (as in "state = state_abbreviation").
+
     Wraps:
         [`pandas.DataFrame.rename`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.rename.html)
         from pandas.
@@ -300,23 +334,25 @@ class RenameColumns(Cleaner):
         self,
         data: pd.DataFrame,
         names: Mapping[str, str] | None = None,
-        **kwargs: Any) -> pd.DataFrame:
+        **renames: str) -> pd.DataFrame:
         """Renames columns.
 
         Args:
             data: the data to clean.
             names: `dict` mapping current names to new names. Defaults to
-                `None`, which renames nothing.
-            **kwargs: not used.
+                `None`.
+            **renames: new names, by the current names.
 
         Returns:
             The data, with new column names.
 
         """
-        return data.rename(columns = dict(names or {}))
+        return data.rename(columns = {**dict(names or {}), **renames})
 
     def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
-        """Renames the columns of `item`, including its label.
+        """Renames the columns of `item`, including its label and groups.
+
+        The kinds of the renamed columns (see `Dataset.kinds`) are kept.
 
         Args:
             item: the dataset to clean.
@@ -326,7 +362,9 @@ class RenameColumns(Cleaner):
             The cleaned dataset.
 
         """
-        names = dict(kwargs.get('names') or {})
+        names = {
+            **dict(kwargs.pop('names', None) or {}),
+            **{str(k): str(v) for k, v in kwargs.items()}}
         # The label and groups are renamed before the data so that `replace`
         # finds them.
         special = [c for c in [item.label, *item.groups] if c in names]
@@ -336,4 +374,34 @@ class RenameColumns(Cleaner):
             item.groups = [names.get(g, g) for g in item.groups]
             if item.label in names:
                 item.label = names[item.label]
-        return super().apply(item, **kwargs)
+        item.kinds = {names.get(c, c): k for c, k in item.kinds.items()}
+        return super().apply(item, names = names)
+
+
+""" Private Functions """
+
+
+def _condition_query(column: str, condition: Any) -> str:
+    """Returns a `pandas` query of `condition` for `column`.
+
+    Args:
+        column: name of the column.
+        condition: a comparison and a value (such as "> 5" or "not in [1,
+            2]"), "not" and a value (which means "!="), a list (which means
+            "in"), or a value alone (which means "==").
+
+    Returns:
+        The query, with the column's name in backticks.
+
+    """
+    name = f'`{column}`'
+    if isinstance(condition, list | tuple | set):
+        return f'{name} in {list(condition)!r}'
+    if not isinstance(condition, str):
+        return f'{name} == {condition!r}'
+    text = condition.strip()
+    if _COMPARISON.match(text):
+        return f'{name} {text}'
+    if text.startswith('not '):
+        return f'{name} != {text[4:].strip()}'
+    return f'{name} == {text}'

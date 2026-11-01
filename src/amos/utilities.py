@@ -10,6 +10,8 @@ Contents:
     import_tool: imports a tool from its import path, with a helpful error.
     parameters_of: returns the parameters of a built tool.
     preserved_logging: restores the root logger after code that changes it.
+    quote_bare_values: puts quotes around the words in an expression that are
+        not columns.
     search_space: divides parameters into fixed values and values to search.
     select_columns: returns the names of columns, checking that they are in
         the data.
@@ -23,8 +25,10 @@ import ctypes
 import functools
 import importlib.metadata
 import inspect
+import keyword
 import logging
 import platform
+import re
 import sys
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
@@ -44,6 +48,17 @@ _CUDA_DRIVERS: tuple[str, ...] = ('libcuda.so.1', 'libcuda.so', 'nvcuda.dll')
 _COMPUTE_CAPABILITY: tuple[int, int] = (75, 76)
 # The kinds of hyperparameter search that models support.
 _SEARCHES: frozenset[str] = frozenset({'grid', 'optuna', 'random'})
+# Text in quotes or backticks (which `quote_bare_values` leaves alone), or a
+# word ("word") that is not after a letter, digit, ".", or "@" and is not
+# followed by "(", ".", or a single "=" (so not part of a number, an
+# attribute, a local variable, the name of a function, something with an
+# attribute, or the target of an assignment).
+_BARE_WORD: re.Pattern[str] = re.compile(
+    r"'(?:[^'\\]|\\.)*'|" + r'"(?:[^"\\]|\\.)*"|`[^`]*`'
+    r'|(?<![\w.@])(?P<word>[A-Za-z_]\w*)\b(?!\s*[(.])(?!\s*=(?!=))')
+# A column (a word or text in backticks) and "==" or "!=" at the end of text.
+_COMPARED_COLUMN: re.Pattern[str] = re.compile(
+    r'(?P<column>`[^`]*`|[A-Za-z_]\w*)\s*(?:==|!=)\s*$')
 
 
 def accepted_parameters(
@@ -291,6 +306,68 @@ def preserved_logging() -> Generator[None, None, None]:
         for handler in handlers:
             if handler not in root.handlers:
                 root.addHandler(handler)
+
+
+def quote_bare_values(expression: str, data: pd.DataFrame) -> str:
+    """Puts quotes around the words in `expression` that are not columns.
+
+    This lets a `pandas` expression compare a column to text without quotes,
+    as in "offender_race == B", which becomes "offender_race == 'B'". A word
+    is left as it is if it is a column of `data`, a Python keyword (such as
+    "and", "in", or "True"), the name of a function (followed by "("), an
+    attribute or method (after "."), something with an attribute (followed
+    by "."), or a local variable (after "@"). Text in quotes or backticks is
+    not changed.
+
+    Args:
+        expression: a `pandas` expression, as `DataFrame.eval` and
+            `DataFrame.query` take.
+        data: the data that the expression is about.
+
+    Raises:
+        ValueError: if a word after "==" or "!=" is a column, and the column
+            before the operator has that word as one of its values, so it is
+            not clear whether the word is a column or a value.
+
+    Returns:
+        `expression`, with quotes around the words that are values.
+
+    """
+    columns = {str(c) for c in data.columns}
+
+    def quote(match: re.Match[str]) -> str:
+        """Returns the text of `match`, in quotes if it is a bare value.
+
+        Args:
+            match: a match of `_BARE_WORD`.
+
+        Raises:
+            ValueError: if the word is both a column and a value of the
+                column that it is compared to.
+
+        Returns:
+            The text, quoted if it is a word that is not a column or name.
+
+        """
+        word = match.group('word')
+        if word is None or keyword.iskeyword(word):
+            return match.group(0)
+        if word not in columns:
+            return repr(word)
+        compared = _COMPARED_COLUMN.search(expression[:match.start()])
+        if compared is not None:
+            other = compared.group('column').strip('`')
+            if other in columns and (
+                data[other].astype(str) == word).to_numpy().any():
+                message = (
+                    f'{word!r} in {expression!r} is both a column and a '
+                    f'value of {other!r}: put the value in quotes, or the '
+                    f'column in backticks'
+                )
+                raise ValueError(message)
+        return match.group(0)
+
+    return _BARE_WORD.sub(quote, expression)
 
 
 def search_space(

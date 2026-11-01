@@ -217,6 +217,23 @@ def test_the_feature_groups_section_is_not_a_worker() -> None:
     assert project.result.features == ['x0', 'x1']
 
 
+def test_every_feature_group_keeps_the_always_use_features() -> None:
+    settings = _group_settings(
+        {'always_use': ['x4', 'x0'], 'first': ['x0', 'x1'], 'last': 'x5'},
+        ['first', 'last', 'feature_group1', 'k_best'])
+    settings['feature_group1_parameters'] = {'columns': ['x2']}
+    settings['k_best_parameters'] = {'k': 1}
+    project = amos.Project.create(settings, item = make_numeric())
+    assert 'always_use' not in chrisjen.library.all
+    found = _features_by_group(project)
+    assert {k: v for k, v in found.items() if k != 'k_best'} == {
+        'first': ['x0', 'x1', 'x4'],
+        'last': ['x0', 'x4', 'x5'],
+        'feature_group1': ['x0', 'x2', 'x4']}
+    # Other selectors do not keep them.
+    assert len(found['k_best']) == 1
+
+
 def test_feature_groups_can_be_numbered_techniques() -> None:
     settings = _group_settings({}, ['feature_group1', 'feature_group2'])
     settings['feature_group1_parameters'] = {'columns': ['x0', 'x1']}
@@ -224,6 +241,36 @@ def test_feature_groups_can_be_numbered_techniques() -> None:
     project = amos.Project.create(settings, item = make_numeric())
     assert _features_by_group(project) == {
         'feature_group1': ['x0', 'x1'], 'feature_group2': ['x2']}
+
+
+def test_groups_in_the_parameters_of_feature_group_are_branches() -> None:
+    settings = _group_settings({}, ['feature_group', 'k_best'])
+    settings['feature_group_parameters'] = {
+        'always_use': ['x4'],
+        'raw': ['x0', 'x1'],
+        'refined': 'x2'}
+    settings['k_best_parameters'] = {'k': 1}
+    project = amos.Project.create(settings, item = make_numeric())
+    assert project.idea['study_project']['select_techniques'] == [
+        'raw', 'refined', 'k_best']
+    assert project.idea['feature_groups'] == {
+        'raw': ['x0', 'x1', 'x4'], 'refined': ['x2', 'x4']}
+    found = _features_by_group(project)
+    assert found['raw'] == ['x0', 'x1', 'x4']
+    assert found['refined'] == ['x2', 'x4']
+
+
+@pytest.mark.parametrize(('parameters', 'groups', 'match'), [
+    ({'columns': ['x0'], 'raw': ['x1']}, {}, 'both "columns" and groups'),
+    ({'raw': ['x1']}, {'raw': ['x0']}, 'listed with other features')])
+def test_groups_in_parameters_are_checked(
+    parameters: dict[str, object],
+    groups: dict[str, object],
+    match: str) -> None:
+    settings = _group_settings(groups, ['feature_group'])
+    settings['feature_group_parameters'] = parameters
+    with pytest.raises(ValueError, match = match):
+        amos.Project.create(settings, item = make_numeric())
 
 
 @pytest.mark.parametrize(('groups', 'error', 'match'), [

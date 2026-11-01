@@ -116,14 +116,14 @@ def test_cox_penalizer_shrinks_the_coefficients() -> None:
 def test_concordance_uses_the_cox_event() -> None:
     dataset = _survival(split = True)
     amos.models.Cox().apply(dataset, event = 'arrested')
-    amos.metrics.Concordance().apply(dataset)
+    measured = amos.metrics.Concordance().measure(dataset)
     rows = dataset.predictions.index
     expected = amos.metrics.concordance_index(
         dataset.y.loc[rows],
         dataset.predictions,
         dataset.data.loc[rows, 'arrested'])
-    assert dataset.metrics['concordance'] == pytest.approx(expected)
-    assert dataset.metrics['concordance'] > 0.5
+    assert measured == pytest.approx(expected)
+    assert measured > 0.5
 
 
 @pytest.mark.parametrize(('times', 'scores', 'observed', 'expected'), [

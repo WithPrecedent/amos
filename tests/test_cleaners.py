@@ -57,6 +57,35 @@ def test_filter_rows(mixed: amos.Dataset) -> None:
     assert (mixed.data['income'] > 30000).all()
 
 
+def test_filter_rows_by_conditions_for_columns(mixed: amos.Dataset) -> None:
+    cleaners.FilterRows().apply(mixed, region = 'not in [north, south]')
+    assert set(mixed.data['region'].dropna()) <= {'east', 'west'}
+    cleaners.FilterRows().apply(mixed, region = 'not east')
+    assert set(mixed.data['region'].dropna()) == {'west'}
+    before = len(mixed.data)
+    cleaners.FilterRows().apply(
+        mixed, query = 'income > 30000', member = True, age = '>= 30')
+    data = mixed.data
+    assert len(data) < before
+    assert (data['income'] > 30000).all()
+    assert data['member'].all()
+    assert (data['age'] >= 30).all()
+    with pytest.raises(KeyError, match = 'not in the data'):
+        cleaners.FilterRows().apply(mixed, missing = 1)
+
+
+def test_filter_rows_condition_queries() -> None:
+    query = cleaners._condition_query
+    assert query('state', "not in ['GU']") == "`state` not in ['GU']"
+    assert query('code', 'in [1, 2]') == '`code` in [1, 2]'
+    assert query('flag', 'not 1') == '`flag` != 1'
+    assert query('age', '>= 18') == '`age` >= 18'
+    assert query('race', 'W') == '`race` == W'
+    assert query('race', ['W', 'B']) == "`race` in ['W', 'B']"
+    assert query('count', 2) == '`count` == 2'
+    assert query('index', 'indigo') == '`index` == indigo'
+
+
 def test_keep_columns_always_keeps_the_label(mixed: amos.Dataset) -> None:
     cleaners.KeepColumns().apply(mixed)
     assert len(mixed.data.columns) == 6
@@ -70,3 +99,11 @@ def test_rename_columns_renames_the_label(mixed: amos.Dataset) -> None:
     assert mixed.label == 'result'
     assert 'years' in mixed.features
     assert mixed.y.name == 'result'
+
+
+def test_rename_columns_by_parameter(mixed: amos.Dataset) -> None:
+    mixed.kinds['age'] = 'numerics'
+    cleaners.RenameColumns().apply(
+        mixed, names = {'income': 'earnings'}, age = 'years')
+    assert {'years', 'earnings'} <= set(mixed.features)
+    assert mixed.kinds == {'years': 'numerics'}

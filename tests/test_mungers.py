@@ -347,6 +347,103 @@ def test_derive_columns(mixed: amos.Dataset) -> None:
             mixed, expressions = {'x': 'y = income * 2'})
 
 
+def test_derive_columns_by_parameter_with_bare_values(
+    mixed: amos.Dataset) -> None:
+    mungers.DeriveColumns().apply(
+        mixed,
+        north = 'region == north',
+        north_member = 'north and member',
+        wealthy = "region in ['east', 'west'] and income > 30000")
+    data = mixed.data
+    assert (data['north'] == (data['region'] == 'north')).all()
+    assert (data['north_member'] == (data['north'] & data['member'])).all()
+    assert data['wealthy'].dtype == bool
+
+
+def test_set_kinds() -> None:
+    data = pd.DataFrame({
+        'flag': [True, False, True, True],
+        'count': [0, 1, 1, 0],
+        'age': [17.0, 30.0, 45.0, 120.0],
+        'big': [1, 2, 3, 40_000],
+        'share': [0.5, 0.25, np.nan, 1.0],
+        'precise': [0.1, 1 / 3, 2.0, 1e39],
+        'code': [1, 2, 1, 3],
+        'race': ['W', 'B', 'W', 'A'],
+        'note': ['a', 'b', 'c', 'd'],
+        'won': [True, False, False, True]})
+    dataset = amos.Dataset(data, label = 'won', groups = ['note'])
+    mungers.SetKinds().apply(
+        dataset,
+        dummy = 'count',
+        categorical = ['code', 'race', 'race'],
+        numerical = 'flag')
+    types = dataset.data.dtypes
+    assert types['count'] == 'int8'
+    assert types['flag'] == 'int8'
+    assert types['age'] == 'int8'
+    assert types['big'] == 'int32'
+    assert types['share'] == 'float32'
+    assert types['precise'] == 'float64'
+    assert isinstance(types['code'], pd.CategoricalDtype)
+    assert isinstance(types['race'], pd.CategoricalDtype)
+    assert types['won'] == 'int8'
+    assert types['note'] == object or pd.api.types.is_string_dtype(
+        types['note'])
+    assert dataset.kinds['count'] == 'booleans'
+    assert dataset.kinds['flag'] == 'numerics'
+    assert dataset.kinds['won'] == 'booleans'
+    assert 'note' not in dataset.kinds
+    assert dataset.booleans == ['count']
+    assert dataset.numerics == ['flag', 'age', 'big', 'share', 'precise']
+    assert dataset.classes == [0, 1]
+
+
+def test_set_kinds_checks_dummies_and_kinds() -> None:
+    data = pd.DataFrame({
+        'gap': [1.0, np.nan, 0.0],
+        'many': [0, 1, 2],
+        'text': ['1', '2', 'x']})
+    with pytest.raises(ValueError, match = 'missing values'):
+        mungers.SetKinds().apply(data.copy(), dummy = 'gap')
+    with pytest.raises(ValueError, match = 'other than 0 and 1'):
+        mungers.SetKinds().apply(data.copy(), dummy = 'many')
+    with pytest.raises(ValueError, match = 'not numbers'):
+        mungers.SetKinds().apply(data.copy(), numerical = 'text')
+    with pytest.raises(ValueError, match = 'two kinds'):
+        mungers.SetKinds().apply(
+            data.copy(), dummy = 'many', numerical = 'many')
+    with pytest.raises(ValueError, match = 'does not know'):
+        mungers.SetKinds().apply(data.copy(), text = 'text')
+    with pytest.raises(KeyError, match = 'not in the data'):
+        mungers.SetKinds().apply(data.copy(), dummy = 'missing')
+
+
+def test_map_values_uses_registered_maps() -> None:
+    data = pd.DataFrame({
+        'offender_race': ['W', 'B', None],
+        'victim_race': pd.Categorical(['B', 'B', 'W']),
+        'state': ['ny', 'ca', 'tx']})
+    try:
+        amos.register_value_map(
+            ['offender_race', 'victim_race'], {'W': 'white', 'B': 'black'})
+        amos.register_value_map('state', str.upper)
+        result = mungers.MapValues().apply(
+            data, columns = ['offender_race', 'victim_race', 'state'])
+        changed = result.data
+        assert changed['offender_race'].tolist()[:2] == ['white', 'black']
+        assert pd.isna(changed['offender_race'].iloc[2])
+        assert isinstance(changed['victim_race'].dtype, pd.CategoricalDtype)
+        assert changed['victim_race'].tolist() == ['black', 'black', 'white']
+        assert changed['state'].tolist() == ['NY', 'CA', 'TX']
+        with pytest.raises(TypeError, match = 'a dict or a function'):
+            amos.register_value_map('state', 5)  # type: ignore[arg-type]
+    finally:
+        mungers._VALUE_MAPS.clear()
+    with pytest.raises(KeyError, match = 'register_value_map'):
+        mungers.MapValues().apply(data, columns = 'state')
+
+
 def test_mungers_check_their_columns_and_patterns(
     cases: amos.Dataset) -> None:
     with pytest.raises(ValueError, match = 'is not valid'):

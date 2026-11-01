@@ -19,6 +19,10 @@ imported when a technique that needs them is used (see the extras in the
 (CatBoost-style target encoding, from category_encoders) is not the
 `catboost` model.
 
+[Metrics](#metrics) are listed last. They are not techniques, so they are not
+steps of a workflow: name one as a worker's `criterion`, or in the `metrics`
+of a technique that uses them (such as `scorecard` or a validator).
+
 ## Loaders (wrangler)
 
 | Name | Tool | Description |
@@ -35,7 +39,7 @@ imported when a technique that needs them is used (see the extras in the
 | [`drop_constant`][amos.cleaners.DropConstant] | Removes columns that have only one value (and so tell you nothing). |
 | [`drop_duplicates`][amos.cleaners.DropDuplicates] | Removes rows that duplicate an earlier row. |
 | [`drop_missing`][amos.cleaners.DropMissing] | Removes rows with missing values. |
-| [`filter_rows`][amos.cleaners.FilterRows] | Keeps the rows that match a query. |
+| [`filter_rows`][amos.cleaners.FilterRows] | Keeps the rows that match a query, or a condition for each column. |
 | [`keep_columns`][amos.cleaners.KeepColumns] | Keeps only some columns. The label and groups are always kept. |
 | [`rename_columns`][amos.cleaners.RenameColumns] | Renames columns, including the label and groups of the dataset. |
 
@@ -59,6 +63,7 @@ imported when a technique that needs them is used (see the extras in the
 | [`parse_dates`][amos.mungers.ParseDates] | Turns text into dates. |
 | [`parse_numbers`][amos.mungers.ParseNumbers] | Turns text such as "$1,234.50" into numbers. |
 | [`replace_text`][amos.mungers.ReplaceText] | Replaces the matches of patterns in text. |
+| [`set_kinds`][amos.mungers.SetKinds] | Sets the kind of each column, with the smallest type that holds it. |
 | [`split_text`][amos.mungers.SplitText] | Splits text into columns where a pattern matches. |
 | [`strip_text`][amos.mungers.StripText] | Trims spaces from text, and optionally makes it lowercase. |
 
@@ -155,7 +160,7 @@ imported when a technique that needs them is used (see the extras in the
 
 | Name | Tool | Description |
 | --- | --- | --- |
-| [`interactions`][amos.transformers.Interactions] | <code>sklearn.<wbr>preprocessing.<wbr>PolynomialFeatures</code> | Adds the product of each pair of features. |
+| [`interactions`][amos.transformers.Interactions] | <code>sklearn.<wbr>preprocessing.<wbr>PolynomialFeatures</code> | Adds the product of each pair of features, or of the terms of formulas. |
 | [`polynomial`][amos.transformers.Polynomial] | <code>sklearn.<wbr>preprocessing.<wbr>PolynomialFeatures</code> | Adds the squares and products of the features (degree 2 by default). |
 | [`splines`][amos.transformers.Splines] | <code>sklearn.<wbr>preprocessing.<wbr>SplineTransformer</code> | Replaces each feature with a set of spline curves. |
 
@@ -257,35 +262,6 @@ imported when a technique that needs them is used (see the extras in the
 | [`stratified_k_fold`][amos.validators.StratifiedKFold] | <code>sklearn.<wbr>model_selection.<wbr>StratifiedKFold</code> | Folds that keep the share of each class the same in every fold. |
 | [`stratified_shuffle_split`][amos.validators.StratifiedShuffleSplit] | <code>sklearn.<wbr>model_selection.<wbr>StratifiedShuffleSplit</code> | Repeated random splits into two sets, with the classes in proportion. |
 | [`time_series_split`][amos.validators.TimeSeriesSplit] | <code>sklearn.<wbr>model_selection.<wbr>TimeSeriesSplit</code> | Scores later rows with copies of the model fitted to earlier rows. |
-
-## Metrics (critic)
-
-| Name | Tool | Task | Better | Description |
-| --- | --- | --- | --- | --- |
-| [`accuracy`][amos.metrics.Accuracy] | <code>sklearn.<wbr>metrics.<wbr>accuracy_score</code> | classify | higher | The share of rows classified correctly. |
-| [`average_precision`][amos.metrics.AveragePrecision] | <code>sklearn.<wbr>metrics.<wbr>average_precision_score</code> | classify | higher | The area under the precision-recall curve. |
-| [`balanced_accuracy`][amos.metrics.BalancedAccuracy] | <code>sklearn.<wbr>metrics.<wbr>balanced_accuracy_score</code> | classify | higher | The average share of each class classified correctly. |
-| [`brier`][amos.metrics.Brier] | <code>sklearn.<wbr>metrics.<wbr>brier_score_loss</code> | classify | lower | The mean squared error of the predicted probabilities (lower is better). |
-| [`cohen_kappa`][amos.metrics.CohenKappa] | <code>sklearn.<wbr>metrics.<wbr>cohen_kappa_score</code> | classify | higher | Agreement between the predictions and labels beyond chance. |
-| [`concordance`][amos.metrics.Concordance] | <code>amos.<wbr>metrics.<wbr>concordance_index</code> | regress | higher | How often the model orders pairs of times correctly (Harrell's C). |
-| [`demographic_parity`][amos.metrics.DemographicParity] | <code>fairlearn.<wbr>metrics.<wbr>demographic_parity_difference</code> | classify | lower | The largest gap between groups in the share predicted to be positive. |
-| [`demographic_parity_ratio`][amos.metrics.DemographicParityRatio] | <code>fairlearn.<wbr>metrics.<wbr>demographic_parity_ratio</code> | classify | higher | The smallest group's share predicted positive over the largest's. |
-| [`equal_opportunity`][amos.metrics.EqualOpportunity] | <code>fairlearn.<wbr>metrics.<wbr>equal_opportunity_difference</code> | classify | lower | The largest gap between groups in the true positive rate. |
-| [`equal_opportunity_ratio`][amos.metrics.EqualOpportunityRatio] | <code>fairlearn.<wbr>metrics.<wbr>equal_opportunity_ratio</code> | classify | higher | The smallest group's true positive rate over the largest's. |
-| [`equalized_odds`][amos.metrics.EqualizedOdds] | <code>fairlearn.<wbr>metrics.<wbr>equalized_odds_difference</code> | classify | lower | The larger gap between groups in true or false positive rates. |
-| [`equalized_odds_ratio`][amos.metrics.EqualizedOddsRatio] | <code>fairlearn.<wbr>metrics.<wbr>equalized_odds_ratio</code> | classify | higher | The smaller ratio between groups of true or false positive rates. |
-| [`explained_variance`][amos.metrics.ExplainedVariance] | <code>sklearn.<wbr>metrics.<wbr>explained_variance_score</code> | regress | higher | The share of the variance of the label that the model explains. |
-| [`f1`][amos.metrics.F1] | <code>sklearn.<wbr>metrics.<wbr>f1_score</code> | classify | higher | The harmonic mean of precision and recall. |
-| [`log_loss`][amos.metrics.LogLoss] | <code>sklearn.<wbr>metrics.<wbr>log_loss</code> | classify | lower | The negative log-likelihood of the true labels (lower is better). |
-| [`mae`][amos.metrics.MAE] | <code>sklearn.<wbr>metrics.<wbr>mean_absolute_error</code> | regress | lower | The mean absolute error (lower is better). |
-| [`mape`][amos.metrics.MAPE] | <code>sklearn.<wbr>metrics.<wbr>mean_absolute_percentage_error</code> | regress | lower | The mean absolute percentage error (lower is better). |
-| [`matthews`][amos.metrics.Matthews] | <code>sklearn.<wbr>metrics.<wbr>matthews_corrcoef</code> | classify | higher | The Matthews correlation coefficient (phi for two classes). |
-| [`mse`][amos.metrics.MSE] | <code>sklearn.<wbr>metrics.<wbr>mean_squared_error</code> | regress | lower | The mean squared error (lower is better). |
-| [`precision`][amos.metrics.Precision] | <code>sklearn.<wbr>metrics.<wbr>precision_score</code> | classify | higher | The share of rows predicted to be positive that are positive. |
-| [`r2`][amos.metrics.R2] | <code>sklearn.<wbr>metrics.<wbr>r2_score</code> | regress | higher | The coefficient of determination (R squared). |
-| [`recall`][amos.metrics.Recall] | <code>sklearn.<wbr>metrics.<wbr>recall_score</code> | classify | higher | The share of positive rows that are predicted to be positive. |
-| [`rmse`][amos.metrics.RMSE] | <code>sklearn.<wbr>metrics.<wbr>root_mean_squared_error</code> | regress | lower | The root mean squared error (lower is better). |
-| [`roc_auc`][amos.metrics.RocAuc] | <code>sklearn.<wbr>metrics.<wbr>roc_auc_score</code> | classify | higher | The area under the receiver operating characteristic (ROC) curve. |
 
 ## Evaluators (critic)
 
@@ -398,3 +374,32 @@ imported when a technique that needs them is used (see the extras in the
 | [`auto_model`][amos.auto.AutoModel] | Fits the best of the models whose needs and assumptions the data meets. |
 | [`auto_plot`][amos.auto.AutoPlot] | Draws the figures that suit the data and the model. |
 | [`auto_sampler`][amos.auto.AutoSampler] | Chooses a sampler that suits the classes and the features, or none. |
+
+## Metrics
+
+| Name | Tool | Task | Better | Description |
+| --- | --- | --- | --- | --- |
+| [`accuracy`][amos.metrics.Accuracy] | <code>sklearn.<wbr>metrics.<wbr>accuracy_score</code> | classify | higher | The share of rows classified correctly. |
+| [`average_precision`][amos.metrics.AveragePrecision] | <code>sklearn.<wbr>metrics.<wbr>average_precision_score</code> | classify | higher | The area under the precision-recall curve. |
+| [`balanced_accuracy`][amos.metrics.BalancedAccuracy] | <code>sklearn.<wbr>metrics.<wbr>balanced_accuracy_score</code> | classify | higher | The average share of each class classified correctly. |
+| [`brier`][amos.metrics.Brier] | <code>sklearn.<wbr>metrics.<wbr>brier_score_loss</code> | classify | lower | The mean squared error of the predicted probabilities (lower is better). |
+| [`cohen_kappa`][amos.metrics.CohenKappa] | <code>sklearn.<wbr>metrics.<wbr>cohen_kappa_score</code> | classify | higher | Agreement between the predictions and labels beyond chance. |
+| [`concordance`][amos.metrics.Concordance] | <code>amos.<wbr>metrics.<wbr>concordance_index</code> | regress | higher | How often the model orders pairs of times correctly (Harrell's C). |
+| [`demographic_parity`][amos.metrics.DemographicParity] | <code>fairlearn.<wbr>metrics.<wbr>demographic_parity_difference</code> | classify | lower | The largest gap between groups in the share predicted to be positive. |
+| [`demographic_parity_ratio`][amos.metrics.DemographicParityRatio] | <code>fairlearn.<wbr>metrics.<wbr>demographic_parity_ratio</code> | classify | higher | The smallest group's share predicted positive over the largest's. |
+| [`equal_opportunity`][amos.metrics.EqualOpportunity] | <code>fairlearn.<wbr>metrics.<wbr>equal_opportunity_difference</code> | classify | lower | The largest gap between groups in the true positive rate. |
+| [`equal_opportunity_ratio`][amos.metrics.EqualOpportunityRatio] | <code>fairlearn.<wbr>metrics.<wbr>equal_opportunity_ratio</code> | classify | higher | The smallest group's true positive rate over the largest's. |
+| [`equalized_odds`][amos.metrics.EqualizedOdds] | <code>fairlearn.<wbr>metrics.<wbr>equalized_odds_difference</code> | classify | lower | The larger gap between groups in true or false positive rates. |
+| [`equalized_odds_ratio`][amos.metrics.EqualizedOddsRatio] | <code>fairlearn.<wbr>metrics.<wbr>equalized_odds_ratio</code> | classify | higher | The smaller ratio between groups of true or false positive rates. |
+| [`explained_variance`][amos.metrics.ExplainedVariance] | <code>sklearn.<wbr>metrics.<wbr>explained_variance_score</code> | regress | higher | The share of the variance of the label that the model explains. |
+| [`f1`][amos.metrics.F1] | <code>sklearn.<wbr>metrics.<wbr>f1_score</code> | classify | higher | The harmonic mean of precision and recall. |
+| [`log_loss`][amos.metrics.LogLoss] | <code>sklearn.<wbr>metrics.<wbr>log_loss</code> | classify | lower | The negative log-likelihood of the true labels (lower is better). |
+| [`mae`][amos.metrics.MAE] | <code>sklearn.<wbr>metrics.<wbr>mean_absolute_error</code> | regress | lower | The mean absolute error (lower is better). |
+| [`mape`][amos.metrics.MAPE] | <code>sklearn.<wbr>metrics.<wbr>mean_absolute_percentage_error</code> | regress | lower | The mean absolute percentage error (lower is better). |
+| [`matthews`][amos.metrics.Matthews] | <code>sklearn.<wbr>metrics.<wbr>matthews_corrcoef</code> | classify | higher | The Matthews correlation coefficient (phi for two classes). |
+| [`mse`][amos.metrics.MSE] | <code>sklearn.<wbr>metrics.<wbr>mean_squared_error</code> | regress | lower | The mean squared error (lower is better). |
+| [`precision`][amos.metrics.Precision] | <code>sklearn.<wbr>metrics.<wbr>precision_score</code> | classify | higher | The share of rows predicted to be positive that are positive. |
+| [`r2`][amos.metrics.R2] | <code>sklearn.<wbr>metrics.<wbr>r2_score</code> | regress | higher | The coefficient of determination (R squared). |
+| [`recall`][amos.metrics.Recall] | <code>sklearn.<wbr>metrics.<wbr>recall_score</code> | classify | higher | The share of positive rows that are predicted to be positive. |
+| [`rmse`][amos.metrics.RMSE] | <code>sklearn.<wbr>metrics.<wbr>root_mean_squared_error</code> | regress | lower | The root mean squared error (lower is better). |
+| [`roc_auc`][amos.metrics.RocAuc] | <code>sklearn.<wbr>metrics.<wbr>roc_auc_score</code> | classify | higher | The area under the receiver operating characteristic (ROC) curve. |

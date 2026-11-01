@@ -79,6 +79,16 @@ def test_frequencies(mixed: amos.Dataset) -> None:
     assert regions['share'].sum() == pytest.approx(1.0)
 
 
+def test_frequencies_of_all_includes_dummies(mixed: amos.Dataset) -> None:
+    mixed.data['flag'] = (mixed.data['income'] > 30000).astype('int8')
+    mixed.kinds['flag'] = 'booleans'
+    describers.Frequencies().apply(mixed, columns = 'all')
+    table = mixed.tables['frequencies']
+    assert set(table['column']) == {'region', 'member', 'flag'}
+    describers.Frequencies().apply(mixed, columns = 'region')
+    assert set(mixed.tables['frequencies']['column']) == {'region'}
+
+
 def test_frequencies_without_categorical_columns(
     classified: amos.Dataset) -> None:
     describers.Frequencies().apply(classified)

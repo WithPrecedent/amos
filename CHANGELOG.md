@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.6.2
+
+* Requires `bobbie` 0.3.3 or later, so an ini list can go on over several
+  lines and the rest of a line after a `#` with spaces on both sides is a
+  comment.
+* The label can be a column that the wrangler makes (such as with
+  `derive_columns`). Until then it is pending: `Dataset` keeps its name
+  rather than raising a `KeyError`, infers the task once the column is made,
+  and raises an error if the label is used before. The new
+  `Dataset.has_label` says whether the label is a column yet.
+* Added `set_kinds`, a munger that gives each column a kind ("dummy",
+  "categorical", or "numerical") in the smallest type that holds it exactly
+  (`int8` for dummies, the "category" type, and the smallest integer or
+  float type for numbers), and infers the kinds of the columns it is not
+  given. A dummy with missing values raises an error, and a classified label
+  of booleans becomes a dummy. The kinds are kept in the new `Dataset.kinds`,
+  so a dummy is one of the dataset's `booleans`.
+* `rename_columns`, `filter_rows`, and `derive_columns` take settings named
+  for columns, so they need no mappings in an ini file
+  (`state = state_abbreviation`, `state = not in ['GU', 'PR']`, and
+  `minor = victim_age < 18`). A condition of `filter_rows` can start with a
+  comparison, "not" and a value, or be a value or list.
+* Words that are not columns in the conditions of `filter_rows` and the
+  expressions of `derive_columns` are values, so text needs no quotes
+  (`offender_race == B`). A word that is both a column and a value of the
+  column it is compared to raises an error.
+* `map_values` without "values" uses the map or function registered for each
+  of its columns with the new `amos.register_value_map`.
+* `frequencies` takes `columns = all`, which counts the categorical and
+  boolean features, including the dummies of `set_kinds`.
+* `interactions` takes formulas, such as `race = offender_race *
+  victim_race`. Categorical columns make one categorical column of their
+  combinations (such as "white_offender_black_victim"), numbers make their
+  product, and both make the product for each combination.
+* Groups of features can be the parameters of `feature_group` (such as
+  `raw = a, b` in "feature_group_parameters"). A step that names
+  `feature_group` then names each group in its place, so an experiment
+  compares them as branches, and `always_use` in those parameters is kept by
+  each group.
+* Features listed as `always_use` in the "feature_groups" section of the
+  settings are kept by every feature group (including a numbered
+  `feature_group` with its own "columns"), so they are in every group's path.
+  `always_use` is not a technique of its own, and other selectors are not
+  affected.
+* Metrics are no longer steps of a workflow. `Metric` is now a
+  `chrisjen.Criteria` rather than an `Operation`, so it has no `apply` and is
+  stored under "criteria" in the library instead of with the techniques.
+  Name a metric as a worker's `criterion`, or in the `metrics` of a
+  `scorecard` or validator; listing one among a worker's techniques raises a
+  `TypeError` that says so. In Python, call `measure` for a score (it now
+  uses the metric's own `parameters`, which a keyword argument overrides).
+
 ## 0.6.1
 
 * Added selectors, a new genre of analyst techniques that keep some of the

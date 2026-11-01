@@ -85,13 +85,29 @@ def test_create_fills_in_what_a_dataset_lacks() -> None:
     amos.Dataset.create(dataset, label = 'x0', seed = 9)
     assert dataset.label == 'target'
     assert dataset.seed == 5
-    with pytest.raises(KeyError):
-        amos.Dataset.create(amos.Dataset(make_numeric()), label = 'missing')
+    pending = amos.Dataset.create(amos.Dataset(make_numeric()), label = 'made')
+    assert pending.label == 'made'
+    assert pending.task is None
 
 
-def test_invalid_label_or_task_raises() -> None:
-    with pytest.raises(KeyError):
-        amos.Dataset(make_numeric(), label = 'missing')
+def test_pending_label_is_inferred_once_it_is_made() -> None:
+    dataset = amos.Dataset(make_numeric(), label = 'made')
+    assert not dataset.has_label
+    assert dataset.task is None
+    assert 'made' not in dataset.features
+    with pytest.raises(ValueError, match = 'not a column of the data'):
+        _ = dataset.y
+    data = dataset.data.copy()
+    data['made'] = data['x0'] > 0
+    dataset.replace(data)
+    assert dataset.has_label
+    assert dataset.task == 'classify'
+    assert 'made' not in dataset.features
+    with pytest.raises(KeyError, match = 'label'):
+        dataset.replace(data.drop(columns = 'made'))
+
+
+def test_invalid_task_raises() -> None:
     with pytest.raises(ValueError, match = 'task must be one of'):
         amos.Dataset(make_numeric(), label = 'target', task = 'cluster')
 

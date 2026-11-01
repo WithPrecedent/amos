@@ -7,7 +7,7 @@ authors = [{name = "Corey Rayburn Yung", email = "coreyrayburnyung@gmail.com"}]
 license = {text = "Apache Software License 2.0"}
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.6.1"
+version = "0.6.2"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -33,6 +33,9 @@ keywords = [
     "statistics",
     "workflow"]
 dependencies = [
+    # bobbie (which chrisjen uses to read settings) reads ini lists that span
+    # several lines and comments after values from 0.3.3.
+    "bobbie>=0.3.3",
     "camina>=0.2.4",
     "chrisjen>=0.4.2",
     "nagata>=0.2.1",

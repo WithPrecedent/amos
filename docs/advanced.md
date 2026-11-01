@@ -24,7 +24,8 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Project` | A `chrisjen.Project` that makes your data into a `Dataset`, applies the workflow to a copy of it, and can `export` the results. |
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
-| `Loader`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, `Selector`, and `Reducer`, `Metric` has the genre `GroupMetric` (fairness metrics), and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
+| `Loader`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, `Selector`, and `Reducer`, and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
+| `Metric` | Base class for metrics, which score a model's predictions. A metric is a `chrisjen.Criteria`, not a technique, so it is not a step of a workflow: name it as a `criterion`, or in the `metrics` of a technique such as `scorecard` or a validator. `GroupMetric` is its genre of fairness metrics. |
 | `Chooser` | The genre of the techniques that choose other techniques to suit the data (`auto`, `auto_sampler`, `auto_model`, and `auto_plot`). See [Choosing techniques automatically](#choosing-techniques-automatically). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
 | `Findings` | The default report. |
@@ -45,7 +46,7 @@ import sklearn.datasets
 import amos
 
 print(sorted(amos.library["vertex"]["operation"]))
-# ['chooser', 'cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'metric', 'model', 'munger', 'plot', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
+# ['chooser', 'cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'model', 'munger', 'plot', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
 print(amos.library.classify("smote"), amos.library.classify("one_hot"))
 # sampler encoder
 print(amos.library.all["random_forest"])
@@ -159,6 +160,10 @@ A `Dataset` has these attributes:
 | `fitted` | Fitted tools (such as a scaler), by the name of the technique that fitted them. |
 | `history` | A record of each technique applied, with its tool and parameters. |
 | `branches` | A record of every branch of the most recent experiment (for the scorecard). |
+| `kinds` | The kind that `set_kinds` gave each column (see "Kinds of columns" below). |
+
+A label that is not yet a column is pending until a technique makes it (see
+"Settings named for columns" below).
 
 Its properties select parts of the data: `x` and `y` (the features and the
 label), `x_train`, `y_train`, `x_test`, and `y_test`, and the names of the
@@ -309,7 +314,7 @@ cleaners, they belong in the wrangler, before the data is split. The
 | --- | --- |
 | Text | `strip_text`, `normalize_text`, `replace_text` |
 | Patterns in text | `flag_patterns`, `count_patterns`, `map_patterns`, `extract_pattern`, `extract_all`, `split_text` |
-| Values and types | `map_values`, `parse_numbers`, `parse_dates`, `parse_booleans`, `convert_types`, `auto_categorize` |
+| Values and types | `map_values`, `parse_numbers`, `parse_dates`, `parse_booleans`, `convert_types`, `auto_categorize`, `set_kinds` |
 | Combining columns | `coalesce`, `combine_flags`, `derive_columns` |
 
 Many mungers search text for patterns, which are [regular
@@ -391,6 +396,127 @@ amos.mungers.ParseNumbers().apply(citations, columns = ["volume", "page"])
 print(citations.data["volume"].tolist(), citations.data["page"].tolist())
 # [512.0, 98.0, nan] [1093.0, 12.0, nan]
 ```
+
+### Settings named for columns
+
+Some cleaners and mungers take settings named for the columns they are about,
+so an ini file needs no mappings for them:
+
+| Technique | A setting `name = value` means | Other settings |
+| --- | --- | --- |
+| `rename_columns` | Rename the column `name` to `value`. | `names` |
+| `filter_rows` | Keep the rows whose `name` meets the condition `value`. | `query` |
+| `derive_columns` | Make the column `name` from the expression `value`. | `expressions` |
+| `set_kinds` | Give the columns in `value` the kind `name` (see below). | none |
+
+A condition of `filter_rows` starts with a comparison ("==", "!=", "<", "<=",
+">", ">=", "in", or "not in"). "not" and a value (as in "not 1") means "!=", a
+list means "in", and a value alone means "==". The rows kept meet every
+condition (and the `query`, if there is one). In the conditions and in the
+expressions of `derive_columns`, a word that is not a column is a value, so
+text needs no quotes: "offender_race == B" is "offender_race == 'B'". If a
+word is both a column and a value of the column it is compared to, it raises
+an error; put the value in quotes or the column in backticks.
+
+The label can be a column that the wrangler makes. Until a technique makes
+it, the label is pending: the dataset keeps its name, and its task is
+inferred once the column is made.
+
+<!-- file: wrangle.ini -->
+```ini
+[general]
+label = won  # made by derive_columns
+
+[wrangle_project]
+wrangle_workers = wrangler
+
+[wrangler]
+techniques = rename_columns, filter_rows, derive_columns,
+    set_kinds
+
+[rename_columns_parameters]
+court_type = court
+
+[filter_rows_parameters]
+court = not in [tax, bankruptcy]
+damages = > 0
+
+[derive_columns_parameters]
+won = outcome in [reversed, vacated]
+federal = court == federal
+
+[set_kinds_parameters]
+dummy = federal
+categorical = court
+```
+
+```python
+appeals = pd.DataFrame({
+    "court_type": ["federal", "state", "tax", "federal", "state"],
+    "damages": [100.0, 2500.0, 40.0, 0.0, 75.5],
+    "outcome": ["reversed", "affirmed", "reversed", "vacated", "vacated"],
+})
+wrangled = amos.Project.create("wrangle.ini", item = appeals).result
+print(wrangled.label, wrangled.task, wrangled.data["won"].tolist())
+# won classify [1, 0, 1]
+print(wrangled.data.dtypes.astype(str).to_dict())
+# {'court': 'category', 'damages': 'float32', 'outcome': 'category', 'won': 'int8', 'federal': 'int8'}
+```
+
+Since every setting of these techniques other than those in the last column
+is a column, a parameter set for the whole wrangler (in a
+"wrangler_parameters" section) would be read as a column. Set their
+parameters in their own sections.
+
+### Kinds of columns
+
+`set_kinds` gives each column a kind, "dummy", "categorical", or
+"numerical", and stores it in the smallest type that holds its values
+exactly. A dummy is `int8` (0 and 1), and raises an error if it has missing
+values or any other value. A categorical column is the `pandas` "category"
+type. A numerical column is the smallest integer type if its values are
+whole numbers with none missing, and otherwise `float32` (or `float64`, for
+numbers that `float32` cannot hold to about 7 digits).
+
+Columns that are not listed get the kind of their values: a boolean column
+or a column of only 0s and 1s is a dummy, other numbers are numerical, and a
+categorical column or text with few values is categorical. Dates, longer
+text, and the groups are left as they are. A classified label of booleans (or
+0s and 1s) becomes a dummy. The kinds are kept in `Dataset.kinds`, so a dummy
+is one of the dataset's `booleans` even though it holds numbers, and
+`frequencies` with `columns = all` counts the dummies with the categorical
+columns:
+
+```python
+print(wrangled.booleans, wrangled.categoricals, wrangled.numerics)
+# ['federal'] ['court', 'outcome'] ['damages']
+```
+
+Arithmetic on small integer types can overflow (`int8` holds only -128 to
+127), so make new columns from numbers before setting their kinds.
+
+### Maps of values
+
+`map_values` replaces values with others, as its "values" map says. Without
+"values", it uses the map (or function) registered for each of its
+"columns" with `amos.register_value_map`, so a package built on `amos` can
+register the meanings of its codes once and its projects only name the
+columns:
+
+```python
+amos.register_value_map(["offender_race", "victim_race"], {"W": "white", "B": "black"})
+crimes = amos.Dataset(pd.DataFrame({
+    "offender_race": ["W", "B", "B"],
+    "victim_race": ["B", "B", "W"],
+    "age": [19, 34, 52],
+}))
+amos.mungers.MapValues().apply(crimes, columns = ["offender_race", "victim_race"])
+print(crimes.data["offender_race"].tolist())
+# ['white', 'black', 'black']
+```
+
+The order of the wrangler's techniques is up to you: a technique after
+`map_values` sees the new values, not the codes.
 
 ## Merging data
 
@@ -682,6 +808,27 @@ print(type(dataset.fitted["min_max"]).__name__)
 # MinMaxScaler
 ```
 
+### Interactions
+
+`interactions` adds the product of each pair of numeric features. Give it
+formulas instead, each named for the interaction it makes (as in "race =
+offender_race * victim_race" in its settings), and it adds only those, and
+keeps the columns they are made from. Categorical columns make one
+categorical column of their combinations, each value followed by the part of
+its column's name that differs from the others', which an encoder can then
+encode. Numbers make their product, and numbers with categorical columns make
+the product for each combination, as a column of its own. It learns nothing
+from the data, so it can come before the split:
+
+```python
+amos.transformers.Interactions().apply(
+    crimes, race = "offender_race * victim_race", age_by_race = "age * victim_race")
+print(crimes.data["race"].tolist())
+# ['white_offender_black_victim', 'black_offender_black_victim', 'black_offender_white_victim']
+print(list(crimes.data.columns))
+# ['offender_race', 'victim_race', 'age', 'race', 'age_by_race_black_victim_race', 'age_by_race_white_victim_race']
+```
+
 ### Labels and the positive class
 
 Metrics, encoders, and models handle labels of any type. For a binary label,
@@ -839,10 +986,39 @@ print(project.result.features)
 A listed name that is not a feature keeps the features made from it, whose
 names start with it and an underscore, so a group can name a column before
 it is encoded ("court" keeps "court_federal" and "court_state" after
-`one_hot`). A group's name must not be the name of another technique. To
+`one_hot`). A group's name must not be the name of another technique.
+
+To keep some features in every group, list them as `always_use` in the
+section. `always_use` is not a group of its own (it cannot be named as a
+technique): each group, including a numbered `feature_group`, keeps its own
+features and those. Other selectors, such as `k_best`, are not affected.
+
+```ini
+[feature_groups]
+always_use = mean radius
+size = mean perimeter, mean area
+texture = mean texture, worst texture
+```
+
+To
 use a group without the section, pass its features as `columns` to
 `feature_group` (or to a numbered copy, such as `feature_group2`, with its
 own parameters section).
+
+The groups can also be the parameters of `feature_group`. Then a step that
+names `feature_group` names each of its groups in its place, so an experiment
+compares them as branches, and `always_use` in those parameters is kept by
+each of them:
+
+```ini
+[analyst]
+select_techniques = feature_group
+
+[feature_group_parameters]
+always_use = mean radius
+size = mean perimeter, mean area
+texture = mean texture, worst texture
+```
 
 ### Fitting models on a GPU
 
@@ -1136,8 +1312,7 @@ amos.models.Logit().apply(dataset)
 amos.evaluators.Fairness().apply(dataset)
 print(list(dataset.tables["fairness"].index))
 # ['north', 'south', 'difference', 'ratio']
-amos.metrics.EqualizedOdds().apply(dataset)
-print(0 <= dataset.metrics["equalized_odds"] <= 1)
+print(0 <= amos.metrics.EqualizedOdds().measure(dataset) <= 1)
 # True
 ```
 
@@ -1291,10 +1466,9 @@ dataset = amos.Dataset(times, label = "days", seed = 43, groups = ["arrested"])
 amos.describers.KaplanMeier().apply(dataset, event = "arrested")
 amos.splitters.TrainTest().apply(dataset)
 amos.models.Cox().apply(dataset, event = "arrested")
-amos.metrics.Concordance().apply(dataset)
 print(dataset.tables["cox_coefficients"].loc["prior", "hazard_ratio"] > 1)
 # True
-print(dataset.metrics["concordance"] > 0.5)
+print(amos.metrics.Concordance().measure(dataset) > 0.5)
 # True
 ```
 
@@ -1518,11 +1692,11 @@ class MedianError(amos.Metric):
 
 settings = {
     "general": {"label": "target", "seed": 43},
-    "diabetes_project": {"techniques": "train_test, spline, bayes_ridge, median_error"},
+    "diabetes_project": {"techniques": "train_test, spline, bayes_ridge"},
     "spline_parameters": {"columns": ["bmi"], "n_knots": 4},
 }
 project = amos.Project.create(settings, item = diabetes)
-print(type(project.result.model).__name__, "median_error" in project.result.metrics)
+print(type(project.result.model).__name__, MedianError().measure(project.result) > 0)
 # BayesianRidge True
 print(project.result.features[2:5])
 # ['bmi_sp_0', 'bmi_sp_1', 'bmi_sp_2']
@@ -1530,9 +1704,11 @@ print(project.result.features[2:5])
 
 A model whose tool differs by task sets `tools` (a `dict` mapping "classify"
 and "regress" to tools) instead of `contents`. A metric sets
-`greater_is_better`, `tasks`, and `uses_probabilities` as class attributes.
-Because every metric is also a `chrisjen.Criteria`, a new metric can be the
-criterion of an experiment.
+`greater_is_better`, `tasks`, and `uses_probabilities` as class attributes,
+and `measure` returns its score of a dataset. A metric is not a step of a
+workflow, but because every metric is a `chrisjen.Criteria`, a new metric can
+be the criterion of an experiment or one of the `metrics` of a scorecard or
+validator.
 
 ## Experiments
 
@@ -1845,7 +2021,7 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | `ValueError: the data has not been split` | A technique asked for the test rows before a splitter was applied. |
 | `ValueError: '...' cannot use the dates or text in [...]` | A model was given text or dates. Encode them (with an encoder such as `one_hot`) or remove them (with `drop_columns`) first. |
 | `ValueError: '...' can classify, but the label is set to regress` | The model does only one task. Choose another model or set "task". |
-| `ValueError: '...' needs predictions: apply a model first` | A metric, evaluator, or plot came before the model. |
+| `ValueError: '...' needs predictions: apply a model first` | An evaluator or plot came before the model, or a metric scored a dataset without one. |
 | `ValueError: '...' needs predicted probabilities, which the model does not make` | The metric (such as `roc_auc`) needs probabilities. |
 | `ImportError: ... install it with "pip install amos[...]"` | The technique wraps an optional package that is not installed. |
 | `ValueError: '...' needs a group` | A fairness metric or `fairness` was used without groups. Set "groups" in the "general" section or pass "group". |
@@ -1853,6 +2029,7 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | `ValueError: '...' needs the name of a "treatment" column` | An inferer was used without a "treatment" parameter. |
 | `ImportError: causalml has no version for Python 3.13 and later ...` | causalml's inferers (such as `x_learner`) need Python 3.11 or 3.12. Use another package's inferer, such as DoubleML's `interactive_regression`. |
 | `ImportError: ... The causal extra ... installs DoWhy on Python 3.13 and later ...` | DoWhy's inferers (such as `propensity_matching`) need DoWhy, which the `causal` extra installs on Python 3.13 and later. |
+| `TypeError: '...' is a metric, not a technique, so it cannot be a step of a workflow` | A metric (such as `roc_auc`) was listed in a worker's techniques. Name it as the worker's `criterion`, or in the `metrics` of a `scorecard` or validator. |
 | `KeyError: no class named ... is in the library` | A name in the settings is not a technique. Check the spelling against the [technique catalog](catalog.md). |
 | `ValueError: '...' needs the name of a "groups" column` | A splitter or validator of groups (such as `group_k_fold`) was used without groups. Set "groups" in the "general" section or pass "groups". |
 | `ValueError: a copy of the model could not predict ...` | A validator's copy of the model could not predict the rows of a fold. A model that cannot predict a group it did not learn from needs a validator that does not keep groups apart (such as `k_fold`). (`fixest` predicts a group it did not learn from with the average of its fixed effects.) |

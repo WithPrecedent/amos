@@ -24,6 +24,7 @@ CATALOG = ROOT / 'docs' / 'catalog.md'
 # The heading of the first section of the catalog, after its introduction.
 FIRST = '## Loaders (wrangler)'
 # The genres with a table of their own (in order), with their stages.
+# Metrics are last, since they are criteria rather than steps of a stage.
 GENRES: tuple[tuple[str, str], ...] = (
     ('loader', 'Loaders (wrangler)'),
     ('cleaner', 'Cleaners (wrangler)'),
@@ -41,11 +42,11 @@ GENRES: tuple[tuple[str, str], ...] = (
     ('sampler', 'Samplers (analyst)'),
     ('model', 'Models (analyst)'),
     ('validator', 'Validators (analyst)'),
-    ('metric', 'Metrics (critic)'),
     ('evaluator', 'Evaluators (critic)'),
     ('inferer', 'Inferers (critic)'),
     ('plot', 'Plots (artist)'),
-    ('chooser', 'Choosers (any stage)'))
+    ('chooser', 'Choosers (any stage)'),
+    ('metric', 'Metrics'))
 
 
 def main() -> None:

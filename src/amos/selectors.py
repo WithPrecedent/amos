@@ -23,6 +23,9 @@ demographics = age, sex, race
 case_facts = court, year, claims
 ```
 
+Features listed as "always_use" in that section are not a group of their
+own: every group keeps them too, so they are in every group's path.
+
 Contents:
     Selector: genre of techniques that keep some of the features.
     ExhaustiveSelection: keeps the best of every set of 1 to 3 features.
@@ -51,6 +54,8 @@ Contents:
         threshold.
     register_feature_groups: adds the feature groups of the settings to the
         library.
+    _ALWAYS: name in the feature groups of the features every group keeps.
+    _GROUP_TECHNIQUE: names of `FeatureGroup` and its numbered copies.
     _SECTION: name of the section of the settings with the feature groups.
 
 """
@@ -60,7 +65,8 @@ from __future__ import annotations
 import abc
 import dataclasses
 import importlib
-from collections.abc import Mapping, Sequence
+import re
+from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any, ClassVar, cast
 
 import camina
@@ -75,6 +81,12 @@ from . import base, models, transformers, utilities
 _SECTION: str = 'feature_groups'
 if _SECTION not in chrisjen.options._SPECIAL_SETTINGS:
     chrisjen.options._SPECIAL_SETTINGS.append(_SECTION)
+# Name in the feature groups of the features that every group keeps. It is
+# not a group, so it is not a technique.
+_ALWAYS: str = 'always_use'
+# Names of `FeatureGroup` (and its numbered copies) in the settings, whose
+# parameters can list groups (see `register_feature_groups`).
+_GROUP_TECHNIQUE: re.Pattern[str] = re.compile(r'feature_group\d*')
 
 
 @dataclasses.dataclass
@@ -301,7 +313,9 @@ class FeatureGroup(Selector):
 
     The features are "columns": by default, those that the "feature_groups"
     section of the settings lists for the technique's name (see
-    `register_feature_groups`). A listed name that is not a feature keeps the
+    `register_feature_groups`). If that section lists features as
+    "always_use", a group built for a project keeps them too, whatever its
+    other features are, so every group shares them. A listed name that is not a feature keeps the
     features made from it by an encoder or other transformer, whose names
     start with it and an underscore (so "court" keeps "court_federal" and
     "court_state" after `one_hot`). The label and groups are not features, so
@@ -338,8 +352,14 @@ class FeatureGroup(Selector):
         technique = cast('FeatureGroup', super().build(
             name, project, parameters = parameters, **kwargs))
         groups = project.idea.get(_SECTION, {})
-        if name in groups:
+        if name in groups and name != _ALWAYS:
             technique.parameters.setdefault('columns', groups[name])
+        columns = technique.parameters.get('columns')
+        if columns is not None and _ALWAYS in groups:
+            listed = [str(c) for c in camina.listify(columns)]
+            always = [str(c) for c in camina.listify(groups[_ALWAYS])]
+            technique.parameters['columns'] = [
+                *listed, *(c for c in always if c not in listed)]
         return technique
 
     """ Public Methods """
@@ -844,14 +864,24 @@ class VarianceThreshold(Selector):
 
 
 def register_feature_groups(
-    idea: Mapping[str, Any],
+    idea: MutableMapping[str, Any],
     library: chrisjen.Library | None = None) -> None:
     """Adds the feature groups of the settings to the library.
 
     Each name in the "feature_groups" section of the settings is stored in the
     library as `FeatureGroup`, so it can be named as a technique (usually of a
     step such as "select"), and that technique keeps the features listed for
-    it. The `Project` calls this when it builds its workflow.
+    it. The `Project` calls this when it builds its workflow. "always_use" is
+    not a group: its features are kept by every group (see `FeatureGroup`),
+    so it is checked but not added.
+
+    Groups can also be listed in the parameters of `feature_group` (or of a
+    numbered copy, such as `feature_group2`), as in a "feature_group_parameters"
+    section with "raw = a, b" and "refined = c, d". Each step that names that
+    technique then names each of its groups in its place, so an experiment
+    compares them as branches, and the groups are added to the
+    "feature_groups" section. "always_use" in those parameters is kept by
+    each of those groups.
 
     Args:
         idea: the settings of a project.
@@ -861,11 +891,13 @@ def register_feature_groups(
     Raises:
         TypeError: if the "feature_groups" section is not a section, or a
             group is not a name or a list of names.
-        ValueError: if a group lists no features, or has the name of another
-            class in the library.
+        ValueError: if a group lists no features, has the name of another
+            class in the library, or is listed with other features in two
+            places.
 
     """
     library = chrisjen.library if library is None else library
+    _expand_parameter_groups(idea)
     if _SECTION not in idea:
         return
     groups = idea[_SECTION]
@@ -886,6 +918,8 @@ def register_feature_groups(
         if not camina.listify(columns):
             message = f'the feature group {name!r} lists no features'
             raise ValueError(message)
+        if name == _ALWAYS:
+            continue
         existing = library.all.get(name)
         if existing is FeatureGroup:
             continue
@@ -900,6 +934,36 @@ def register_feature_groups(
 
 
 """ Private Functions """
+
+
+def _add_group(
+    idea: MutableMapping[str, Any],
+    group: str,
+    columns: list[str]) -> None:
+    """Adds `group` to the "feature_groups" section of `idea`.
+
+    Args:
+        idea: the settings of a project, which are changed in place.
+        group: name of the group.
+        columns: the features of the group.
+
+    Raises:
+        ValueError: if the section already has `group` with other features.
+
+    """
+    # `bobbie.Settings.get` raises a `KeyError` for a missing section, so the
+    # section is looked for first.
+    section = dict(idea[_SECTION] or {}) if _SECTION in idea else {}
+    existing = section.get(group)
+    if existing is not None and [str(c) for c in camina.listify(existing)] != (
+        columns):
+        message = (
+            f'the feature group {group!r} is listed with other features in '
+            f'the "{_SECTION}" section'
+        )
+        raise ValueError(message)
+    section[group] = columns
+    idea[_SECTION] = section
 
 
 def _add_search(item: base.Dataset, name: str) -> None:
@@ -972,6 +1036,48 @@ def _build_estimator(item: base.Dataset, estimator: Any) -> Any:
     return estimator
 
 
+def _expand_parameter_groups(idea: MutableMapping[str, Any]) -> None:
+    """Names the groups in the parameters of `feature_group` in its place.
+
+    Each setting of techniques (a worker's "techniques" or a step's
+    "{step}_techniques") that names `feature_group` (or a numbered copy)
+    whose parameters list groups names each group instead, and each group,
+    with the "always_use" features of those parameters, is added to the
+    "feature_groups" section. Settings that are already expanded are left as
+    they are.
+
+    Args:
+        idea: the settings of a project, which are changed in place.
+
+    Raises:
+        ValueError: if the parameters of a technique list both "columns" and
+            groups, or a group is listed with other features elsewhere.
+
+    """
+    for section_name in list(idea):
+        section = idea[section_name]
+        if not isinstance(section, Mapping):
+            continue
+        changes: dict[str, list[str]] = {}
+        for key, value in section.items():
+            if key != 'techniques' and not str(key).endswith('_techniques'):
+                continue
+            names = [str(n) for n in camina.listify(value)]
+            expanded: list[str] = []
+            for name in names:
+                groups = _parameter_groups(idea, name)
+                if groups is None:
+                    expanded.append(name)
+                    continue
+                for group, columns in groups.items():
+                    _add_group(idea, group, columns)
+                    expanded.append(group)
+            if expanded != names:
+                changes[key] = expanded
+        if changes:
+            idea[section_name] = {**section, **changes}
+
+
 def _is_model(name: str) -> bool:
     """Returns whether `name` is the name of a model in the library.
 
@@ -1014,6 +1120,49 @@ def _match_features(
         else:
             matched[name] = [f for f in features if f.startswith(f'{name}_')]
     return matched
+
+
+def _parameter_groups(
+    idea: Mapping[str, Any],
+    name: str) -> dict[str, list[str]] | None:
+    """Returns the groups listed in the parameters of the technique `name`.
+
+    Args:
+        idea: the settings of a project.
+        name: name of a technique.
+
+    Raises:
+        ValueError: if the parameters list both "columns" and groups.
+
+    Returns:
+        The features of each group (with the "always_use" features of the
+            parameters), by its name, or `None` if `name` is not
+            `feature_group` (or a numbered copy) or its parameters list no
+            groups.
+
+    """
+    if not _GROUP_TECHNIQUE.fullmatch(name):
+        return None
+    section = f'{name}_parameters'
+    # `bobbie.Settings.get` raises a `KeyError` for a missing section.
+    parameters = idea[section] if section in idea else None  # noqa: SIM401
+    if not isinstance(parameters, Mapping):
+        return None
+    listed = {
+        str(k): [str(c) for c in camina.listify(v)]
+        for k, v in parameters.items() if k != 'columns'}
+    always = listed.pop(_ALWAYS, [])
+    if not listed:
+        return None
+    if 'columns' in parameters:
+        message = (
+            f'the parameters of {name!r} list both "columns" and groups '
+            f'{sorted(listed)}: list one or the other'
+        )
+        raise ValueError(message)
+    return {
+        group: [*columns, *(c for c in always if c not in columns)]
+        for group, columns in listed.items()}
 
 
 def _with_score_function(

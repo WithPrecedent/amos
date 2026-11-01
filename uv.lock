@@ -40,9 +40,10 @@ wheels = [
 
 [[package]]
 name = "amos"
-version = "0.6.1"
+version = "0.6.2"
 source = { editable = "." }
 dependencies = [
+    { name = "bobbie" },
     { name = "camina" },
     { name = "chrisjen" },
     { name = "nagata" },
@@ -263,6 +264,7 @@ tests = [
 [package.metadata]
 requires-dist = [
     { name = "amos", extras = ["boosting", "causal", "encoders", "explain", "fairness", "mlxtend", "plots", "polars", "sampling", "statistics", "survival", "tables", "tuning", "uncertainty", "word"], marker = "extra == 'all'" },
+    { name = "bobbie", specifier = ">=0.3.3" },
     { name = "camina", specifier = ">=0.2.4" },
     { name = "catboost", marker = "extra == 'boosting'", specifier = ">=1.2" },
     { name = "category-encoders", marker = "extra == 'encoders'", specifier = ">=2.6" },
@@ -562,15 +564,15 @@ wheels = [
 
 [[package]]
 name = "bobbie"
-version = "0.3.1"
+version = "0.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bunches" },
     { name = "wonka" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/34/c1/2f28d70379a59316035d85c2aa41106100db6c6c5bcc2caec990285d8ca1/bobbie-0.3.1.tar.gz", hash = "sha256:f231e3af66cc754edd9bccfb2c3d8072fecb579104e51fa4b378458339dfaec4", size = 101377, upload-time = "2026-10-31T19:56:15.145Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5e/67/93129f32e4df4af75363ca51c151e8f6628fbe61131c4d01becbe120e03c/bobbie-0.3.3.tar.gz", hash = "sha256:57a0cb461141a78a4816eb11d80ada511b0aed90ecff1406bb44f47aec801110", size = 113690, upload-time = "2026-11-01T18:16:53.016Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/d7/bb68915f28e861ab77f2ee9c68563574b2de852f15218270151272514f57/bobbie-0.3.1-py3-none-any.whl", hash = "sha256:99d4b2b3c914282548be8bc3712e6ae17c1be69c213cbe58f05a9de10da6a949", size = 14541, upload-time = "2026-10-31T19:56:13.934Z" },
+    { url = "https://files.pythonhosted.org/packages/04/a6/c0ca27b82ba87d6f746b5dfd4cd19df986bd958612c56469609332c4954f/bobbie-0.3.3-py3-none-any.whl", hash = "sha256:6b0a88a33e3e3bbf0cf287d81bbebf0b8a28384ea84bcf80a989f102bb90c977", size = 15733, upload-time = "2026-11-01T18:16:51.739Z" },
 ]
 
 [[package]]

@@ -43,14 +43,14 @@ def test_group_metrics_match_fairlearn(
     kind: type[amos.Metric]) -> None:
     fairness = pytest.importorskip('fairlearn.metrics')
     dataset = _fitted()
-    kind().apply(dataset)
+    measured = kind().measure(dataset)
     function = getattr(fairness, kind.contents.split('.')[-1])
     rows = dataset.predictions.index
     expected = function(
         (dataset.y.loc[rows] == 'yes').astype(int),
         (dataset.predictions == 'yes').astype(int),
         sensitive_features = dataset.data.loc[rows, 'race'])
-    assert dataset.metrics[name] == pytest.approx(expected)
+    assert measured == pytest.approx(expected)
 
 
 def test_differences_are_better_when_lower() -> None:
@@ -72,14 +72,14 @@ def test_a_group_can_be_named() -> None:
 
 def test_group_metrics_need_a_group(fitted: amos.Dataset) -> None:
     with pytest.raises(ValueError, match = 'needs a group'):
-        amos.metrics.EqualizedOdds().apply(fitted)
+        amos.metrics.EqualizedOdds().measure(fitted)
 
 
 def test_group_metrics_need_two_classes(multiclass: amos.Dataset) -> None:
     multiclass.data['half'] = np.arange(len(multiclass.data)) % 2
     amos.models.Logit().apply(multiclass)
     with pytest.raises(ValueError, match = 'two classes'):
-        amos.metrics.DemographicParity().apply(multiclass, group = 'half')
+        amos.metrics.DemographicParity().measure(multiclass, group = 'half')
 
 
 def test_fairness_table() -> None:

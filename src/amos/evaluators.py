@@ -1,10 +1,10 @@
 """Techniques that evaluate a fitted model with tables.
 
-These are techniques of the "critic" stage, beside the metrics. Each one adds
-a table to the dataset's `tables` (under the technique's name). Most evaluate
-the model on the test rows (or on every row, if the data has not been split).
-`factor_analysis` and `pca` instead describe the features
-that the model learned from, so they work in any stage.
+These are techniques of the "critic" stage. Each one adds a table to the
+dataset's `tables` (under the technique's name). Most evaluate the model on
+the test rows (or on every row, if the data has not been split).
+`factor_analysis` and `pca` instead describe the features that the model
+learned from, so they work in any stage.
 
 Contents:
     Evaluator: base class for techniques that evaluate a model with a table.
@@ -2222,7 +2222,7 @@ class Scorecard(_Published, Evaluator):
                 or item.task not in metric.tasks
                 or (metric.uses_probabilities and item.probabilities is None)):
                 continue
-            values[name] = metric.measure(item, **metric._keywords())
+            values[name] = metric.measure(item)
         return values
 
     def _metric_names(

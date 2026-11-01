@@ -237,14 +237,15 @@ class Frequencies(Describer):
     def describe(
         self,
         item: base.Dataset,
-        columns: Sequence[str] | None = None,
+        columns: Sequence[str] | str | None = None,
         **kwargs: Any) -> pd.DataFrame:
         """Returns the count and share of each value in `columns`.
 
         Args:
             item: the dataset to describe.
-            columns: columns to count. Defaults to `None`, which counts the
-                categorical and boolean features.
+            columns: columns to count, or "all". Defaults to `None`, which
+                (like "all") counts the categorical and boolean features,
+                including the dummies of `set_kinds`.
             **kwargs: not used.
 
         Returns:
@@ -252,8 +253,10 @@ class Frequencies(Describer):
                 "count", and "share" columns.
 
         """
-        if columns is None:
+        if columns is None or columns == 'all':
             columns = item.categoricals + item.booleans
+        elif isinstance(columns, str):
+            columns = [columns]
         tables = []
         for column in columns:
             counts = item.data[column].value_counts(dropna = False)

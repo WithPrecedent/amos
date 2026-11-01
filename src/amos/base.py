@@ -100,6 +100,17 @@ class Dataset:
         branches: the branches of the most recent `experiment` that the
             dataset came from, with the result of each. A `scorecard`
             compares them. Defaults to an empty `list`.
+        kinds: the kind ("booleans", "categoricals", or "numerics") that
+            `set_kinds` gave each column it changed. A column of 0s and 1s
+            given the kind "booleans" (a dummy) is one of the `booleans`
+            while it holds integers, though its type is a number. Other
+            columns' kinds are found from their types. Defaults to an empty
+            `dict`.
+
+    A label that is not yet a column of the data is pending: the dataset keeps
+    its name, and its task is inferred once a technique (such as
+    `derive_columns`) makes the column. Anything that needs the label before
+    then raises an error.
 
     """
 
@@ -123,6 +134,7 @@ class Dataset:
     history: list[dict[str, Any]] = dataclasses.field(default_factory = list)
     branches: list[Branch] = dataclasses.field(
         default_factory = list, repr = False)
+    kinds: dict[str, str] = dataclasses.field(default_factory = dict)
 
     """ Initialization Methods """
 
@@ -130,12 +142,9 @@ class Dataset:
         """Validates `data`, `label`, `groups`, `use_gpu`, and `task`."""
         if not isinstance(self.data, pd.DataFrame):
             self.data = pd.DataFrame(self.data)
-        if self.label is not None and self.label not in self.data.columns:
-            message = f'the label {self.label!r} is not a column of the data'
-            raise KeyError(message)
         self.groups = _validate_groups(self.groups, self.data, self.label)
         self.use_gpu = _validate_use_gpu(self.use_gpu)
-        if self.task is None and self.label is not None:
+        if self.task is None and self.has_label:
             self.task = self.infer_task()
         elif self.task is not None and self.task not in _TASKS:
             message = f'task must be one of {_TASKS}, not {self.task!r}'
@@ -186,11 +195,9 @@ class Dataset:
         """
         if isinstance(item, Dataset):
             if item.label is None and label is not None:
-                if label not in item.data.columns:
-                    message = f'the label {label!r} is not a column of the data'
-                    raise KeyError(message)
                 item.label = label
-                item.task = task or item.infer_task()
+                item.task = task or (
+                    item.infer_task() if item.has_label else None)
             if item.task is None and task is not None:
                 item.task = task
             if item.seed is None:
@@ -274,6 +281,11 @@ class Dataset:
         return [
             c for c in self.data.columns
             if c != self.label and c not in self.groups]
+
+    @property
+    def has_label(self) -> bool:
+        """Returns whether there is a label that is a column of the data."""
+        return self.label is not None and self.label in self.data.columns
 
     @property
     def is_split(self) -> bool:
@@ -361,14 +373,18 @@ class Dataset:
     def replace(self, data: pd.DataFrame) -> None:
         """Replaces `data`, keeping `train` and `test` to the rows that remain.
 
+        If the label was pending and `data` has it, the task is inferred from
+        it (unless it was set).
+
         Args:
             data: the new data.
 
         Raises:
-            KeyError: if the label or a group is not a column of `data`.
+            KeyError: if the label was a column of the data and is not a
+                column of `data`, or if a group is not a column of `data`.
 
         """
-        if self.label is not None and self.label not in data.columns:
+        if self.has_label and self.label not in data.columns:
             message = f'the label {self.label!r} is not a column of the data'
             raise KeyError(message)
         missing = [g for g in self.groups if g not in data.columns]
@@ -376,6 +392,8 @@ class Dataset:
             message = f'the groups {missing} are not columns of the data'
             raise KeyError(message)
         self.data = data
+        if self.task is None and self.has_label:
+            self.task = self.infer_task()
         if self.train is not None:
             self.train = self.train[self.train.isin(data.index)]
         if self.test is not None:
@@ -493,6 +511,9 @@ class Dataset:
     def _kind(self, kind: str) -> list[str]:
         """Returns the names of the features of one kind.
 
+        A dummy (a column that `set_kinds` gave the kind "booleans") is a
+        boolean while it holds integers.
+
         Args:
             kind: "booleans", "numerics", or "categoricals". Dates and times
                 are not in any kind.
@@ -501,7 +522,17 @@ class Dataset:
             Names of the features of that kind, in order.
 
         """
-        return [c for c in self.features if _kind_of(self.data[c]) == kind]
+        names = []
+        for column in self.features:
+            values = self.data[column]
+            found = _kind_of(values)
+            if (
+                self.kinds.get(column) == 'booleans'
+                and pd.api.types.is_integer_dtype(values.dtype)):
+                found = 'booleans'
+            if found == kind:
+                names.append(column)
+        return names
 
     def _new_labels(self, count: int) -> pd.Index:
         """Returns `count` index labels that are not used by the test rows.
@@ -523,7 +554,8 @@ class Dataset:
         """Returns `label`.
 
         Raises:
-            ValueError: if there is no label.
+            ValueError: if there is no label, or if it is pending (not yet a
+                column of the data).
 
         Returns:
             The name of the label column.
@@ -533,6 +565,13 @@ class Dataset:
             message = (
                 'the dataset has no label: pass one when it is created or set '
                 '"label" in the "general" section of the settings'
+            )
+            raise ValueError(message)
+        if self.label not in self.data.columns:
+            message = (
+                f'the label {self.label!r} is not a column of the data: make '
+                f'it (with a technique such as "derive_columns") before it is '
+                f'used'
             )
             raise ValueError(message)
         return self.label
@@ -666,11 +705,11 @@ class Operation(chrisjen.Technique, abc.ABC):
 
     `Operation` is a genre: its abstract subclasses (`Loader`, `Cleaner`,
     `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`,
-    `Sampler`, `Model`, `Validator`, `Metric`, `Evaluator`, `Inferer`, and
-    `Plot`) are genres within it. To add a technique, subclass the genre that
-    fits and write the method it requires, or set `contents` to the tool to
-    wrap. To add a new kind of technique, subclass `Operation` and write
-    `apply`.
+    `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, and `Plot`) are
+    genres within it. To add a technique, subclass the genre that fits and
+    write the method it requires, or set `contents` to the tool to wrap. To
+    add a new kind of technique, subclass `Operation` and write `apply`.
+    (Metrics are not operations: see `amos.metrics.Metric`.)
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to

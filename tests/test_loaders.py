@@ -263,7 +263,7 @@ def _settings(**extra: Any) -> dict[str, Any]:
             'load_techniques': 'load_file',
             'clean_techniques': 'drop_duplicates'},
         'load_file_parameters': {'source': 'cases.csv'},
-        'analyst': {'techniques': 'stratified, logit, accuracy'},
+        'analyst': {'techniques': 'stratified, logit'},
         **extra}
 
 
@@ -275,7 +275,7 @@ def test_a_project_with_a_loader_needs_no_item() -> None:
     assert isinstance(result, amos.Dataset)
     assert (result.label, result.seed) == ('target', SEED)
     assert result.history[0]['technique'] == 'load_file'
-    assert 'accuracy' in result.metrics
+    assert result.predictions is not None
     nodes = amos.interface._nodes(project.workflow)
     loader = next(n for n in nodes if isinstance(n, amos.Loader))
     assert loader.clerk is project.clerk

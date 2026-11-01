@@ -4,11 +4,11 @@ A validator measures how well the dataset's model does on rows that it did
 not learn from, without using the test rows. It divides the training rows into
 folds with one of scikit-learn's cross-validation splitters, fits a new copy
 of the model to the rest of the training rows for each fold, and scores the
-copy on the fold with the critic's metrics. The scores of each fold are a
-table, stored in the dataset's `tables` under the validator's name, and their
-means are stored in its `metrics` as "cv_{metric}" (such as "cv_roc_auc"), so
-that a scorecard or an experiment's comparison shows them beside the scores
-on the test rows.
+copy on the fold with its "metrics" (by default, those of a scorecard for
+the task). The scores of each fold are a table, stored in the dataset's
+`tables` under the validator's name, and their means are stored in its
+`metrics` as "cv_{metric}" (such as "cv_roc_auc"), so that a scorecard or
+an experiment's comparison shows them beside the scores on the test rows.
 
 Rows that a sampler made up (the dataset's `synthetic` rows) are never scored.
 Instead, each sampler that was applied to the training rows is applied again
@@ -585,7 +585,7 @@ def _measure(item: base.Dataset, names: Sequence[str]) -> dict[str, float]:
             or (metric.uses_probabilities and item.probabilities is None)):
             continue
         try:
-            values[name] = metric.measure(item, **metric._keywords())
+            values[name] = metric.measure(item)
         except ValueError:
             values[name] = np.nan
     return values

@@ -82,13 +82,19 @@ def test_every_genre_is_in_the_operation_layer() -> None:
     operations = chrisjen.library['vertex']['operation']
     for genre in (
         'loader', 'cleaner', 'munger', 'merger', 'shaper', 'describer',
-        'splitter', 'transformer', 'sampler', 'model', 'validator', 'metric',
+        'splitter', 'transformer', 'sampler', 'model', 'validator',
         'evaluator', 'inferer', 'plot'):
         assert isinstance(operations[genre], dict), genre
-    assert isinstance(operations['metric']['group_metric'], dict)
     for genre in (
         'imputer', 'scaler', 'encoder', 'mixer', 'reducer', 'selector'):
         assert isinstance(operations['transformer'][genre], dict), genre
+
+
+def test_metrics_are_criteria_not_operations() -> None:
+    assert 'metric' not in chrisjen.library['vertex']['operation']
+    criteria = chrisjen.library['criteria']
+    assert isinstance(criteria['metric']['group_metric'], dict)
+    assert not issubclass(amos.Metric, amos.Operation)
 
 
 def test_every_name_in_the_library_is_unique() -> None:
@@ -117,7 +123,8 @@ def test_every_wrapped_tool_is_linked_in_its_docstring() -> None:
     # The API docs tell users which tool each technique wraps, with a link to
     # its documentation, so the docstrings must keep up with the code.
     for kind in set(chrisjen.library.all.values()):
-        if not isinstance(kind, type) or not issubclass(kind, amos.Operation):
+        if not isinstance(kind, type) or not issubclass(
+                kind, (amos.Operation, amos.Metric)):
             continue
         declared = [
             getattr(kind, 'contents', None),

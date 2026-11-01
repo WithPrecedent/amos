@@ -61,10 +61,10 @@ describers.Summarize().apply(dataset)
 splitters.Stratified().apply(dataset)
 transformers.Standard().apply(dataset)
 models.Logit().apply(dataset)
-metrics.RocAuc().apply(dataset)
 print(len(dataset.train), len(dataset.test))
 # 426 143
-print(dataset.metrics["roc_auc"] > 0.95)
+roc_auc = metrics.RocAuc()
+print(roc_auc.measure(dataset) > 0.95)
 # True
 ```
 
@@ -75,11 +75,15 @@ training rows and predicted the test rows, and `roc_auc` scored the
 predictions. The scaler learned the means and standard deviations from the
 training rows only, so nothing about the test rows leaked into the model.
 
+A metric is not a technique: it measures a dataset without changing it, so it
+is never a step of a workflow. Techniques use metrics instead, to compare
+models or to report how well a model did, as later sections show.
+
 Each technique recorded what it did:
 
 ```python
 print([entry["technique"] for entry in dataset.history])
-# ['summarize', 'stratified', 'standard', 'logit', 'roc_auc']
+# ['summarize', 'stratified', 'standard', 'logit']
 print(dataset.history[2]["tool"])
 # sklearn.preprocessing.StandardScaler
 print(dataset.history[1]["seed"], dataset.history[1]["test"])
@@ -100,10 +104,10 @@ settings = {
     "cancer_project": {"cancer_workers": "explorer, analyst, critic"},
     "explorer": {"techniques": "summarize, label_balance"},
     "analyst": {"techniques": "stratified, standard, logit"},
-    "critic": {"techniques": "roc_auc, f1, confusion"},
+    "critic": {"techniques": "confusion"},
 }
 project = amos.Project.create(settings, item = data)
-print(project.result.metrics["roc_auc"] == dataset.metrics["roc_auc"])
+print(roc_auc.measure(project.result) == roc_auc.measure(dataset))
 # True
 print(list(project.result.tables))
 # ['summarize', 'label_balance', 'confusion']

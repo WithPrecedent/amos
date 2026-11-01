@@ -72,7 +72,7 @@ def test_sklearn(classified: amos.Dataset) -> None:
     y_train, y_test = classified.y_train, classified.y_test
     amos.transformers.Standard().apply(classified)
     amos.models.Logit().apply(classified)
-    amos.metrics.RocAuc().apply(classified)
+    roc_auc = amos.metrics.RocAuc().measure(classified)
     scaler = preprocessing.StandardScaler().fit(x_train)
     expected = scaler.transform(x_test)
     np.testing.assert_allclose(classified.x_test.to_numpy(), expected)
@@ -82,7 +82,7 @@ def test_sklearn(classified: amos.Dataset) -> None:
     probabilities = model.predict_proba(expected)
     np.testing.assert_allclose(
         classified.probabilities.to_numpy(), probabilities)
-    assert classified.metrics['roc_auc'] == pytest.approx(
+    assert roc_auc == pytest.approx(
         metrics.roc_auc_score(y_test, probabilities[:, 1]))
 
 
@@ -320,13 +320,13 @@ def test_fairlearn() -> None:
     dataset.groups = ['member']
     amos.transformers.OneHot().apply(dataset)
     amos.models.Logit().apply(dataset)
-    amos.metrics.EqualizedOdds().apply(dataset)
+    measured = amos.metrics.EqualizedOdds().measure(dataset)
     rows = dataset.predictions.index
     expected = fairness.equalized_odds_difference(
         (dataset.y.loc[rows] == 'yes').astype(int),
         (dataset.predictions == 'yes').astype(int),
         sensitive_features = dataset.data.loc[rows, 'member'])
-    assert dataset.metrics['equalized_odds'] == pytest.approx(expected)
+    assert measured == pytest.approx(expected)
 
 
 def test_mapie(fitted_regression: amos.Dataset) -> None:
