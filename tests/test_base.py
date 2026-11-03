@@ -259,3 +259,73 @@ def test_make_tool_uses_the_seed_and_accepted_parameters(
     assert tool.random_state == SEED
     with pytest.raises(NotImplementedError, match = 'has no tool'):
         amos.Transformer()._make_tool(classified, {})
+
+
+def _raises(error: Exception) -> Any:
+    """Returns an `apply` method that raises `error`.
+
+    Args:
+        error: the error to raise.
+
+    Returns:
+        A function that takes what the `apply` of a technique takes.
+
+    """
+
+    def apply(self: Any, item: amos.Dataset, **kwargs: Any) -> amos.Dataset:
+        """Raises the error.
+
+        Args:
+            item: the dataset.
+            **kwargs: not used.
+
+        Raises:
+            Exception: always, the error given to `_raises`.
+
+        """
+        raise error
+
+    return apply
+
+
+def test_an_incompatible_technique_raises_its_error_outside_a_workflow(
+    ) -> None:
+    dataset = amos.Dataset(make_numeric(), label = 'target', seed = SEED)
+    technique = amos.models.Baseline()
+    error = amos.IncompatibleTechniqueError('needs a tree')
+    with pytest.raises(amos.IncompatibleTechniqueError, match = 'needs a tree'):
+        technique._call_apply(_raises(error), dataset)
+    assert not dataset.history
+    # The errors are raised again once a workflow has ended.
+    with amos.base.skipping_incompatible_techniques():
+        technique._call_apply(_raises(error), dataset)
+    with pytest.raises(amos.IncompatibleTechniqueError, match = 'needs a tree'):
+        technique._call_apply(_raises(error), dataset)
+
+
+def test_an_incompatible_technique_in_a_workflow_is_skipped_and_recorded(
+    caplog: pytest.LogCaptureFixture) -> None:
+    dataset = amos.Dataset(make_numeric(), label = 'target', seed = SEED)
+    technique = amos.models.Baseline(name = 'needs_a_tree')
+    error = amos.IncompatibleTechniqueError('needs a tree')
+    with amos.base.skipping_incompatible_techniques():
+        assert technique._call_apply(_raises(error), dataset) is dataset
+    assert dataset.history[-1] == {
+        'technique': 'needs_a_tree',
+        'skipped': True,
+        'reason': 'needs a tree'}
+    assert "'needs_a_tree' was skipped: needs a tree" in caplog.text
+
+
+def test_any_other_error_of_a_technique_in_a_workflow_is_raised() -> None:
+    dataset = amos.Dataset(make_numeric(), label = 'target', seed = SEED)
+    technique = amos.models.Baseline()
+    with (
+        amos.base.skipping_incompatible_techniques(),
+        pytest.raises(ValueError, match = 'needs a tree')):
+        technique._call_apply(_raises(ValueError('needs a tree')), dataset)
+    assert not dataset.history
+
+
+def test_an_incompatible_technique_error_is_a_value_error() -> None:
+    assert issubclass(amos.IncompatibleTechniqueError, ValueError)

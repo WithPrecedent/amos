@@ -552,6 +552,11 @@ class Chooser(base.Operation, abc.ABC):
                     f'{done}: {error}',
                     stacklevel = 3)
                 continue
+            if item.history[-1].get('skipped'):
+                reason = item.history[-1]['reason']
+                table.loc[name, 'chosen'] = False
+                table.loc[name, 'reason'] = f'could not be {done}: {reason}'
+                continue
             applied.append(name)
         if errors and not applied:
             raise errors[0]

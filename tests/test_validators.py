@@ -2,14 +2,52 @@
 
 from __future__ import annotations
 
+import weakref
+from typing import Any, ClassVar
+
 import numpy as np
 import pandas as pd
 import pytest
-from conftest import SEED, make_numeric, make_regression, requires
+from conftest import (
+    SEED,
+    make_fixest_courts,
+    make_numeric,
+    make_regression,
+    requires,
+)
+from sklearn.dummy import DummyClassifier
 
 import amos
 
 VALIDATORS = sorted(amos.library.get_genre('validator').items())
+
+
+class _CountsLiveCopies(DummyClassifier):
+    """A classifier that records how many fitted copies of it are alive.
+
+    Each copy refers to itself, so only a collection can free it, as with the
+    results of pyfixest.
+    """
+
+    copies: ClassVar[list[weakref.ref[Any]]] = []
+    alive: ClassVar[list[int]] = []
+
+    def fit(self, x: Any, y: Any, **kwargs: Any) -> _CountsLiveCopies:
+        """Fits the classifier, first counting the fitted copies that live.
+
+        Args:
+            x: the features.
+            y: the label.
+            **kwargs: passed to `DummyClassifier.fit`.
+
+        Returns:
+            The fitted classifier.
+
+        """
+        self.alive.append(sum(c() is not None for c in self.copies))
+        self.copies.append(weakref.ref(self))
+        self.cycle = self
+        return super().fit(x, y, **kwargs)
 
 
 def _grouped() -> amos.Dataset:
@@ -248,3 +286,60 @@ def test_validators_use_the_columns_that_lightgbm_renamed() -> None:
     assert 'feature_0' in list(dataset.model.feature_names_in_)
     amos.validators.StratifiedKFold().apply(dataset, metrics = ['accuracy'])
     assert 0 <= dataset.metrics['cv_accuracy'] <= 1
+
+
+def test_each_fold_frees_its_model_before_the_next_is_fitted() -> None:
+    dataset = _grouped()
+    _CountsLiveCopies.copies.clear()
+    _CountsLiveCopies.alive.clear()
+    model = _CountsLiveCopies().fit(
+        dataset.x_train, dataset.y_train)
+    dataset.model = model
+    amos.validators.KFold().apply(
+        dataset, metrics = ['accuracy'], n_splits = 4)
+    # Only the dataset's own model is alive when each fold's copy is fitted.
+    assert _CountsLiveCopies.alive == [0, 1, 1, 1, 1]
+
+
+def test_each_fold_frees_the_results_of_pyfixest(
+    monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset = make_fixest_courts()
+    predict = amos.validators._predict
+    results: list[weakref.ref[Any]] = []
+    alive: list[bool] = []
+
+    def watched(estimator: Any, x: Any, item: Any) -> Any:
+        """Predicts, checking whether the last fold's results were freed.
+
+        Args:
+            estimator: the fitted copy of the model.
+            x: the rows of the fold.
+            item: the dataset.
+
+        Returns:
+            What `validators._predict` returns.
+
+        """
+        if results:
+            alive.append(results[-1]() is not None)
+        results.append(weakref.ref(estimator.results))
+        return predict(estimator, x, item)
+
+    monkeypatch.setattr(amos.validators, '_predict', watched)
+    amos.validators.GroupKFold().apply(
+        dataset, metrics = ['accuracy'], n_splits = 3)
+    assert alive == [False, False]
+
+
+def test_only_a_validator_that_does_not_pool_its_folds_collects_garbage(
+    monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int] = []
+    monkeypatch.setattr(
+        amos.validators.gc, 'collect', lambda: calls.append(1))
+    amos.validators.KFold().apply(
+        _grouped(), metrics = ['accuracy'], n_splits = 4)
+    assert len(calls) == 4
+    calls.clear()
+    amos.validators.LeaveOneRowOut().apply(
+        _grouped(), metrics = ['accuracy'])
+    assert not calls

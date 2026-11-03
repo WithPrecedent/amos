@@ -4,18 +4,27 @@ Contents:
     Dataset: data and everything learned from it in a workflow.
     Branch: one branch of an experiment and its result.
     Operation: base class for amos techniques, which work on a `Dataset`.
+    IncompatibleTechniqueError: raised by a technique that does not suit the
+        dataset's model.
+    skipping_incompatible_techniques: skips those techniques, rather than
+        raising their errors, in a workflow.
+    _SKIPS_INCOMPATIBLE: whether the code that is running is in a workflow.
 
 """
 
 from __future__ import annotations
 
 import abc
+import contextlib
+import contextvars
 import dataclasses
+import logging
 import pathlib
 import weakref
 from collections.abc import (
     Callable,
     Iterable,
+    Iterator,
     Mapping,
     MutableMapping,
     Sequence,
@@ -34,6 +43,45 @@ from . import options, utilities
 GenericDict: TypeAlias = MutableMapping[str, Any]
 # Tasks that a `Dataset` can have.
 _TASKS: tuple[str, ...] = ('classify', 'regress')
+
+# Whether a technique that does not suit the model is skipped.
+_SKIPS_INCOMPATIBLE: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    'skips_incompatible', default = False)
+
+logger = logging.getLogger(__name__)
+
+
+class IncompatibleTechniqueError(ValueError):
+    """Raised by a technique that does not suit the dataset's model.
+
+    In a workflow, the technique is skipped and the skip is recorded in the
+    dataset's `history` (see `skipping_incompatible_techniques`), so one that
+    an experiment applies after every path does not end the run when a path's
+    model cannot use it. Otherwise, as when `apply` is called directly, the
+    error is raised. An error in how a technique was used (such as a parameter
+    that is wrong, or a model that has not been applied yet) should not be
+    this error.
+
+    """
+
+
+@contextlib.contextmanager
+def skipping_incompatible_techniques() -> Iterator[None]:
+    """Skips techniques that do not suit the model, rather than raising.
+
+    A `Project` and an `Experiment` apply their workflows in this context.
+
+    Yields:
+        Nothing. Inside the context, a technique that raises an
+            `IncompatibleTechniqueError` is skipped, and the skip is recorded
+            in the dataset's `history`.
+
+    """
+    token = _SKIPS_INCOMPATIBLE.set(True)
+    try:
+        yield
+    finally:
+        _SKIPS_INCOMPATIBLE.reset(token)
 
 
 # `eq` is `False` so that comparing datasets does not compare their data
@@ -703,6 +751,13 @@ class Operation(chrisjen.Technique, abc.ABC):
     `_call_apply`). The dataset is changed in place. Every operation adds an
     entry to the dataset's `history`.
 
+    A technique that does not suit the dataset's model raises an
+    `IncompatibleTechniqueError` before it changes anything. In a workflow,
+    the technique is then skipped rather than ending the run: a warning is
+    logged, and its entry in `history` has "skipped" (`True`) and the "reason"
+    (see `skipping_incompatible_techniques`). A direct call to `apply` raises
+    the error.
+
     `Operation` is a genre: its abstract subclasses (`Loader`, `Cleaner`,
     `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`,
     `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, and `Plot`) are
@@ -763,14 +818,27 @@ class Operation(chrisjen.Technique, abc.ABC):
             **kwargs: keyword arguments for `method` that take precedence over
                 `parameters`.
 
+        Raises:
+            IncompatibleTechniqueError: if `method` raised it outside of a
+                workflow.
+
         Returns:
-            The changed `Dataset`.
+            The changed `Dataset`, or, in a workflow, the `Dataset` with a
+                record that the technique was skipped, if `method` raised an
+                `IncompatibleTechniqueError`.
 
         """
         dataset = Dataset.create(item)
         count = len(dataset.history)
-        result: Dataset = method(
-            self, dataset, **{**self._keywords(), **kwargs})
+        try:
+            result: Dataset = method(
+                self, dataset, **{**self._keywords(), **kwargs})
+        except IncompatibleTechniqueError as error:
+            if not _SKIPS_INCOMPATIBLE.get():
+                raise
+            logger.warning(f'{self.name!r} was skipped: {error}')
+            dataset.record(self.name, skipped = True, reason = str(error))
+            return dataset
         # Records the operation if `apply` did not record it in more detail.
         if len(result.history) == count:
             result.record(self.name, tool = utilities.describe_tool(

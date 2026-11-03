@@ -189,7 +189,8 @@ class Project(chrisjen.Project):
 
         """
         dataset = self._validate_item(self.item if item is None else item)
-        result = super().apply(copy.deepcopy(dataset), **kwargs)
+        with base.skipping_incompatible_techniques():
+            result = super().apply(copy.deepcopy(dataset), **kwargs)
         if self.idea.get('files', {}).get('export_results', False):
             self.export()
         return result

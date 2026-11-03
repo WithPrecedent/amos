@@ -303,8 +303,31 @@ def test_statsmodels_plots(
     plots.CoefficientPlot().apply(regressed, intercept = True)
     axes = regressed.figures['coefficient_plot'].axes[0]
     assert 'const' in [t.get_text() for t in axes.get_yticklabels()]
-    with pytest.raises(TypeError, match = 'needs a scikit-learn model'):
+    with pytest.raises(
+        amos.IncompatibleTechniqueError,
+        match = 'needs a scikit-learn model'):
         plots.LearningCurve().apply(regressed)
+
+
+def test_a_coefficient_plot_in_a_workflow_is_skipped_and_logged(
+    fitted: amos.Dataset,
+    caplog: pytest.LogCaptureFixture) -> None:
+    with amos.base.skipping_incompatible_techniques():
+        assert plots.CoefficientPlot().apply(fitted) is fitted
+    assert 'coefficient_plot' not in fitted.figures
+    entry = fitted.history[-1]
+    assert entry['technique'] == 'coefficient_plot'
+    assert entry['skipped'] is True
+    assert 'no table of coefficients' in entry['reason']
+    assert "'coefficient_plot' was skipped" in caplog.text
+
+
+def test_a_coefficient_plot_of_a_missing_table_is_not_skipped(
+    fitted: amos.Dataset) -> None:
+    with (
+        amos.base.skipping_incompatible_techniques(),
+        pytest.raises(KeyError, match = 'missing')):
+        plots.CoefficientPlot().apply(fitted, source = 'missing')
 
 
 def test_plots_that_need_a_kind_of_model(fitted: amos.Dataset) -> None:

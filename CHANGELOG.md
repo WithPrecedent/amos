@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.6.3
+
+* A technique that does not suit the model no longer ends the workflow of a
+  `Project` or an `Experiment`. It raises the new
+  `amos.IncompatibleTechniqueError` (a `ValueError`), so in a workflow the
+  technique is skipped: a warning is logged, and its entry in `history` (and
+  "history.json") has "skipped" and the "reason". An `Experiment` also lists
+  what each path skipped in `Experiment.skipped` and in the
+  "skipped_techniques" of its entry in `history`, since the datasets of other
+  paths may not be kept. Choosers mark a skipped technique as not chosen. This
+  covers `coefficient_plot` and `search_plot` without a table (unless "source"
+  names one), `influence_plot`, `qq_plot` of a classifier, `decision_regions`
+  of a regression, `shape_functions`, `tree_plot`, the `dtreeviz` plots, the
+  curves of a model without probabilities, the plots that need a scikit-learn
+  model, `bias_variance`, `explain_weights`, and `feature_importance`. Calling
+  `apply` on one of these directly still raises the error, which is a
+  `ValueError` even for the plots and `bias_variance` that raised a `TypeError`
+  for a model that is not from scikit-learn.
+* Validators free each fold's fitted model before fitting the next, which
+  lowers the peak memory of cross-validating a large `fixest` model by about
+  one fitted model. Validators that pool their folds (such as
+  `leave_one_row_out`) free it without forcing a garbage collection, which
+  would be slow for so many folds. The scores do not change.
+
 ## 0.6.2
 
 * Requires `bobbie` 0.3.3 or later, so an ini list can go on over several

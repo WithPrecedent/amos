@@ -695,6 +695,35 @@ def test_auto_plot_leaves_out_plots_that_cannot_be_drawn(
         auto.AutoPlot().apply(dataset, choices = ['residual_plot'])
 
 
+@pytest.mark.usefixtures('_plotting')
+def test_auto_plot_marks_a_plot_that_was_skipped_as_not_chosen(
+    monkeypatch: pytest.MonkeyPatch) -> None:
+    requires('statsmodels')
+    dataset = _split(make_regression())
+    amos.models.OLS().apply(dataset)
+
+    def incompatible(*args: object, **kwargs: object) -> None:
+        """Raises the error of a technique that does not suit the model.
+
+        Args:
+            *args: not used.
+            **kwargs: not used.
+
+        Raises:
+            IncompatibleTechniqueError: always.
+
+        """
+        raise amos.IncompatibleTechniqueError('cannot draw this')
+
+    monkeypatch.setattr(amos.plots.ResidualPlot, 'draw', incompatible)
+    with amos.base.skipping_incompatible_techniques():
+        auto.AutoPlot().apply(dataset)
+    assert 'residual_plot' not in dataset.figures
+    assert 'residual_plot' not in _chosen(dataset, 'auto_plot')
+    assert dataset.tables['auto_plot'].loc['residual_plot', 'reason'] == (
+        'could not be drawn: cannot draw this')
+
+
 """ Projects """
 
 

@@ -152,3 +152,32 @@ def test_experiment_needs_paths() -> None:
         name = 'empty', criteria = amos.metrics.Accuracy())
     with pytest.raises(ValueError, match = 'no paths'):
         experiment.apply(1)
+
+
+@pytest.mark.parametrize('conserve_memory', [False, True])
+def test_experiment_records_what_every_path_skipped(
+    classified: amos.Dataset,
+    conserve_memory: bool) -> None:
+    # A technique skipped before the experiment is not one of its paths'.
+    with amos.base.skipping_incompatible_techniques():
+        amos.plots.CoefficientPlot().apply(classified)
+    experiment = amos.Experiment(
+        name = 'analyst',
+        criteria = amos.metrics.Accuracy(),
+        conserve_memory = conserve_memory)
+    experiment.populate([
+        [amos.models.Baseline(name = 'baseline'),
+         amos.models.Logit(name = 'logit')],
+        amos.plots.CoefficientPlot(name = 'coefficient_plot'),
+        amos.evaluators.Scorecard(name = 'scorecard')])
+    result = experiment.apply(classified)
+    assert 'coefficient_plot' not in result.figures
+    paths = {
+        'baseline > coefficient_plot > scorecard',
+        'logit > coefficient_plot > scorecard'}
+    assert set(experiment.skipped) == paths
+    for entries in experiment.skipped.values():
+        assert [e['technique'] for e in entries] == ['coefficient_plot']
+        assert 'no table of coefficients' in entries[0]['reason']
+    assert result.history[-1]['skipped_techniques'] == experiment.skipped
+    assert result.tables['analyst_comparison'].shape[0] == 2

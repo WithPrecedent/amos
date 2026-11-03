@@ -636,13 +636,14 @@ class DecisionRegions(Plot):
             **kwargs: not used.
 
         Raises:
-            ValueError: if the task is not classification, there are not two
-                features, or a feature is not a number.
+            IncompatibleTechniqueError: if the task is not classification.
+            ValueError: if there are not two features, or a feature is not a
+                number.
 
         """
         if item.task != 'classify':
             message = 'decision_regions needs a classifier'
-            raise ValueError(message)
+            raise base.IncompatibleTechniqueError(message)
         plotting = utilities.import_tool('mlxtend.plotting')
         matplotlib = importlib.import_module('matplotlib')
         model = _model(item)
@@ -882,14 +883,14 @@ class InfluencePlot(Plot):
             **kwargs: not used.
 
         Raises:
-            ValueError: if the model is not one of those.
+            IncompatibleTechniqueError: if the model is not one of those.
 
         """
         model = _unwrapped(item)
         kind = getattr(model, 'kind', None)
         if not isinstance(model, models.Statsmodel) or kind not in _INFLUENCE:
             message = 'influence_plot needs an "ols" or "glm" model'
-            raise ValueError(message)
+            raise base.IncompatibleTechniqueError(message)
         regression = utilities.import_tool(
             'statsmodels.graphics.regressionplots')
         # statsmodels finds the externally studentized residuals of an ols
@@ -1344,8 +1345,8 @@ class QqPlot(Plot):
             **kwargs: not used.
 
         Raises:
-            ValueError: if there are no predictions, or the label is
-                classified.
+            ValueError: if there are no predictions.
+            IncompatibleTechniqueError: if the label is classified.
 
         """
         if item.predictions is None:
@@ -1353,7 +1354,7 @@ class QqPlot(Plot):
             raise ValueError(message)
         if item.task == 'classify':
             message = 'qq_plot needs a regression model'
-            raise ValueError(message)
+            raise base.IncompatibleTechniqueError(message)
         gofplots = utilities.import_tool('statsmodels.graphics.gofplots')
         y = item.y.loc[item.predictions.index]
         residuals = (y - item.predictions).astype(float)
@@ -1454,7 +1455,8 @@ class SearchPlot(Plot):
             **kwargs: not used.
 
         Raises:
-            ValueError: if there is no search table.
+            IncompatibleTechniqueError: if no search table was made and
+                `source` does not name one.
 
         """
         names = [
@@ -1463,7 +1465,7 @@ class SearchPlot(Plot):
         if source is None and not names:
             message = (
                 'there is no search table: apply a model with "search" first')
-            raise ValueError(message)
+            raise base.IncompatibleTechniqueError(message)
         table = item.tables[source or names[-1]]
         parameters = [c for c in table.columns if c.startswith('param_')]
         best = table['rank_test_score'].to_numpy() == 1
@@ -2212,13 +2214,14 @@ class ShapeFunctions(Plot):
             **kwargs: not used.
 
         Raises:
-            ValueError: if the model is not an explainable boosting model.
+            IncompatibleTechniqueError: if the model is not an explainable
+                boosting model.
 
         """
         model = _unwrapped(item)
         if not hasattr(model, 'term_importances'):
             message = 'shape_functions needs an "explainable_boosting" model'
-            raise ValueError(message)
+            raise base.IncompatibleTechniqueError(message)
         explanation = model.explain_global()
         order = np.argsort(model.term_importances())[::-1]
         terms = [
@@ -2519,7 +2522,8 @@ class TreePlot(Plot):
             **kwargs: not used.
 
         Raises:
-            ValueError: if the model is not a scikit-learn tree (or trees).
+            IncompatibleTechniqueError: if the model is not a scikit-learn
+                tree (or trees).
 
         """
         tree_module = importlib.import_module('sklearn.tree')
@@ -2533,7 +2537,7 @@ class TreePlot(Plot):
             message = (
                 'tree_plot needs a decision tree, or a forest of them, from '
                 'scikit-learn')
-            raise ValueError(message)
+            raise base.IncompatibleTechniqueError(message)
         classes = getattr(chosen, 'classes_', None)
         # scikit-learn sizes the text of the boxes with a canvas that draws.
         agg = importlib.import_module('matplotlib.backends.backend_agg')
@@ -2760,7 +2764,8 @@ def _coefficients(item: base.Dataset, source: str | None) -> pd.DataFrame:
         source: name of the table, or `None` for the last one made.
 
     Raises:
-        ValueError: if there is no such table.
+        IncompatibleTechniqueError: if no such table was made and `source`
+            does not name one.
 
     Returns:
         The table, with "coefficient", "ci_lower", and "ci_upper" columns.
@@ -2773,7 +2778,7 @@ def _coefficients(item: base.Dataset, source: str | None) -> pd.DataFrame:
         message = (
             'there is no table of coefficients: apply "ols", "glm", "fixest", '
             '"cox", or an inferer first')
-        raise ValueError(message)
+        raise base.IncompatibleTechniqueError(message)
     return item.tables[source or names[-1]]
 
 
@@ -2784,7 +2789,8 @@ def _curves(item: base.Dataset) -> list[tuple[str, Any, pd.Series, Any]]:
         item: the dataset with a fitted classifier.
 
     Raises:
-        ValueError: if the model does not predict probabilities.
+        IncompatibleTechniqueError: if the model does not predict
+            probabilities.
 
     Returns:
         For a binary label, the positive class only: its name, the true
@@ -2796,7 +2802,7 @@ def _curves(item: base.Dataset) -> list[tuple[str, Any, pd.Series, Any]]:
     """
     if item.probabilities is None:
         message = 'the model does not predict probabilities'
-        raise ValueError(message)
+        raise base.IncompatibleTechniqueError(message)
     probabilities = item.probabilities
     y_true = item.y.loc[probabilities.index].to_numpy()
     classes = list(probabilities.columns)
@@ -3409,15 +3415,15 @@ def _require_sklearn(model: Any, use: str) -> None:
         use: what needs a scikit-learn estimator (for the message).
 
     Raises:
-        TypeError: if `model` is not a scikit-learn estimator (as the models
-            of statsmodels and pyfixest are not).
+        IncompatibleTechniqueError: if `model` is not a scikit-learn estimator
+            (as the models of statsmodels and pyfixest are not).
 
     """
     sklearn = importlib.import_module('sklearn.base')
     if not isinstance(model, sklearn.BaseEstimator):
         message = (
             f'{use} needs a scikit-learn model, not a {type(model).__name__}')
-        raise TypeError(message)
+        raise base.IncompatibleTechniqueError(message)
 
 
 def _scoring(item: base.Dataset) -> str:
@@ -3685,8 +3691,8 @@ def _tree_viz(
             (dtreeviz draws only some plots of them). Defaults to `False`.
 
     Raises:
-        ValueError: if the model is not a tree, or trees, that dtreeviz
-            draws for the plot.
+        IncompatibleTechniqueError: if the model is not a tree, or trees,
+            that dtreeviz draws for the plot.
 
     Returns:
         The adapter, and the names of the model's features.
@@ -3703,7 +3709,7 @@ def _tree_viz(
         message = (
             f'{use} needs a decision tree or a forest of them from '
             f'scikit-learn: dtreeviz cannot draw it for xgboost or lightgbm')
-        raise ValueError(message)
+        raise base.IncompatibleTechniqueError(message)
     if hasattr(model, 'booster_'):
         # lightgbm's models are drawn from their boosters.
         chosen, index = model.booster_, tree
@@ -3721,7 +3727,7 @@ def _tree_viz(
         message = (
             f'{use} needs a decision tree, a forest of them, or an xgboost or '
             f'lightgbm model')
-        raise ValueError(message)
+        raise base.IncompatibleTechniqueError(message)
     y = item.y_train
     classes = None
     if item.task == 'classify':

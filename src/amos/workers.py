@@ -67,6 +67,11 @@ class Experiment(chrisjen.Contest):
         outcomes: the outcome of each path that made a `Dataset` in the most
             recent call: its label and group columns, predictions,
             probabilities, and metrics (see `_outcome`).
+        skipped: the entries of `history` of the techniques that each path
+            skipped in the most recent call, for each path that skipped any.
+            They are also in the experiment's entry in the winner's `history`
+            ("skipped_techniques"), since the datasets of the other paths may
+            not be kept.
         winner: label of the path with the best result in the most recent
             call.
 
@@ -74,6 +79,11 @@ class Experiment(chrisjen.Contest):
 
     outcomes: dict[str, base.Dataset] = dataclasses.field(
         default_factory = dict)
+    skipped: dict[str, list[dict[str, Any]]] = dataclasses.field(
+        default_factory = dict)
+    # How many entries of `history` the item had before any path was tried.
+    _inherited: int = dataclasses.field(
+        default = 0, init = False, repr = False)
 
     """ Public Methods """
 
@@ -92,15 +102,21 @@ class Experiment(chrisjen.Contest):
 
         """
         self.outcomes = {}
-        best = super().apply(item, **kwargs)
+        self.skipped = {}
+        self._inherited = len(getattr(item, 'history', ()))
+        with base.skipping_incompatible_techniques():
+            best = super().apply(item, **kwargs)
         if isinstance(best, base.Dataset):
             best.branches = self._branches()
             best.tables[f'{self.name}_comparison'] = self.tabulate()
+            details = (
+                {'skipped_techniques': self.skipped} if self.skipped else {})
             best.record(
                 str(self.name),
                 winner = self.winner,
                 criterion = getattr(self.criteria, 'name', None),
-                paths = len(self.scores))
+                paths = len(self.scores),
+                **details)
         return best
 
     def tabulate(self) -> pd.DataFrame:
@@ -175,6 +191,11 @@ class Experiment(chrisjen.Contest):
             sign = 1 if criteria.greater_is_better else -1
             result.metrics[criteria.name] = sign * self.scores[label]
         self.outcomes[label] = _outcome(result)
+        skipped = [
+            entry for entry in result.history[self._inherited:]
+            if entry.get('skipped')]
+        if skipped:
+            self.skipped[label] = skipped
 
 
 """ Private Functions """

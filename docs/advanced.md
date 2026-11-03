@@ -1497,6 +1497,18 @@ draw the table that another technique made, and the last two make it if it
 is missing. `learning_curve` and `validation_curve` fit copies of a
 scikit-learn model again, in cross-validation on the training rows.
 
+In the workflow of a `Project` or an `Experiment`, a plot or evaluator that
+does not suit the model (such as a `tree_plot` of a logit, or a
+`coefficient_plot` of a model without a table of coefficients and no "source")
+is skipped rather than ending the run, since one path of an experiment may need
+it and another may not. A warning is logged, and the technique's entry in the
+dataset's `history` (and "history.json") has "skipped" and the "reason". An
+experiment's own entry also has "skipped_techniques", with what each path
+skipped, since the datasets of the other paths may not be kept. A technique of
+your own can do the same by raising `amos.IncompatibleTechniqueError`. Other
+errors, such as a wrong parameter or a plot of a model that has not been
+applied yet, are still raised, and so is this one if you call `apply` directly.
+
 The SHAP plots draw the SHAP values that `shap_importance` found (or find
 them) for the class "category", with shap's own plotting functions. shap
 draws with `matplotlib.pyplot`, so `amos` lends it each figure while it

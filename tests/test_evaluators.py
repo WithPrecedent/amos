@@ -144,7 +144,9 @@ def test_bias_variance_needs_test_rows_and_scikit_learn(
         evaluators.BiasVariance().apply(unsplit)
     requires('statsmodels')
     amos.models.LogitSM().apply(classified)
-    with pytest.raises(TypeError, match = 'needs a scikit-learn model'):
+    with pytest.raises(
+        amos.IncompatibleTechniqueError,
+        match = 'needs a scikit-learn model'):
         evaluators.BiasVariance().apply(classified)
 
 

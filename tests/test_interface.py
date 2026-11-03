@@ -230,3 +230,23 @@ def test_export_before_apply_raises() -> None:
     project = amos.Project.create(_settings())
     with pytest.raises(ValueError, match = 'apply the project'):
         project.export()
+
+
+def test_a_project_exports_a_plot_that_was_skipped_in_its_history() -> None:
+    settings = _settings(
+        analyst = {
+            'design': 'experiment',
+            'criterion': 'accuracy',
+            'conserve_memory': True,
+            'steps': 'split, model',
+            'split_techniques': 'stratified',
+            'model_techniques': 'logit, baseline'},
+        critic = {'techniques': 'scorecard, coefficient_plot'})
+    project = amos.Project.create(settings, item = make_numeric(), id = 'run')
+    folder = project.export()
+    assert 'coefficient_plot' not in project.result.figures
+    history = json.loads(
+        (folder / 'history.json').read_text(encoding = 'utf-8'))
+    entry = next(e for e in history if e.get('skipped'))
+    assert entry['technique'] == 'coefficient_plot'
+    assert 'no table of coefficients' in entry['reason']

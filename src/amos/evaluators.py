@@ -533,6 +533,7 @@ class BiasVariance(Evaluator):
         Raises:
             TypeError: if the model is not a scikit-learn estimator.
             ValueError: if the data is not split.
+            IncompatibleTechniqueError: if the model is not from scikit-learn.
 
         Returns:
             One row, with the loss and its parts.
@@ -557,7 +558,7 @@ class BiasVariance(Evaluator):
             message = (
                 f'bias_variance needs a scikit-learn model, not a '
                 f'{type(model).__name__}')
-            raise TypeError(message)
+            raise base.IncompatibleTechniqueError(message)
         loss = '0-1_loss' if item.task == 'classify' else 'mse'
         expected, bias, variance = evaluate.bias_variance_decomp(
             sklearn.clone(model),
@@ -776,7 +777,7 @@ class ExplainWeights(Evaluator):
             **kwargs: not used.
 
         Raises:
-            ValueError: if eli5 cannot explain the model.
+            IncompatibleTechniqueError: if eli5 cannot explain the model.
 
         Returns:
             eli5's table of weights.
@@ -794,7 +795,7 @@ class ExplainWeights(Evaluator):
         if table is None:
             message = (
                 f'eli5 cannot explain the weights of {type(model).__name__}')
-            raise ValueError(message)
+            raise base.IncompatibleTechniqueError(message)
         return table
 
 
@@ -938,8 +939,8 @@ class FeatureImportance(Evaluator):
             **kwargs: not used.
 
         Raises:
-            ValueError: if the model does not report the importance of its
-                features.
+            IncompatibleTechniqueError: if the model does not report the
+                importance of its features.
 
         Returns:
             One row for each feature, with an "importance" column.
@@ -960,7 +961,7 @@ class FeatureImportance(Evaluator):
                     f'{type(model).__name__} does not report the importance of '
                     f'its features: use permutation_importance instead'
                 )
-                raise ValueError(message)
+                raise base.IncompatibleTechniqueError(message)
             importances = np.abs(np.atleast_2d(coefficients)).mean(axis = 0)
         features = (
             utilities.feature_names(model, item.data.columns) or item.features)
@@ -2178,6 +2179,8 @@ class Scorecard(_Published, Evaluator):
         """
         found: dict[str, str] = {}
         for entry in item.history:
+            if entry.get('skipped'):
+                continue
             technique = str(entry.get('technique'))
             try:
                 genre = chrisjen.library.classify(technique)

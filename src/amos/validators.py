@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import gc
 import importlib
 from collections.abc import Sequence
 from typing import Any, ClassVar
@@ -135,6 +136,14 @@ class Validator(base.Operation, abc.ABC):
             estimator = clone(model).fit(x_learn, y_learn)
             folds.append(_Fold(
                 number, len(y_learn), *_predict(estimator, x.iloc[score], item)))
+            # A fitted model can be as large as its data, so it is freed before
+            # the next one is fitted. The results of pyfixest are in reference
+            # cycles, so they need a collection. It takes a noticeable time,
+            # which is too long for each of the many folds of a pooled
+            # validator, whose folds are too small to need it.
+            del estimator
+            if not self.pools:
+                gc.collect()
         names = evaluators.Scorecard()._metric_names(item, [], metrics)
         summarize = _pool if self.pools else _average
         table, scores = summarize(item, rows, folds, names)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = '0.6.2'
+__version__ = '0.6.3'
 
 __author__: str = 'Corey Rayburn Yung'
 
@@ -18,6 +18,7 @@ __all__: list[str] = [
     'Findings',
     'GroupMetric',
     'Imputer',
+    'IncompatibleTechniqueError',
     'Inferer',
     'Loader',
     'Merger',
@@ -46,7 +47,7 @@ __all__: list[str] = [
 from chrisjen import library
 
 from .auto import Chooser
-from .base import Dataset, Operation
+from .base import Dataset, IncompatibleTechniqueError, Operation
 from .cleaners import Cleaner
 from .clerks import Clerk
 from .describers import Describer
