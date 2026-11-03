@@ -23,8 +23,8 @@ import pathlib
 import weakref
 from collections.abc import (
     Callable,
+    Generator,
     Iterable,
-    Iterator,
     Mapping,
     MutableMapping,
     Sequence,
@@ -66,15 +66,15 @@ class IncompatibleTechniqueError(ValueError):
 
 
 @contextlib.contextmanager
-def skipping_incompatible_techniques() -> Iterator[None]:
+def skipping_incompatible_techniques() -> Generator[None, None, None]:
     """Skips techniques that do not suit the model, rather than raising.
 
     A `Project` and an `Experiment` apply their workflows in this context.
+    Inside it, a technique that raises an `IncompatibleTechniqueError` is
+    skipped, and the skip is recorded in the dataset's `history`.
 
     Yields:
-        Nothing. Inside the context, a technique that raises an
-            `IncompatibleTechniqueError` is skipped, and the skip is recorded
-            in the dataset's `history`.
+        None: control, to the code in the context.
 
     """
     token = _SKIPS_INCOMPATIBLE.set(True)

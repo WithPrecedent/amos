@@ -276,11 +276,15 @@ def _raises(error: Exception) -> Any:
         """Raises the error.
 
         Args:
+            self: the technique.
             item: the dataset.
             **kwargs: not used.
 
         Raises:
             Exception: always, the error given to `_raises`.
+
+        Returns:
+            Nothing, since it always raises the error.
 
         """
         raise error

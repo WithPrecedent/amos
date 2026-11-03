@@ -21,7 +21,8 @@ All notable changes to this project will be documented in this file.
   model, `bias_variance`, `explain_weights`, and `feature_importance`. Calling
   `apply` on one of these directly still raises the error, which is a
   `ValueError` even for the plots and `bias_variance` that raised a `TypeError`
-  for a model that is not from scikit-learn.
+  for a model that is not from scikit-learn. Code of your own can skip them in
+  the same way with `amos.base.skipping_incompatible_techniques`.
 * Validators free each fold's fitted model before fitting the next, which
   lowers the peak memory of cross-validating a large `fixest` model by about
   one fitted model. Validators that pool their folds (such as
