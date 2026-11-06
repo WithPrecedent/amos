@@ -7,6 +7,7 @@ section (the dataset's fields of the same names) replace it if they are set.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import pathlib
 from typing import Any
@@ -163,6 +164,10 @@ def test_causal_links_are_drawn_as_a_graph(tmp_path: pathlib.Path) -> None:
     texts = {
         t.get_text() for t in dataset.figures['pcmci_plus'].axes[0].texts}
     assert {'filings', 'hearings'} <= texts
+    # tigramite's colorbars are drawn on the figure, not one of pyplot's.
+    pyplot = importlib.import_module('matplotlib.pyplot')
+    assert pyplot.get_fignums() == []
+    assert dataset.figures['pcmci_plus'].axes[0].child_axes
 
 
 def test_nothing_is_drawn_by_default(fitted: amos.Dataset) -> None:

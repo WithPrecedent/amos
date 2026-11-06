@@ -51,6 +51,10 @@ All notable changes to this project will be documented in this file.
   `options._SCIENTIFIC_LIMIT`). Small SHAP values were ticks of whole numbers
   beside a power of 10 (such as "1, 2, 3" and "1e-7"), and are now ticks such
   as "0.0000001", without a power of 10 or a number to add beside the axis.
+* `causal_graph` lends its figure to `matplotlib.pyplot` while tigramite
+  draws, as the plots of shap, mlxtend, and dtreeviz do, since tigramite
+  draws its colorbars with `pyplot.colorbar`, which would otherwise leave an
+  empty figure open in pyplot.
 
 ## 0.6.4
 

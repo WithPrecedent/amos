@@ -640,21 +640,24 @@ class CausalGraph(Plot):
         text = matplotlib.rcParams['font.size']
         ticks = matplotlib.rcParams['xtick.labelsize']
         axes = figure.subplots()
-        plotting.plot_graph(
-            graph,
-            val_matrix = strengths,
-            var_names = names,
-            fig_ax = (figure, axes),
-            vmin_edges = -limit,
-            vmax_edges = limit,
-            vmin_nodes = -limit,
-            vmax_nodes = limit,
-            label_fontsize = text,
-            node_label_size = text,
-            link_label_fontsize = text,
-            tick_label_size = ticks,
-            link_colorbar_label = 'strength of the link',
-            node_colorbar_label = 'strength of its own past')
+        # tigramite draws its colorbars with `pyplot.colorbar`, which would
+        # open a figure of pyplot's own if `figure` were not lent to it.
+        with _lent(figure):
+            plotting.plot_graph(
+                graph,
+                val_matrix = strengths,
+                var_names = names,
+                fig_ax = (figure, axes),
+                vmin_edges = -limit,
+                vmax_edges = limit,
+                vmin_nodes = -limit,
+                vmax_nodes = limit,
+                label_fontsize = text,
+                node_label_size = text,
+                link_label_fontsize = text,
+                tick_label_size = ticks,
+                link_colorbar_label = 'strength of the link',
+                node_colorbar_label = 'strength of its own past')
 
 
 @dataclasses.dataclass
