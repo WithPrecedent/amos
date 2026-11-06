@@ -191,6 +191,7 @@ amos[all]`, or choose:
 | `plots` | matplotlib, seaborn, SciencePlots | The artist's figures, and scorecards and regression tables as images. |
 | `polars` | Polars, pyarrow | Reading Polars data frames. |
 | `sampling` | imbalanced-learn | Samplers such as `smote`. |
+| `settings` | tomli-w, PyYAML | Saving the settings of the winning paths of an experiment as a TOML or YAML file. |
 | `statistics` | statsmodels, pyfixest | `ols`, `glm`, `logit_sm`, `fixest`, and the other models with inference (such as `poisson`, `probit`, and `mixedlm`). |
 | `survival` | statsmodels | `cox`, `kaplan_meier`, `survival_curves`, and `concordance`. |
 | `tables` | great_tables | Scorecards and regression tables as HTML tables. |

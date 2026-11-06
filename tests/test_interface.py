@@ -6,6 +6,7 @@ import importlib
 import json
 import os
 import pathlib
+import sys
 from typing import Any
 
 import numpy as np
@@ -187,13 +188,14 @@ def test_export_saves_everything(tmp_path: pathlib.Path) -> None:
         'scorecard.md',
         'scorecard.png',
         'settings.json',
+        'study_replication.json',
         'tables/analyst_comparison.csv',
         'tables/confusion.csv',
         'tables/scorecard.csv',
-        'tables/summarize.csv',
-        'winning_settings.json']
-    winning = json.loads((folder / 'winning_settings.json').read_text('utf-8'))
-    assert winning == json.loads(json.dumps(project.winning_settings()))
+        'tables/summarize.csv']
+    winning = json.loads(
+        (folder / 'study_replication.json').read_text('utf-8'))
+    assert winning == dict(project.winning_settings())
     settings = json.loads((folder / 'settings.json').read_text('utf-8'))
     assert settings['general']['seed'] == SEED
     history = json.loads((folder / 'history.json').read_text('utf-8'))
@@ -381,8 +383,9 @@ def test_winning_settings_without_a_contest() -> None:
             'model_techniques': 'logit'})
     project = amos.Project.create(settings, item = make_numeric(), id = 'run')
     assert project.winning_settings() is None
+    assert project.export_replication() is None
     folder = project.export()
-    assert not (folder / 'winning_settings.json').exists()
+    assert not list(folder.glob('*_replication.*'))
 
 
 def test_winning_settings_before_apply_raise() -> None:
@@ -400,3 +403,57 @@ def test_the_chosen_parameters_of_a_wrapped_classifier() -> None:
     chosen = amos.interface._chosen_parameters(parameters)
     assert chosen['C'] == 2.0
     assert 'estimator' not in chosen
+
+
+@pytest.mark.parametrize('file_format', ['json', 'ini', 'toml', 'yaml', 'py'])
+def test_export_replication_in_each_format(file_format: str) -> None:
+    if file_format == 'toml':
+        requires('tomli_w')
+    if file_format == 'yaml':
+        requires('yaml')
+    project = amos.Project.create(
+        _settings(), item = make_numeric(), id = 'run')
+    path = project.export_replication(file_format = file_format)
+    assert path == (
+        pathlib.Path(project.clerk.output_folder) / 'run'
+        / f'study_replication.{file_format}')
+    again = amos.Project.create(path, item = make_numeric())
+    assert 'design' not in again.idea['analyst']
+    pd.testing.assert_series_equal(
+        again.result.predictions, project.result.predictions)
+
+
+def test_export_replication_takes_a_folder_and_a_name(
+    tmp_path: pathlib.Path) -> None:
+    requires('yaml')
+    project = amos.Project.create(_settings(), item = make_numeric())
+    path = project.export_replication(
+        tmp_path / 'shared', file_name = 'winner', file_format = '.YAML')
+    assert path == tmp_path / 'shared' / 'winner.yaml'
+    assert path.is_file()
+
+
+def test_export_saves_the_replication_in_the_format_of_the_settings() -> None:
+    settings = _settings(files = {'replication_format': 'ini'})
+    project = amos.Project.create(settings, item = make_numeric(), id = 'run')
+    folder = project.export()
+    assert (folder / 'study_replication.ini').is_file()
+    assert not (folder / 'study_replication.json').exists()
+    # A format passed to `export` takes precedence over the settings.
+    folder = project.export(replication_format = 'py')
+    assert (folder / 'study_replication.py').is_file()
+
+
+def test_export_replication_in_an_unknown_format_raises() -> None:
+    project = amos.Project.create(_settings(), item = make_numeric())
+    with pytest.raises(ValueError, match = "cannot be saved as 'xml'"):
+        project.export_replication(file_format = 'xml')
+
+
+def test_export_replication_names_the_extra_for_a_missing_writer(
+    monkeypatch: pytest.MonkeyPatch) -> None:
+    project = amos.Project.create(_settings(), item = make_numeric())
+    # A `None` in `sys.modules` makes importing the package fail.
+    monkeypatch.setitem(sys.modules, 'tomli_w', None)
+    with pytest.raises(ImportError, match = r'amos\[settings\]'):
+        project.export_replication(file_format = 'toml')

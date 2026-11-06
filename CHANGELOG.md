@@ -7,13 +7,22 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 * A project whose workflow has an `experiment` or `contest` exports
-  "winning_settings.json", the settings of only the winning path, so another
-  researcher can replicate the winner without trying every combination. The
-  new `Project.winning_settings` returns them. Each contest becomes a `flow`
+  "{project}_replication.json" (such as "cancer_replication.json"), the
+  settings of only the winning path, so another researcher can replicate the
+  winner without trying every combination. The new
+  `Project.winning_settings` returns them as an `Idea`, and the new
+  `Project.export_replication` saves them alone, with a `folder`,
+  `file_name`, and `file_format`. `bobbie` writes the file, in json (the
+  default), ini, toml, yaml, or py: set "replication_format" in the "files"
+  section, or pass `replication_format` to `export`. Each contest becomes a
+  `flow`
   in which each step keeps only its winning technique, the parameters of the
   techniques that lost are dropped, a searched model gets the values its
   search chose (without "search", "cv", "n_iter", and "scoring"), and
   "pipeline" settings are dropped, since the pipeline is already filled in.
+* Requires `bobbie` 0.4.0 or later, which writes settings files. The new
+  `settings` extra (part of `all`) installs its writers for toml and yaml
+  files. "environment.json" records the version of `bobbie`.
 
 ## 0.6.4
 

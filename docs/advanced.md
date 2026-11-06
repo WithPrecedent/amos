@@ -80,6 +80,7 @@ describes the "general" section in detail.
 | | `interim_folder` | Folder (in the root folder) for intermediate files. Defaults to the input folder. |
 | | `output_folder` | Folder (in the root folder) in which `export` makes a folder for each run. Defaults to "studies". |
 | | `export_results` | Whether to export the results after every run. Defaults to `False`. |
+| | `replication_format` | Format of the settings file of the winning paths that `export` saves: "json", "ini", "toml", "yaml" (or "yml"), or "py". Defaults to "json" (see "Reports and exports" below). |
 | `feature_groups` | `{group}` | The features (columns) in a group, which is then a technique that keeps only them (see "Selecting features" below). |
 
 The `chrisjen` settings, in brief:
@@ -2005,7 +2006,7 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | --- | --- |
 | report.txt | The text of the report. |
 | settings.json | The settings of the project. |
-| winning_settings.json | The settings of only the winning path, if the workflow has an `experiment` or `contest` (see below). |
+| {project}_replication.json | The settings of only the winning path, if the workflow has an `experiment` or `contest` (see below). |
 | environment.json | The versions of Python and of the packages used, and the GPUs, if `use_gpu` is true. |
 | history.json | Each technique applied, with its tool and parameters. |
 | metrics.csv | The model's metrics. |
@@ -2016,8 +2017,9 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | regression_table.csv, .md, .docx, .png | Each `regression_table` in the workflow (named for the technique), in the same formats as the scorecard. |
 | data.csv | The data after the workflow, if `export(data = True)`. |
 
-"winning_settings.json" holds the settings that `Project.winning_settings`
-returns, so that another researcher can fit the winning path alone. Each
+"{project}_replication.json" (such as "cancer_replication.json") holds the
+settings that `Project.winning_settings` returns, so that another researcher
+can pass the file to `Project.create` to fit the winning path alone. Each
 `experiment` or `contest` becomes a `flow`:
 
 * Each step that it compared (or, without steps, the worker itself) keeps
@@ -2034,6 +2036,13 @@ returns, so that another researcher can fit the winning path alone. Each
 The winner of an `experiment` inside another worker that compares paths is
 found in the history. A plain `contest` does not record its winner there, so
 one inside another keeps every alternative.
+
+`bobbie` writes the file, in any format that a settings file can have: set
+`replication_format` in the "files" section, or pass `replication_format` to
+`export`. "toml" and "yaml" need the `settings` extra
+(`pip install amos[settings]`). `Project.export_replication` saves the file
+alone, and takes a `folder`, a `file_name` (without its extension), and a
+`file_format`.
 
 ## Errors you may see
 

@@ -24,6 +24,10 @@ Contents:
     _PLOT_STYLE: the style of figures.
     _RECORDED_PACKAGES: packages whose versions are recorded by
         `Project.export`.
+    _REPLICATION_FORMAT: format of the settings file of the winning paths
+        that `Project.export` saves.
+    _REPLICATION_SUFFIX: added to the name of a project to name the settings
+        file of its winning paths.
     _STUDIES_FOLDER: folder of the workspace for each run's results.
     _WORKSPACE_VARIABLE: environment variable that can name the workspace.
 
@@ -91,7 +95,9 @@ _EXTRAS: dict[str, str] = {
     'statsmodels': 'statistics',
     'tabpfn': 'tabpfn',
     'tigramite': 'causal',
-    'xgboost': 'boosting'}
+    'tomli_w': 'settings',
+    'xgboost': 'boosting',
+    'yaml': 'settings'}
 # Dots per inch of the figures that `Project.export` saves. Figures in the
 # default style are one column of a journal wide (3.3 inches), so they need
 # more dots than the 100 that `matplotlib` uses to be sharp in print.
@@ -112,10 +118,19 @@ _PLOT_COLORS: str | None = 'bright'
 # in order, or "xkcd". The default is SciencePlots' style for scientific
 # figures, with the sizes and fonts of figures in Nature.
 _PLOT_STYLE: tuple[str, ...] = ('science', 'nature')
+# Format of the settings file of the winning paths that `Project.export`
+# saves: the extension of a format that `bobbie` writes ("json", "ini",
+# "toml", "yaml", or "py"). The "replication_format" setting of the "files"
+# section takes precedence.
+_REPLICATION_FORMAT: str = 'json'
+# Added to the name of a project to name the settings file of its winning
+# paths (such as "cancer_replication.json").
+_REPLICATION_SUFFIX: str = '_replication'
 # Packages whose versions are written to "environment.json" by
 # `Project.export`, if they are installed.
 _RECORDED_PACKAGES: tuple[str, ...] = (
     'amos',
+    'bobbie',
     'chrisjen',
     'numpy',
     'pandas',

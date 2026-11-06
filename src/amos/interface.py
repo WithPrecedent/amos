@@ -15,6 +15,7 @@ import pathlib
 from collections.abc import Mapping, MutableMapping
 from typing import Any, cast
 
+import bobbie
 import chrisjen
 import nagata
 import numpy as np
@@ -47,6 +48,9 @@ _COMPARISON_SETTINGS: tuple[str, ...] = (
     'design', 'criterion', 'conserve_memory')
 # Parameters of a model that only its hyperparameter search uses.
 _SEARCH_PARAMETERS: tuple[str, ...] = ('search', 'cv', 'n_iter', 'scoring')
+# Packages that `bobbie` needs to write the settings files of some formats,
+# by the format.
+_SETTINGS_WRITERS: dict[str, str] = {'toml': 'tomli_w', 'yaml': 'yaml'}
 
 
 @dataclasses.dataclass
@@ -84,7 +88,9 @@ class Project(chrisjen.Project):
       If "export_results" is true in the "files" section, the results are
       exported after each call to `apply`.
     * `winning_settings` returns settings that repeat only the winning path
-      of each `contest` or `experiment`, which `export` also saves.
+      of each `contest` or `experiment`, and `export_replication` saves them
+      (as `export` also does) in a settings file named for the project, such
+      as "cancer_replication.json".
 
     Args:
         name: name of the project.
@@ -207,7 +213,8 @@ class Project(chrisjen.Project):
         self,
         folder: pathlib.Path | str | None = None,
         *,
-        data: bool = False) -> pathlib.Path:
+        data: bool = False,
+        replication_format: str | None = None) -> pathlib.Path:
         """Saves everything needed to report and reproduce the results.
 
         The files are saved by the project's `clerk`:
@@ -216,7 +223,7 @@ class Project(chrisjen.Project):
         | --- | --- |
         | report.txt | The text of the report. |
         | settings.json | The settings of the project. |
-        | winning_settings.json | The settings of only the winning path of each contest (see `winning_settings`), if the workflow has one. |
+        | {name}_replication.json | The settings of only the winning path of each contest, if the workflow has one (see `export_replication`). |
         | environment.json | Versions of Python and the packages used, and the GPUs (if "use_gpu" is true). |
         | history.json | Each technique applied, with its parameters. |
         | metrics.csv | The model's metrics. |
@@ -234,10 +241,17 @@ class Project(chrisjen.Project):
                 case a folder named for the project's `id` in the clerk's
                 output folder is used.
             data: whether to also save the data. Defaults to `False`.
+            replication_format: format of the settings file of the winning
+                paths (see `export_replication`). Defaults to `None`, which
+                uses the "replication_format" setting of the "files"
+                section, or else `options._REPLICATION_FORMAT` ("json").
 
         Raises:
+            ImportError: if the format of the settings file of the winning
+                paths needs a package that is not installed.
             TypeError: if the result is not a `Dataset`.
-            ValueError: if the project has not been applied.
+            ValueError: if the project has not been applied, or the format
+                of the settings file of the winning paths is not known.
 
         Returns:
             The absolute path of the folder the files were saved in.
@@ -258,9 +272,7 @@ class Project(chrisjen.Project):
         report = '' if self.report is None else self.report.contents
         self._save_text(report or '', folder, 'report.txt')
         self._save_json(dict(self.idea), folder, 'settings.json')
-        winning = self.winning_settings()
-        if winning is not None:
-            self._save_json(winning, folder, 'winning_settings.json')
+        self.export_replication(folder, file_format = replication_format)
         self._save_json(
             utilities.environment(gpu = result.use_gpu),
             folder,
@@ -296,7 +308,72 @@ class Project(chrisjen.Project):
             self._save_table(result.data, folder, 'data')
         return folder
 
-    def winning_settings(self) -> dict[str, Any] | None:
+    def export_replication(
+        self,
+        folder: pathlib.Path | str | None = None,
+        *,
+        file_name: str | None = None,
+        file_format: str | None = None) -> pathlib.Path | None:
+        """Saves the settings of only the winning paths in a settings file.
+
+        The settings are those of `winning_settings`, which another
+        researcher can pass to `Project.create` to fit the winning path of
+        each contest alone. `bobbie` writes the file.
+
+        Args:
+            folder: folder to save the file in. Defaults to `None`, in which
+                case a folder named for the project's `id` in the clerk's
+                output folder is used (as `export` does).
+            file_name: name of the file, without its extension. Defaults to
+                `None`, in which case the name of the project with
+                `options._REPLICATION_SUFFIX` ("_replication") is used.
+            file_format: the extension of a format that `bobbie` writes:
+                "json", "ini", "toml", "yaml" (or "yml"), or "py". "toml"
+                needs the `tomli-w` package and "yaml" the `pyyaml` package,
+                which the "settings" extra installs. Defaults to `None`,
+                which uses the "replication_format" setting of the "files"
+                section, or else `options._REPLICATION_FORMAT` ("json").
+
+        Raises:
+            ImportError: if the format needs a package that is not installed.
+            ValueError: if the format is not known, or the project has not
+                been applied.
+
+        Returns:
+            The absolute path of the file, or `None` if no contest in the
+                workflow has a winner (and so no file is saved).
+
+        """
+        if file_format is None:
+            file_format = self.idea.get('files', {}).get(
+                'replication_format', options._REPLICATION_FORMAT)
+        extension = str(file_format).lower().removeprefix('.')
+        kind = bobbie.options._FILE_EXTENSIONS.get(extension)
+        if kind is None:
+            known = ', '.join(bobbie.options._FILE_EXTENSIONS)
+            message = (
+                f'settings cannot be saved as {file_format!r}: the formats '
+                f'are {known}')
+            raise ValueError(message)
+        winning = self.winning_settings()
+        if winning is None:
+            return None
+        if kind in _SETTINGS_WRITERS:
+            # Raises an error that names the extra to install.
+            utilities.import_tool(_SETTINGS_WRITERS[kind])
+        if folder is None:
+            folder = pathlib.Path(self.clerk.output_folder) / self.id
+        folder = pathlib.Path(folder).resolve()
+        folder.mkdir(parents = True, exist_ok = True)
+        name = file_name or f'{self.name}{options._REPLICATION_SUFFIX}'
+        path = folder / f'{name}.{extension}'
+        # json cannot store some values (such as a function named in the
+        # settings), which are saved as their `str`, as in "settings.json".
+        writing = {'default': str} if kind == 'json' else {}
+        winning.to_file(path, **writing)
+        return path
+
+    def winning_settings(self) -> chrisjen.Idea | None:
         """Returns settings that repeat only the winning path of each contest.
 
         Another researcher can create a project from them to fit the winning
@@ -321,8 +398,8 @@ class Project(chrisjen.Project):
             ValueError: if the project has not been applied.
 
         Returns:
-            The settings, or `None` if no contest in the workflow has a
-                winner.
+            The settings (which `export_replication` saves), or `None` if no
+                contest in the workflow has a winner.
 
         """
         if self.result is None:
@@ -349,7 +426,7 @@ class Project(chrisjen.Project):
             if isinstance(section, Mapping) and 'pipeline' in section:
                 idea.contents[name] = {
                     k: v for k, v in section.items() if k != 'pipeline'}
-        return dict(idea)
+        return idea
 
     """ Properties """
 

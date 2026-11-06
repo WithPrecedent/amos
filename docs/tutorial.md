@@ -298,7 +298,7 @@ Anyone with the settings file, the data, and "environment.json" can reproduce
 these results exactly.
 
 Because the analyst is an experiment, `export` also saves
-"winning_settings.json": the settings with only the winning path. Each step
+"cancer_replication.json": the settings with only the winning path. Each step
 keeps only the technique that won, the analyst is a plain `flow`, the
 parameters of the techniques that lost are dropped, and a searched parameter
 is given the value that the search chose. Another researcher can fit the
@@ -311,6 +311,16 @@ print(winning["analyst"]["scale_techniques"], winning["random_forest_parameters"
 replica = amos.Project.create(winning, item = data)
 print(replica.result.predictions.equals(project.result.predictions))
 # True
+```
+
+The file is json unless you choose another format that a settings file can
+have, such as ini, with `replication_format` (in the "files" section or as an
+argument of `export`). `export_replication` saves the file alone:
+
+```python
+path = project.export_replication(file_format = "ini")
+print(path.name)
+# cancer_replication.ini
 ```
 
 ## Next steps
