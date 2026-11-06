@@ -2005,6 +2005,7 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | --- | --- |
 | report.txt | The text of the report. |
 | settings.json | The settings of the project. |
+| winning_settings.json | The settings of only the winning path, if the workflow has an `experiment` or `contest` (see below). |
 | environment.json | The versions of Python and of the packages used, and the GPUs, if `use_gpu` is true. |
 | history.json | Each technique applied, with its tool and parameters. |
 | metrics.csv | The model's metrics. |
@@ -2014,6 +2015,25 @@ tables and figures. To use another report, pass a `chrisjen.Report` as
 | scorecard.csv, .md, .docx, .png | The scorecard in each format. The Word document and image are saved if python-docx and matplotlib are installed. |
 | regression_table.csv, .md, .docx, .png | Each `regression_table` in the workflow (named for the technique), in the same formats as the scorecard. |
 | data.csv | The data after the workflow, if `export(data = True)`. |
+
+"winning_settings.json" holds the settings that `Project.winning_settings`
+returns, so that another researcher can fit the winning path alone. Each
+`experiment` or `contest` becomes a `flow`:
+
+* Each step that it compared (or, without steps, the worker itself) keeps
+  only the technique of the winning path, and its "design", "criterion",
+  and "conserve_memory" settings are dropped.
+* The parameters sections of the techniques that lost are dropped, unless
+  another worker still names the technique, and so are their own worker
+  sections and feature groups.
+* A model that searched for its hyperparameters is given the values that the
+  search chose, without its "search", "cv", "n_iter", and "scoring".
+* Each "pipeline" setting is dropped, since the settings of the pipeline are
+  already filled in.
+
+The winner of an `experiment` inside another worker that compares paths is
+found in the history. A plain `contest` does not record its winner there, so
+one inside another keeps every alternative.
 
 ## Errors you may see
 

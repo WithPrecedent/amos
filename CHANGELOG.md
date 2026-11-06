@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* A project whose workflow has an `experiment` or `contest` exports
+  "winning_settings.json", the settings of only the winning path, so another
+  researcher can replicate the winner without trying every combination. The
+  new `Project.winning_settings` returns them. Each contest becomes a `flow`
+  in which each step keeps only its winning technique, the parameters of the
+  techniques that lost are dropped, a searched model gets the values its
+  search chose (without "search", "cv", "n_iter", and "scoring"), and
+  "pipeline" settings are dropped, since the pipeline is already filled in.
+
 ## 0.6.4
 
 * A `regression_table` of an experiment with only one branch left (such as

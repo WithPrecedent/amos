@@ -297,6 +297,22 @@ print(sorted(path.name for path in (folder / "tables").iterdir()))
 Anyone with the settings file, the data, and "environment.json" can reproduce
 these results exactly.
 
+Because the analyst is an experiment, `export` also saves
+"winning_settings.json": the settings with only the winning path. Each step
+keeps only the technique that won, the analyst is a plain `flow`, the
+parameters of the techniques that lost are dropped, and a searched parameter
+is given the value that the search chose. Another researcher can fit the
+winning model from it without trying every combination again:
+
+```python
+winning = project.winning_settings()
+print(winning["analyst"]["scale_techniques"], winning["random_forest_parameters"])
+# none {'max_depth': 6, 'n_estimators': 100}
+replica = amos.Project.create(winning, item = data)
+print(replica.result.predictions.equals(project.result.predictions))
+# True
+```
+
 ## Next steps
 
 * The [idea file](idea.md) page shows how to write a settings file in each

@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from conftest import SEED, make_numeric, requires
+from conftest import SEED, make_numeric, make_regression, requires
 
 import amos
 import chrisjen
@@ -190,7 +190,10 @@ def test_export_saves_everything(tmp_path: pathlib.Path) -> None:
         'tables/analyst_comparison.csv',
         'tables/confusion.csv',
         'tables/scorecard.csv',
-        'tables/summarize.csv']
+        'tables/summarize.csv',
+        'winning_settings.json']
+    winning = json.loads((folder / 'winning_settings.json').read_text('utf-8'))
+    assert winning == json.loads(json.dumps(project.winning_settings()))
     settings = json.loads((folder / 'settings.json').read_text('utf-8'))
     assert settings['general']['seed'] == SEED
     history = json.loads((folder / 'history.json').read_text('utf-8'))
@@ -250,3 +253,150 @@ def test_a_project_exports_a_plot_that_was_skipped_in_its_history() -> None:
     entry = next(e for e in history if e.get('skipped'))
     assert entry['technique'] == 'coefficient_plot'
     assert 'no table of coefficients' in entry['reason']
+
+
+def test_winning_settings_keep_only_the_winning_path() -> None:
+    settings = _settings(
+        logit_parameters = {'max_iter': 500},
+        baseline_parameters = {'strategy': 'prior'},
+        standard_scale_parameters = {'with_mean': True})
+    project = amos.Project.create(settings, item = make_numeric())
+    workers = {node.name: node for node in project.workflow}
+    assert workers['analyst'].winner == (
+        'stratified_split > none_scale > logit_model')
+    winning = project.winning_settings()
+    assert winning is not None
+    assert winning['analyst'] == {
+        'steps': 'split, scale, model',
+        'split_techniques': 'stratified',
+        'scale_techniques': 'none',
+        'model_techniques': 'logit'}
+    assert winning['logit_parameters'] == {'max_iter': 500}
+    assert 'standard_scale_parameters' not in winning
+    assert 'baseline_parameters' not in winning
+    # The other workers and the settings of the project are kept.
+    assert winning['explorer'] == settings['explorer']
+    assert winning['critic'] == settings['critic']
+    assert winning['general'] == settings['general']
+    # The settings were copied, not changed.
+    assert project.idea['analyst']['design'] == 'experiment'
+    again = amos.Project.create(winning, item = make_numeric())
+    replica = {node.name: node for node in again.workflow}
+    assert isinstance(replica['analyst'], chrisjen.Flow)
+    assert not isinstance(replica['analyst'], chrisjen.Contest)
+    pd.testing.assert_series_equal(
+        again.result.predictions, project.result.predictions)
+
+
+def test_winning_settings_pin_the_values_a_search_chose() -> None:
+    settings = _settings(
+        random_forest_parameters = {'n_estimators': [5, 20], 'cv': 3},
+        random_forest_model_parameters = {
+            'search': 'grid', 'max_depth': [2, 4]})
+    settings['analyst']['model_techniques'] = 'baseline, random_forest'
+    project = amos.Project.create(settings, item = make_numeric())
+    winning = project.winning_settings()
+    assert winning is not None
+    assert winning['analyst']['model_techniques'] == 'random_forest'
+    assert 'random_forest_search' in project.result.tables
+    best = project.result.model.get_params()
+    assert winning['random_forest_parameters'] == {
+        'n_estimators': best['n_estimators']}
+    assert winning['random_forest_model_parameters'] == {
+        'max_depth': best['max_depth']}
+    again = amos.Project.create(winning, item = make_numeric())
+    assert 'random_forest_search' not in again.result.tables
+    pd.testing.assert_series_equal(
+        again.result.predictions, project.result.predictions)
+
+
+def test_winning_settings_of_a_contest_without_steps() -> None:
+    settings = {
+        'general': {'label': 'target', 'seed': SEED},
+        'study_project': {'study_workers': 'splitter, modeler'},
+        'splitter': {'techniques': 'stratified'},
+        'modeler': {
+            'design': 'contest',
+            'criterion': 'accuracy',
+            'conserve_memory': True,
+            'techniques': 'logit, baseline'},
+        'baseline_parameters': {'strategy': 'prior'}}
+    project = amos.Project.create(settings, item = make_numeric())
+    winning = project.winning_settings()
+    assert winning is not None
+    assert winning['modeler'] == {'techniques': 'logit'}
+    assert 'baseline_parameters' not in winning
+    assert winning['splitter'] == settings['splitter']
+
+
+def test_winning_settings_of_a_contest_inside_an_experiment() -> None:
+    settings = _settings(
+        analyst = {
+            'design': 'experiment',
+            'criterion': 'accuracy',
+            'steps': 'split, scale, modeler',
+            'split_techniques': 'stratified',
+            'scale_techniques': 'standard, none'},
+        modeler = {
+            'design': 'experiment',
+            'criterion': 'accuracy',
+            'techniques': 'logit, baseline'})
+    project = amos.Project.create(settings, item = make_numeric())
+    # The inner experiment is applied only as a copy in each path, so its
+    # winner is found in the history.
+    workers = {node.name: node for node in project.workflow}
+    assert workers['analyst'].winner.endswith(' > modeler')
+    winning = project.winning_settings()
+    assert winning is not None
+    assert winning['modeler'] == {'techniques': 'logit'}
+    assert 'design' not in winning['analyst']
+    again = amos.Project.create(winning, item = make_numeric())
+    pd.testing.assert_series_equal(
+        again.result.predictions, project.result.predictions)
+
+
+def test_winning_settings_drop_the_pipeline() -> None:
+    settings = {
+        'general': {'label': 'target', 'seed': SEED, 'pipeline': 'regression'}}
+    project = amos.Project.create(settings, item = make_regression())
+    winning = project.winning_settings()
+    assert winning is not None
+    assert 'pipeline' not in winning['general']
+    assert 'design' not in winning['analyst']
+    assert isinstance(winning['analyst']['model_techniques'], str)
+    # The pipeline's parameters of a model that lost are dropped too.
+    if winning['analyst']['model_techniques'] != 'random_forest':
+        assert 'random_forest_parameters' not in winning
+    again = amos.Project.create(winning, item = make_regression())
+    assert 'design' not in again.idea['analyst']
+    pd.testing.assert_series_equal(
+        again.result.predictions, project.result.predictions)
+
+
+def test_winning_settings_without_a_contest() -> None:
+    settings = _settings(
+        analyst = {
+            'steps': 'split, model',
+            'split_techniques': 'stratified',
+            'model_techniques': 'logit'})
+    project = amos.Project.create(settings, item = make_numeric(), id = 'run')
+    assert project.winning_settings() is None
+    folder = project.export()
+    assert not (folder / 'winning_settings.json').exists()
+
+
+def test_winning_settings_before_apply_raise() -> None:
+    project = amos.Project.create(_settings())
+    with pytest.raises(ValueError, match = 'apply the project'):
+        project.winning_settings()
+
+
+def test_the_chosen_parameters_of_a_wrapped_classifier() -> None:
+    linear_model = importlib.import_module('sklearn.linear_model')
+    wrapped = amos.models.LabelCoded(
+        estimator = linear_model.LogisticRegression(C = 2.0))
+    parameters = amos.utilities.parameters_of(wrapped)
+    assert list(parameters) == ['estimator']
+    chosen = amos.interface._chosen_parameters(parameters)
+    assert chosen['C'] == 2.0
+    assert 'estimator' not in chosen

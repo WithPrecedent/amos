@@ -41,6 +41,12 @@ _FOLDERS: tuple[str, ...] = (
 _SCORECARD_FORMATS: tuple[tuple[str, str], ...] = (
     ('docx', 'docx'),
     ('png', 'matplotlib'))
+# Settings of a worker that only a design that compares paths uses, which the
+# winning settings drop when they make a contest a flow.
+_COMPARISON_SETTINGS: tuple[str, ...] = (
+    'design', 'criterion', 'conserve_memory')
+# Parameters of a model that only its hyperparameter search uses.
+_SEARCH_PARAMETERS: tuple[str, ...] = ('search', 'cv', 'n_iter', 'scoring')
 
 
 @dataclasses.dataclass
@@ -77,6 +83,8 @@ class Project(chrisjen.Project):
     * `export` saves everything needed to report and reproduce the results.
       If "export_results" is true in the "files" section, the results are
       exported after each call to `apply`.
+    * `winning_settings` returns settings that repeat only the winning path
+      of each `contest` or `experiment`, which `export` also saves.
 
     Args:
         name: name of the project.
@@ -208,6 +216,7 @@ class Project(chrisjen.Project):
         | --- | --- |
         | report.txt | The text of the report. |
         | settings.json | The settings of the project. |
+        | winning_settings.json | The settings of only the winning path of each contest (see `winning_settings`), if the workflow has one. |
         | environment.json | Versions of Python and the packages used, and the GPUs (if "use_gpu" is true). |
         | history.json | Each technique applied, with its parameters. |
         | metrics.csv | The model's metrics. |
@@ -249,6 +258,9 @@ class Project(chrisjen.Project):
         report = '' if self.report is None else self.report.contents
         self._save_text(report or '', folder, 'report.txt')
         self._save_json(dict(self.idea), folder, 'settings.json')
+        winning = self.winning_settings()
+        if winning is not None:
+            self._save_json(winning, folder, 'winning_settings.json')
         self._save_json(
             utilities.environment(gpu = result.use_gpu),
             folder,
@@ -283,6 +295,61 @@ class Project(chrisjen.Project):
         if data:
             self._save_table(result.data, folder, 'data')
         return folder
+
+    def winning_settings(self) -> dict[str, Any] | None:
+        """Returns settings that repeat only the winning path of each contest.
+
+        Another researcher can create a project from them to fit the winning
+        techniques alone, without trying every combination again. Each
+        `contest` (or `experiment`) in the workflow becomes a `flow`:
+
+        * Each step that it compared keeps only the technique of the winning
+          path (as does a contest without steps, whose techniques are the
+          alternatives), and its "design", "criterion", and
+          "conserve_memory" settings are dropped.
+        * The parameters sections of the techniques that lost are dropped,
+          unless another worker still uses the technique, and so are their
+          own worker sections and feature groups.
+        * A model that searched for its hyperparameters is given the values
+          that the search chose rather than the lists it searched, without
+          its "search", "cv", "n_iter", and "scoring" parameters.
+        * The settings of pipelines are already filled in, so each "pipeline"
+          setting is dropped (it would otherwise add the settings of the
+          contest back).
+
+        Raises:
+            ValueError: if the project has not been applied.
+
+        Returns:
+            The settings, or `None` if no contest in the workflow has a
+                winner.
+
+        """
+        if self.result is None:
+            message = 'apply the project before finding its winning settings'
+            raise ValueError(message)
+        history = getattr(self.result, 'history', [])
+        winners = {}
+        for worker in _contests(self.workflow):
+            # A contest inside another is applied only as a copy, so its
+            # winner is found in the history (where an experiment records
+            # it).
+            winner = worker.winner or _recorded_winner(worker, history)
+            if winner is not None:
+                winners[worker] = winner
+        if not winners:
+            return None
+        idea = copy.deepcopy(self.idea)
+        losers = []
+        for worker, winner in winners.items():
+            losers.extend(_keep_winning_path(idea, worker, winner))
+        _drop_losing_settings(idea, losers)
+        _pin_searched_parameters(idea, self.workflow, history)
+        for name, section in list(idea.contents.items()):
+            if isinstance(section, Mapping) and 'pipeline' in section:
+                idea.contents[name] = {
+                    k: v for k, v in section.items() if k != 'pipeline'}
+        return dict(idea)
 
     """ Properties """
 
@@ -456,6 +523,74 @@ def _make_clerk(
     return Clerk(root_folder = root, **folders)
 
 
+def _chosen_parameters(parameters: Mapping[str, Any]) -> dict[str, Any]:
+    """Returns the parameters of a fitted model, as recorded in its history.
+
+    Args:
+        parameters: the "parameters" of a model's entry in `history`. A
+            classifier wrapped in a `LabelCoded` records only its
+            "estimator", whose own parameters are used.
+
+    Returns:
+        The parameters, by name.
+
+    """
+    chosen = {k: v for k, v in parameters.items() if k != 'estimator'}
+    wrapped = parameters.get('estimator')
+    if wrapped is not None:
+        chosen = {**utilities.parameters_of(wrapped), **chosen}
+    return chosen
+
+
+def _contests(workflow: Any) -> list[chrisjen.Contest]:
+    """Returns every contest (and experiment) in a workflow.
+
+    Args:
+        workflow: a `chrisjen.Worker`, or `None`.
+
+    Returns:
+        `workflow` itself, if it is a contest, and every contest in it, in
+            order.
+
+    """
+    nodes = [workflow, *_nodes(workflow)]
+    return [node for node in nodes if isinstance(node, chrisjen.Contest)]
+
+
+def _drop_losing_settings(
+    idea: chrisjen.Idea,
+    losers: list[tuple[str, str]]) -> None:
+    """Drops the settings of the techniques that lost a contest.
+
+    The "{technique}_{step}_parameters" section of each loser is dropped.
+    Its "{technique}_parameters" section, its own worker section, and its
+    feature group (in the "feature_groups" section) are dropped only if no
+    worker, step, or criterion still names it.
+
+    Args:
+        idea: the settings, which are changed.
+        losers: each technique that lost and the step (or contest without
+            steps) that it was an alternative in.
+
+    """
+    contents = idea.contents
+    for technique, step in losers:
+        contents.pop(f'{technique}_{step}_parameters', None)
+    used = {
+        name for names in [*idea.techniques.values(), *idea.steps.values()]
+        for name in names}
+    used.update(str(name) for name in idea.criteria.values())
+    unused = {technique for technique, _ in losers} - used
+    for technique in unused:
+        contents.pop(f'{technique}_parameters', None)
+        if technique in idea.workers:
+            del contents[technique]
+    groups = contents.get('feature_groups')
+    if isinstance(groups, Mapping) and unused & set(groups):
+        contents['feature_groups'] = {
+            k: v for k, v in groups.items() if k not in unused}
+
+
 def _importable(package: str) -> bool:
     """Returns whether `package` can be imported.
 
@@ -471,6 +606,54 @@ def _importable(package: str) -> bool:
     except Exception:  # noqa: BLE001
         return False
     return True
+
+
+def _keep_winning_path(
+    idea: chrisjen.Idea,
+    worker: chrisjen.Contest,
+    winner: str) -> list[tuple[str, str]]:
+    """Makes a contest a flow of only the techniques of its winning path.
+
+    Args:
+        idea: the settings, which are changed.
+        worker: the contest.
+        winner: the label of its winning path (the names of its nodes,
+            joined by " > ").
+
+    Returns:
+        Each technique that lost and the step (or the contest, if it has no
+            steps) that it was an alternative in.
+
+    """
+    name = str(worker.name)
+    path = next(
+        (p for p in worker.walk()
+         if ' > '.join(str(getattr(n, 'name', n)) for n in p) == winner),
+        None)
+    if path is None:
+        return []
+    techniques = idea.techniques
+    # A contest without steps has its techniques as its alternatives.
+    own = [] if name in idea.steps else techniques.get(name, [])
+    losers: list[tuple[str, str]] = []
+    for node in path:
+        label = str(getattr(node, 'name', node))
+        if isinstance(node, chrisjen.Step) and node.contents is not None:
+            technique = str(node.contents.name)
+            step = label.removeprefix(f'{technique}_')
+        elif label in own:
+            technique, step = label, name
+        else:
+            # A worker that is a step of its own is in every path.
+            continue
+        choices = techniques.get(step, [])
+        if technique not in choices:
+            continue
+        _set_settings(idea, step, 'techniques', technique)
+        losers.extend((c, step) for c in choices if c != technique)
+    for key in _COMPARISON_SETTINGS:
+        _set_settings(idea, name, key, None)
+    return losers
 
 
 def _nodes(worker: Any) -> list[Any]:
@@ -493,6 +676,64 @@ def _nodes(worker: Any) -> list[Any]:
         found.append(worker.contents)
         found.extend(_nodes(worker.contents))
     return found
+
+
+def _pin_searched_parameters(
+    idea: chrisjen.Idea,
+    workflow: Any,
+    history: list[dict[str, Any]]) -> None:
+    """Gives each searched model the values that its search chose.
+
+    The parameters of a model can be in its "{technique}_parameters"
+    section and, for each step that wraps it, the "{step}_parameters" and
+    "{technique}_{step}_parameters" sections. In each, a list of values that
+    was searched is replaced by the value chosen, and the parameters of the
+    search (see `_SEARCH_PARAMETERS`) are dropped.
+
+    Args:
+        idea: the settings, which are changed.
+        workflow: the workflow of the project.
+        history: the history of the result.
+
+    """
+    contents = idea.contents
+    for entry in history:
+        if not entry.get('search') or not entry.get('parameters'):
+            continue
+        technique = str(entry['technique'])
+        chosen = _chosen_parameters(entry['parameters'])
+        names = [f'{technique}_parameters']
+        for node in _nodes(workflow):
+            if (
+                isinstance(node, chrisjen.Step)
+                and node.contents is not None
+                and str(node.contents.name) == technique):
+                step = str(node.name).removeprefix(f'{technique}_')
+                names.extend([
+                    f'{step}_parameters', f'{technique}_{step}_parameters'])
+        for name in names:
+            section = contents.get(name)
+            if not isinstance(section, Mapping):
+                continue
+            contents[name] = {
+                key: (
+                    _plain(chosen[key])
+                    if isinstance(value, list) and key in chosen else value)
+                for key, value in section.items()
+                if key not in _SEARCH_PARAMETERS}
+
+
+def _plain(value: Any) -> Any:
+    """Returns `value` as a plain Python value, if it is a `numpy` value.
+
+    Args:
+        value: a value, such as a parameter that a search chose.
+
+    Returns:
+        The Python value of a `numpy` value, or `value` itself.
+
+    """
+    return value.item() if isinstance(value, np.generic) else value
 
 
 def _predictions(item: base.Dataset) -> pd.DataFrame:
@@ -520,6 +761,56 @@ def _predictions(item: base.Dataset) -> pd.DataFrame:
         for column in item.probabilities.columns:
             table[f'probability_{column}'] = item.probabilities[column]
     return table
+
+
+def _recorded_winner(
+    worker: chrisjen.Contest,
+    history: list[dict[str, Any]]) -> str | None:
+    """Returns the winner of a contest, as its entry in `history` records it.
+
+    Args:
+        worker: the contest.
+        history: the history of the result.
+
+    Returns:
+        The "winner" of the last entry of `worker` in `history`, or `None`
+            if there is none (only an `Experiment` records its winner).
+
+    """
+    for entry in reversed(history):
+        if entry.get('technique') == worker.name and entry.get('winner'):
+            return str(entry['winner'])
+    return None
+
+
+def _set_settings(
+    idea: chrisjen.Idea,
+    name: str,
+    key: str,
+    value: Any) -> None:
+    """Sets every setting `key` that belongs to `name`, or deletes it.
+
+    A setting belongs to `name` as `chrisjen.Idea` finds it: it is `key` in
+    the section of `name`, or "{name}_{key}" in any worker section.
+
+    Args:
+        idea: the settings, which are changed.
+        name: the name of a worker or step.
+        key: the setting, such as "techniques" or "design".
+        value: the new value, or `None` to delete the setting.
+
+    """
+    for section_name, section in idea.workers.items():
+        settings = [f'{name}_{key}']
+        if section_name == name:
+            settings.append(key)
+        for setting in settings:
+            if setting not in section:
+                continue
+            if value is None:
+                del section[setting]
+            else:
+                section[setting] = value
 
 
 def _storable(item: Any) -> Any:
