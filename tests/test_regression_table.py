@@ -258,6 +258,20 @@ def test_branches_that_are_gone_leave_the_final_model(
     assert list(table.statistics.columns) == ['random_forest']
 
 
+def test_the_only_branch_left_is_named_by_its_model(
+    tmp_path: pathlib.Path) -> None:
+    os.chdir(tmp_path)
+    settings = _settings()
+    settings['general']['conserve_memory'] = True
+    settings['analyst']['steps'] = 'split, scale, model, validator'
+    settings['analyst']['validator_techniques'] = 'stratified_k_fold'
+    with pytest.warns(UserWarning, match = 'no longer in memory'):
+        project = amos.Project.create(
+            settings, item = make_numeric(), id = 'run')
+    columns = project.result.tables['regression_table_statistics'].columns
+    assert list(columns) == ['random_forest']
+
+
 def test_several_datasets_are_columns() -> None:
     ols, linear = _regressed('ols'), _regressed('linear')
     table = RegressionTable.create(

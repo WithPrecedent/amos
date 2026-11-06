@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.6.4
+
+* A `regression_table` of an experiment with only one branch left (such as
+  one that conserves memory, which keeps only the winner's dataset) names its
+  column by the branch's model, not by its last step, which was the validator
+  when the experiment had one.
+
 ## 0.6.3
 
 * A technique that does not suit the model no longer ends the workflow of a

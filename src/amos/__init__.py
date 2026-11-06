@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = '0.6.3'
+__version__ = '0.6.4'
 
 __author__: str = 'Corey Rayburn Yung'
 

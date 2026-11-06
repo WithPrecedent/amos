@@ -2768,8 +2768,9 @@ def _branch_names(branches: Sequence[base.Branch]) -> list[str]:
 
     Returns:
         The techniques of the steps that differ between the branches, joined
-            by " / ", or the technique of a branch's last step if no step
-            differs.
+            by " / ". If no step differs (as when only one branch is left),
+            the name of a branch's model, or else the technique of its last
+            step, which may be a validator after the model.
 
     """
     steps = list(dict.fromkeys(k for b in branches for k in b.steps))
@@ -2781,6 +2782,8 @@ def _branch_names(branches: Sequence[base.Branch]) -> list[str]:
         if differ:
             names.append(' / '.join(
                 str(branch.steps.get(step, '')) for step in differ))
+        elif branch.dataset is not None and branch.dataset.model is not None:
+            names.append(_model_name(branch.dataset))
         elif branch.steps:
             names.append(str(list(branch.steps.values())[-1]))
         else:
