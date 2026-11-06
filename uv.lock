@@ -5553,7 +5553,7 @@ wheels = [
 
 [[package]]
 name = "skrub"
-version = "0.11.0"
+version = "0.10.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cloudpickle" },
@@ -5569,9 +5569,9 @@ dependencies = [
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/22/f6/4bcaf620df6ce360e04ae177cd1586e15e5e30a19a2edff5edca343fc70a/skrub-0.11.0.tar.gz", hash = "sha256:97e986f56a82d9e071aff566c10099827fbaee4959451b61f9bdaf71c3ad6c6d", size = 4234421, upload-time = "2026-10-01T10:03:07.232Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/a6/f4d0b7240ebf546d3a77f212958b930282cccb0a53d66b9b0e1639ce8230/skrub-0.10.1.tar.gz", hash = "sha256:39f58492f6889c5563a654478cd523771aaa8dab5a42ad2ce9f430efb3881f53", size = 4205317, upload-time = "2026-09-01T09:33:37.146Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/a4/cc5181b3f29e3a9db8fd5c4bde79358d7833ae9aeb53b61f9631ef8d5a54/skrub-0.11.0-py3-none-any.whl", hash = "sha256:9cf5bda8c5d35ec3b9669a451b1ae03a5789b5f8cd328f2df224b115fa9fe931", size = 802731, upload-time = "2026-10-01T10:03:02.596Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/2d/492a8b0d0d8b344918312a6416c537e54081ca5d0aaf19d085a188905e41/skrub-0.10.1-py3-none-any.whl", hash = "sha256:553c6f9b19a2cb97bba776a28255e7e024e77d4f50d7c6c70b4805f4e668a3cc", size = 595919, upload-time = "2026-09-01T09:33:35.208Z" },
 ]
 
 [[package]]
@@ -5799,7 +5799,7 @@ wheels = [
 
 [[package]]
 name = "tabpfn"
-version = "8.5.0"
+version = "9.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "einops" },
@@ -5807,6 +5807,7 @@ dependencies = [
     { name = "huggingface-hub" },
     { name = "joblib" },
     { name = "lightgbm" },
+    { name = "matplotlib" },
     { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -5817,13 +5818,14 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "skrub" },
     { name = "torch" },
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9b/6e/c387fccef583ec370d6bf7cec14aa3d78c0523173ba5907e428f333f5c61/tabpfn-8.5.0.tar.gz", hash = "sha256:3dac11cbd54000135c8a11d12ffb1e270b8a7bb77bfa4a4647210a7f708f7c82", size = 827559, upload-time = "2026-08-27T17:43:51.095Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b0/03/1b48e093811877c651f731ac64e36a71b3ac44ec5c5c67a395422a6cbfed/tabpfn-9.2.0.tar.gz", hash = "sha256:e7fb2c6293ffef664c69838eb4cb215c79c85a0c0bd449fdf22489045d32b9eb", size = 937644, upload-time = "2026-10-12T15:12:56.56Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/2e/85c053276f27be38970c967ca7496ef7e330c85fca64dd512b65cc806946/tabpfn-8.5.0-py3-none-any.whl", hash = "sha256:4c076a019cfa5520e9c41405cecda845bdd09d909ede4a60c43839bbc83bf7a0", size = 771167, upload-time = "2026-08-27T17:43:49.215Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/a7/5c403c9fec9f726c91eaeaebaa8905530813ab58cb134a043c4b17afbd6a/tabpfn-9.2.0-py3-none-any.whl", hash = "sha256:bf8edb860cf490ab021d0ba6e91a9798f1b549bdb220066599661c8fc6d6089f", size = 850035, upload-time = "2026-10-12T15:12:54.671Z" },
 ]
 
 [[package]]
