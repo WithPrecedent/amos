@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import importlib
 import pathlib
+from typing import Any
 
 import numpy as np
 import pytest
-from conftest import SEED, make_fixest_courts, make_numeric, requires
+from conftest import (
+    SEED,
+    make_fixest_courts,
+    make_numeric,
+    make_regression,
+    requires)
 
 import amos
 from amos import plots
@@ -137,6 +143,45 @@ def test_shap_plots(
     assert pyplot.get_fignums() == before
     assert figure.canvas.manager is None
     assert not matplotlib.is_interactive()
+
+
+def _scaled_regression(scale: float) -> amos.Dataset:
+    """Returns a fitted regression whose label is multiplied by `scale`."""
+    data = make_regression()
+    data['target'] = data['target'] * scale
+    dataset = amos.Dataset(data, label = 'target', seed = SEED)
+    amos.splitters.TrainTest().apply(dataset)
+    return amos.models.Linear().apply(dataset)
+
+
+def _axis_labels(figure: Any) -> list[str]:
+    """Returns the tick labels and offset texts of every axis of `figure`."""
+    labels = []
+    for axes in figure.axes:
+        for axis in (axes.xaxis, axes.yaxis):
+            labels.extend(t.get_text() for t in axis.get_ticklabels())
+            labels.append(axis.get_offset_text().get_text())
+    return [label for label in labels if label]
+
+
+@pytest.mark.parametrize('name', [*SHAP_PLOTS, 'shap_force'])
+def test_shap_plots_write_small_numbers_in_full(name: str) -> None:
+    requires('shap')
+    # SHAP values of about a ten millionth would be ticks of whole numbers
+    # beside a power of 10 in `matplotlib`'s usual notation.
+    dataset = _scaled_regression(1e-8)
+    amos.library.borrow(name)().apply(dataset, rows = 30, background = 30)
+    labels = _axis_labels(dataset.figures[name])
+    assert labels
+    assert not [label for label in labels if 'e' in label.split(' = ')[0]]
+
+
+def test_shap_plots_use_scientific_notation_for_large_numbers() -> None:
+    requires('shap')
+    dataset = _scaled_regression(1e7)
+    plots.ShapBeeswarm().apply(dataset, rows = 30, background = 30)
+    labels = _axis_labels(dataset.figures['shap_beeswarm'])
+    assert any('1e' in label for label in labels)
 
 
 @pytest.mark.parametrize('name', SHAP_PLOTS)
@@ -739,3 +784,120 @@ def test_panels_that_measure_the_same_thing_share_their_ranges(
     assert grid[0, 0].get_xlim() == grid[1, 0].get_xlim()
     assert grid[0, 1].get_xlim() == grid[1, 1].get_xlim()
     assert grid[0, 1].get_ylim() == grid[1, 0].get_xlim()
+
+
+@pytest.mark.parametrize(('name', 'package'), [
+    ('classification_report_heatmap', None),
+    ('scorecard_plot', None),
+    ('scree_plot', None),
+    ('loadings_heatmap', 'statsmodels'),
+    ('weights_plot', 'eli5'),
+    ('bias_variance_plot', 'mlxtend'),
+    ('estimates_plot', None)])
+def test_plots_of_a_critic_make_its_table_if_it_is_missing(
+    name: str,
+    package: str | None,
+    fitted: amos.Dataset,
+    tmp_path: pathlib.Path) -> None:
+    if package is not None:
+        requires(package)
+    amos.library.borrow(name)().apply(fitted)
+    _check(fitted, name, tmp_path)
+
+
+@pytest.mark.parametrize(('name', 'package'), [
+    ('distribution_plots', None),
+    ('frequency_plots', None),
+    ('missing_bars', None),
+    ('association_rules_plot', 'mlxtend')])
+def test_plots_of_an_explorer_make_its_table_if_it_is_missing(
+    name: str,
+    package: str | None,
+    mixed: amos.Dataset,
+    tmp_path: pathlib.Path) -> None:
+    if package is not None:
+        requires(package)
+    if name == 'association_rules_plot':
+        amos.describers.AssociationRules().apply(mixed, min_support = 0.05)
+    amos.library.borrow(name)().apply(mixed)
+    _check(mixed, name, tmp_path)
+
+
+def test_plots_draw_the_table_named_by_source(fitted: amos.Dataset) -> None:
+    amos.evaluators.PCA(name = 'components').apply(fitted)
+    plots.ScreePlot().apply(fitted, source = 'components')
+    assert 'pca' not in fitted.tables
+    bars = fitted.figures['scree_plot'].axes[0].patches
+    assert len(bars) == len(fitted.tables['components'])
+    amos.describers.Correlations(name = 'ranks').apply(
+        fitted, method = 'spearman')
+    plots.CorrelationHeatmap().apply(fitted, source = 'ranks')
+    with pytest.raises(KeyError, match = 'no table named'):
+        plots.ConfusionHeatmap().apply(fitted, source = 'missing')
+
+
+def test_distribution_plots_draw_every_column(mixed: amos.Dataset) -> None:
+    plots.DistributionPlots().apply(mixed)
+    axes = [
+        a for a in mixed.figures['distribution_plots'].axes if a.get_visible()]
+    assert [a.get_title() for a in axes] == list(mixed.data.columns)
+    # The counts of rows of every panel share their range, from 0.
+    assert len({a.get_ylim() for a in axes}) == 1
+    assert axes[0].get_ylim()[0] == 0
+
+
+def test_frequency_plots_draw_the_share_of_each_value(
+    mixed: amos.Dataset) -> None:
+    plots.FrequencyPlots().apply(mixed, top = 2)
+    region, member = mixed.figures['frequency_plots'].axes
+    assert region.get_title() == 'region'
+    assert len(region.patches) == 2
+    assert member.get_xlim() == region.get_xlim()
+
+
+def test_missing_bars_draw_only_columns_with_missing_values(
+    mixed: amos.Dataset,
+    classified: amos.Dataset) -> None:
+    plots.MissingBars().apply(mixed)
+    axes = mixed.figures['missing_bars'].axes[0]
+    assert [t.get_text() for t in axes.get_yticklabels()] == ['age']
+    plots.MissingBars().apply(classified)
+    axes = classified.figures['missing_bars'].axes[0]
+    assert axes.texts[0].get_text() == 'no values are missing'
+
+
+def test_box_plots_that_are_not_split(mixed: amos.Dataset) -> None:
+    plots.BoxPlots().apply(mixed, columns = ['age'], split = False)
+    axes = mixed.figures['box_plots'].axes[0]
+    assert axes.get_xlabel() == ''
+    assert axes.get_legend() is None
+
+
+def test_estimates_plot_draws_every_model_of_an_experiment(
+    classified: amos.Dataset) -> None:
+    experiment = amos.Experiment(
+        name = 'analyst', criteria = amos.metrics.Accuracy())
+    experiment.populate([[
+        amos.models.Baseline(name = 'baseline'),
+        amos.models.Logit(name = 'logit')]])
+    result = experiment.apply(classified)
+    amos.evaluators.RegressionTable().apply(result, simulations = 5)
+    plots.EstimatesPlot().apply(result)
+    figure = result.figures['estimates_plot']
+    labels = [t.get_text() for t in figure.legends[0].get_texts()]
+    assert len(labels) == 2
+    assert figure.axes[0].get_xlim()[0] <= 0 <= figure.axes[0].get_xlim()[1]
+
+
+def test_causal_graph_needs_a_table_of_links(fitted: amos.Dataset) -> None:
+    requires('tigramite')
+    with pytest.raises(amos.IncompatibleTechniqueError, match = 'pcmci'):
+        plots.CausalGraph().apply(fitted)
+
+
+def test_make_figure_does_not_add_the_figure(fitted: amos.Dataset) -> None:
+    history = list(fitted.history)
+    figure = plots.RocCurve().make_figure(fitted, width = 3, height = 2)
+    assert list(figure.get_size_inches()) == [3, 2]
+    assert 'roc_curve' not in fitted.figures
+    assert fitted.history == history

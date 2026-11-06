@@ -28,6 +28,8 @@ Contents:
         that `Project.export` saves.
     _REPLICATION_SUFFIX: added to the name of a project to name the settings
         file of its winning paths.
+    _SCIENTIFIC_LIMIT: order of magnitude from which the axes of SHAP plots
+        show numbers in scientific notation.
     _STUDIES_FOLDER: folder of the workspace for each run's results.
     _WORKSPACE_VARIABLE: environment variable that can name the workspace.
 
@@ -126,6 +128,11 @@ _REPLICATION_FORMAT: str = 'json'
 # Added to the name of a project to name the settings file of its winning
 # paths (such as "cancer_replication.json").
 _REPLICATION_SUFFIX: str = '_replication'
+# Order of magnitude from which the axes of SHAP plots show numbers in
+# scientific notation (6 is a million). Smaller numbers, however small, are
+# written out in full, so that the ticks of small SHAP values are not
+# written as whole numbers with a power of 10 beside the axis.
+_SCIENTIFIC_LIMIT: int = 6
 # Packages whose versions are written to "environment.json" by
 # `Project.export`, if they are installed.
 _RECORDED_PACKAGES: tuple[str, ...] = (

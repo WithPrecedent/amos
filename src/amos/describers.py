@@ -3,7 +3,10 @@
 These are the techniques of the "explorer" stage of a project. Each one adds a
 table to the dataset's `tables` (under the technique's name) and leaves the
 data unchanged. They describe every row, so use them before the data is split
-or to describe the data as it was collected.
+or to describe the data as it was collected. Pass `visualize = True` (or set
+"visualize_explorers" in the "general" section of the settings) and each one
+also draws its table as a figure in the dataset's `figures`, under its name
+(see `base.Visualizer`).
 
 Contents:
     Describer: base class for techniques that describe data with a table.
@@ -26,8 +29,8 @@ from __future__ import annotations
 import abc
 import dataclasses
 import statistics
-from collections.abc import Sequence
-from typing import Any, Literal, TypeAlias
+from collections.abc import Mapping, Sequence
+from typing import Any, ClassVar, Literal, TypeAlias
 
 import numpy as np
 import pandas as pd
@@ -39,11 +42,13 @@ CorrelationMethod: TypeAlias = Literal['pearson', 'kendall', 'spearman']
 
 
 @dataclasses.dataclass
-class Describer(base.Operation, abc.ABC):
+class Describer(base.Operation, base.Visualizer, abc.ABC):
     """Base class for techniques that describe data with a table.
 
     A subclass writes a `describe` method, which returns a `DataFrame`. It is
-    stored in the dataset's `tables` under the technique's name.
+    stored in the dataset's `tables` under the technique's name. A subclass
+    names the plot that draws its table as `visual`, which `apply` uses if
+    it is given `visualize` (see `base.Visualizer`).
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -53,6 +58,8 @@ class Describer(base.Operation, abc.ABC):
             `dict`.
 
     """
+
+    stage_setting: ClassVar[str] = 'visualize_explorers'
 
     """ Required Methods """
 
@@ -71,19 +78,30 @@ class Describer(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(
+        self,
+        item: base.Dataset,
+        *,
+        visualize: bool = False,
+        **kwargs: Any) -> base.Dataset:
         """Adds the table from `describe` to the tables of `item`.
 
         Args:
             item: the dataset to describe.
+            visualize: whether to draw the table as a figure (with the plot
+                named by `visual`), which is added to the figures of `item`
+                under the technique's name. The dataset's
+                `visualize_explorers` (the setting of the "general" section)
+                replaces it, if it is set. Defaults to `False`.
             **kwargs: parameters for `describe`.
 
         Returns:
-            The dataset, with the new table.
+            The dataset, with the new table (and figure).
 
         """
         item.tables[self.name] = self.describe(item, **kwargs)
         item.record(self.name, table = self.name)
+        self._visualize(item, visualize, kwargs)
         return item
 
 
@@ -110,6 +128,8 @@ class AssociationRules(Describer):
           from mlxtend, for the rules.
 
     """
+
+    visual: ClassVar[str] = 'association_rules_plot'
 
     def describe(
         self,
@@ -181,6 +201,8 @@ class Correlations(Describer):
 
     """
 
+    visual: ClassVar[str] = 'correlation_heatmap'
+
     def describe(
         self,
         item: base.Dataset,
@@ -215,6 +237,8 @@ class Describe(Describer):
 
     """
 
+    visual: ClassVar[str] = 'distribution_plots'
+
     def describe(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns `DataFrame.describe` for every column, transposed.
 
@@ -229,10 +253,30 @@ class Describe(Describer):
         """
         return item.data.describe(include = 'all').T
 
+    """ Private Methods """
+
+    def _visual_parameters(
+        self,
+        item: base.Dataset,
+        parameters: Mapping[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        """Returns the parameters of `distribution_plots`.
+
+        Args:
+            item: the dataset, with the technique's table.
+            parameters: the parameters that the technique was applied with.
+
+        Returns:
+            The columns that were described (every column of the data).
+
+        """
+        return {'columns': list(item.tables[self.name].index)}
+
 
 @dataclasses.dataclass
 class Frequencies(Describer):
     """The count and share of each value of the categorical columns."""
+
+    visual: ClassVar[str] = 'frequency_plots'
 
     def describe(
         self,
@@ -286,6 +330,8 @@ class KaplanMeier(Describer):
 
     """
 
+    visual: ClassVar[str] = 'survival_curves'
+
     def describe(
         self,
         item: base.Dataset,
@@ -315,10 +361,32 @@ class KaplanMeier(Describer):
             tables.append(steps[['group', 'time', 'survival', 'at_risk']])
         return pd.concat(tables, ignore_index = True)
 
+    """ Private Methods """
+
+    def _visual_parameters(
+        self,
+        item: base.Dataset,  # noqa: ARG002
+        parameters: Mapping[str, Any]) -> dict[str, Any]:
+        """Returns the parameters of `survival_curves`.
+
+        Args:
+            item: the dataset, with the technique's table.
+            parameters: the parameters that the technique was applied with.
+
+        Returns:
+            The "event" and "group" that the curves were estimated with.
+
+        """
+        return {
+            'event': parameters.get('event'),
+            'group': parameters.get('group')}
+
 
 @dataclasses.dataclass
 class LabelBalance(Describer):
     """The count and share of each value of the label."""
+
+    visual: ClassVar[str] = 'label_plot'
 
     def describe(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns the count and share of each value of the label.
@@ -337,10 +405,30 @@ class LabelBalance(Describer):
             'count': counts,
             'share': counts / counts.sum()})
 
+    """ Private Methods """
+
+    def _visual_parameters(
+        self,
+        item: base.Dataset,  # noqa: ARG002
+        parameters: Mapping[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        """Returns the parameters of `label_plot`, which draws the label.
+
+        Args:
+            item: the dataset, with the technique's table.
+            parameters: the parameters that the technique was applied with.
+
+        Returns:
+            No parameters.
+
+        """
+        return {}
+
 
 @dataclasses.dataclass
 class MissingValues(Describer):
     """The count and share of missing values in each column."""
+
+    visual: ClassVar[str] = 'missing_bars'
 
     def describe(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns the count and share of missing values in each column.
@@ -367,6 +455,8 @@ class Summarize(Describer):
     values, the median, the skew, and the kurtosis of each column.
 
     """
+
+    visual: ClassVar[str] = 'box_plots'
 
     def describe(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns summary statistics for the numeric and boolean columns.
@@ -397,6 +487,28 @@ class Summarize(Describer):
             'max': data.max(),
             'skew': data.skew(),
             'kurtosis': data.kurt()})
+
+    """ Private Methods """
+
+    def _visual_parameters(
+        self,
+        item: base.Dataset,
+        parameters: Mapping[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        """Returns the parameters of `box_plots`.
+
+        Args:
+            item: the dataset, with the technique's table.
+            parameters: the parameters that the technique was applied with.
+
+        Returns:
+            The numeric columns that were summarized (booleans are left out,
+                since a box of 0s and 1s says little), in boxes that are not
+                split.
+
+        """
+        columns = [
+            c for c in item.tables[self.name].index if c not in item.booleans]
+        return {'columns': columns, 'split': False}
 
 
 """ Public Functions """

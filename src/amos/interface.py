@@ -64,7 +64,10 @@ class Project(chrisjen.Project):
       a data file, or anything else that `Dataset.create` accepts. The
       "general" section of the settings can set the dataset's "label",
       "task", "seed", "groups", and "use_gpu" (which is `False` unless the
-      settings set it to true).
+      settings set it to true), and "visualize_explorers" and
+      "visualize_critics", which (if they are set) decide whether every
+      explorer and critic draws a figure of its table, whatever its own
+      `visualize` argument (see `base.Visualizer`).
     * A "pipeline" named in the settings (such as `pipeline =
       classification` in the "general" section) fills in the settings of the
       analyst, critic, and artist (see the `pipelines` module).
@@ -546,13 +549,19 @@ class Project(chrisjen.Project):
         Returns:
             A `Dataset`, with the "label", "task", "seed", and "groups" from
                 the "general" section of the settings if it did not have them,
-                and the "use_gpu" of the settings. If the settings do not set
-                "use_gpu", a `Dataset` keeps its own (which is `False` unless
-                it was made with `use_gpu = True`), and other data is `False`.
+                and the "use_gpu", "visualize_explorers", and
+                "visualize_critics" of the settings. If the settings do not
+                set "use_gpu", a `Dataset` keeps its own (which is `False`
+                unless it was made with `use_gpu = True`), and other data is
+                `False`. The same goes for the other two, which are `None`
+                (not set) unless the settings or the `Dataset` set them.
 
         """
         general = self.idea.get('general', {})
         use_gpu = general.get('use_gpu')
+        switches = {
+            name: general.get(name)
+            for name in ('visualize_explorers', 'visualize_critics')}
         if item is None:
             if not self._has_loader():
                 message = (
@@ -562,7 +571,8 @@ class Project(chrisjen.Project):
                 raise ValueError(message)
             # The loader applies the label, task, and groups, which an empty
             # dataset cannot have.
-            return base.Dataset(seed = general.get('seed'), use_gpu = use_gpu)
+            return base.Dataset(
+                seed = general.get('seed'), use_gpu = use_gpu, **switches)
         if isinstance(item, str | pathlib.Path):
             item = loaders.LoadFile(clerk = self.clerk).read(item)
         return base.Dataset.create(
@@ -571,7 +581,8 @@ class Project(chrisjen.Project):
             task = general.get('task'),
             seed = general.get('seed'),
             groups = general.get('groups'),
-            use_gpu = use_gpu)
+            use_gpu = use_gpu,
+            **switches)
 
 
 """ Private Functions """

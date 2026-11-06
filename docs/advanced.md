@@ -72,6 +72,8 @@ describes the "general" section in detail.
 | | `seed` | Seed for every random process (passed as `random_state`). |
 | | `groups` | Columns that identify groups of rows (see "Groups and fairness" below). |
 | | `use_gpu` | Whether to fit the models that can use a GPU (`xgboost`, `catboost`, `lightgbm`, and `tabpfn`) on an NVIDIA GPU. Defaults to false (see "Fitting models on a GPU" below). |
+| | `visualize_explorers` | Whether every explorer (describer) draws a figure of its table. If it is set, it replaces each explorer's `visualize` parameter; if not (the default), each explorer's own parameter (false unless set) decides (see "Figures of explorers and critics" below). |
+| | `visualize_critics` | Whether every critic (evaluator or inferer) draws a figure of its table. If it is set, it replaces each critic's `visualize` parameter; if not (the default), each critic's own parameter (false unless set) decides. |
 | | `conserve_memory` | Whether every experiment keeps only the best combination's whole dataset, rather than every combination's, while it tries them. A worker's own `conserve_memory` setting wins. Defaults to false (see "Experiments" below). |
 | | `pipeline` | A named pipeline (such as `classification` or `regression_inference`) that fills in the settings of the analyst, critic, and artist. It can also be in the project's section, or in the section of one of those workers for that worker alone. Settings that you write win. See [pipeline](idea.md#pipeline). |
 | `files` | `root_folder` | The workspace, which the other folders are in. Defaults to the folder that holds the "code" folder (see "Where data and results are kept" below). |
@@ -151,6 +153,7 @@ A `Dataset` has these attributes:
 | `seed` | Seed for every random process. |
 | `groups` | Columns that identify groups of rows. They stay in the data but are not features. |
 | `use_gpu` | Whether the models that can use a GPU are fitted on one. |
+| `visualize_explorers`, `visualize_critics` | Whether every explorer (or critic) draws a figure of its table, or `None` to leave it to each technique's `visualize`. |
 | `train`, `test` | Index labels of the training and test rows. `test` is `None` until the data is split. |
 | `synthetic` | Index labels of the training rows that a sampler made up (synthetic rows and extra copies of a row). |
 | `model` | The fitted model. |
@@ -1482,21 +1485,24 @@ into a few families:
 
 | Family | Plots |
 | --- | --- |
-| The data | `histograms`, `box_plots`, `count_plots`, `pair_plot`, `correlation_heatmap`, `missing_heatmap`, `label_plot` |
-| Classifiers | `roc_curve`, `precision_recall_curve`, `det_curve`, `calibration_curve`, `confusion_heatmap` |
-| Regressions | `actual_vs_predicted`, `residual_plot`, `qq_plot`, `influence_plot`, `coefficient_plot` |
-| Models | `importance_plot`, `partial_dependence`, `decision_regions`, `learning_curve`, `validation_curve`, `search_plot`, `prediction_intervals`, `shape_functions` |
+| The data | `histograms`, `box_plots`, `count_plots`, `distribution_plots`, `frequency_plots`, `pair_plot`, `correlation_heatmap`, `missing_heatmap`, `missing_bars`, `label_plot`, `association_rules_plot`, `scree_plot`, `loadings_heatmap` |
+| Classifiers | `roc_curve`, `precision_recall_curve`, `det_curve`, `calibration_curve`, `confusion_heatmap`, `classification_report_heatmap` |
+| Regressions | `actual_vs_predicted`, `residual_plot`, `qq_plot`, `influence_plot`, `coefficient_plot`, `estimates_plot` |
+| Models | `importance_plot`, `weights_plot`, `partial_dependence`, `decision_regions`, `learning_curve`, `validation_curve`, `search_plot`, `prediction_intervals`, `bias_variance_plot`, `scorecard_plot`, `shape_functions` |
 | Trees | `tree_plot`, `tree_leaf_sizes`, `tree_leaf_distributions`, `tree_leaf_purity`, `tree_feature_space`, `tree_prediction_path` |
 | SHAP values | `shap_bar`, `shap_beeswarm`, `shap_violin`, `shap_heatmap`, `shap_decision`, `shap_embedding`, `shap_waterfall`, `shap_force`, `shap_scatter`, `shap_partial_dependence`, `shap_group_difference` |
-| Groups and time | `fairness_plot`, `survival_curves` |
+| Groups and time | `fairness_plot`, `survival_curves`, `causal_graph` |
 
 Plots of the data are split or colored by the label's classes (or by the
 dataset's first group, or by the column "by"). Plots of a table, such as
 `coefficient_plot` (of the coefficients of `ols`, `glm`, `fixest`, or `cox`,
 or of an inferer), `search_plot`, `fairness_plot`, and `prediction_intervals`,
-draw the table that another technique made, and the last two make it if it
-is missing. `learning_curve` and `validation_curve` fit copies of a
-scikit-learn model again, in cross-validation on the training rows.
+draw the table that another technique made. Most of them make the table if
+it is missing (`coefficient_plot`, `search_plot`, and `causal_graph` cannot),
+and each takes a "source", the name of the table to draw, for a technique
+that was given a name of its own. `learning_curve` and `validation_curve` fit
+copies of a scikit-learn model again, in cross-validation on the training
+rows.
 
 In the workflow of a `Project` or an `Experiment`, a plot or evaluator that
 does not suit the model (such as a `tree_plot` of a logit, or a
@@ -1549,6 +1555,74 @@ for plot in (amos.plots.TreeLeafSizes(), amos.plots.DecisionRegions()):
 print(sorted(trees.figures))
 # ['decision_regions', 'tree_leaf_sizes']
 ```
+
+### Figures of explorers and critics
+
+The explorers and critics make tables, and each can also draw its table, in
+the same style as every plot. Pass `visualize = True` to `apply` (or set
+`visualize = true` in the technique's parameters), and the figure is stored
+in the dataset's `figures` under the technique's name, and the technique's
+entry in `history` has "figure". `visualize` is false unless it is set, so
+nothing is drawn by default.
+
+```python
+explored = amos.Dataset.create(cancer, seed = 43)
+amos.describers.Correlations().apply(explored, visualize = True)
+amos.describers.Summarize().apply(explored)
+print(sorted(explored.figures), explored.history[0]["figure"])
+# ['correlations'] correlations
+```
+
+To draw every figure of a stage, set "visualize_explorers" or
+"visualize_critics" in the "general" section of the settings (or pass them
+to `Dataset` or `Dataset.create`). If either is set, it replaces the
+`visualize` of every technique of its stage: true draws every figure, and
+false draws none, even if a technique's parameters ask for it. If it is not
+set (the default), each technique's own `visualize` decides.
+
+```python
+explored.visualize_explorers = True
+amos.describers.Summarize().apply(explored)
+explored.visualize_explorers = False
+amos.describers.MissingValues().apply(explored, visualize = True)
+print(sorted(explored.figures))
+# ['correlations', 'summarize']
+```
+
+Each technique draws its table with the plot that suits it:
+
+| Technique | Figure |
+| --- | --- |
+| `association_rules` | `association_rules_plot`: each rule's support against its confidence, colored by its lift. |
+| `correlations` | `correlation_heatmap` of the table. |
+| `describe` | `distribution_plots`: a histogram of each column of numbers or dates, and bars of the most common values of each other column. |
+| `frequencies` | `frequency_plots`: the share of the rows with each value, a panel for each column. |
+| `kaplan_meier` | `survival_curves`, with the same "event" and "group". |
+| `label_balance` | `label_plot`. |
+| `missing_values` | `missing_bars`: the share of each column's values that are missing. |
+| `summarize` | `box_plots` of the numeric columns, not split by class. |
+| `bias_variance` | `bias_variance_plot`: the expected loss, the bias, and the variance. |
+| `classification_report` | `classification_report_heatmap`: the precision, recall, and f1 of each class. |
+| `confusion` | `confusion_heatmap` of the table. |
+| `conformal` | `prediction_intervals`. |
+| `explain_weights` | `weights_plot`: the weight of each feature. |
+| `factor_analysis` | `loadings_heatmap`: the loadings of each feature on each factor. |
+| `fairness` | `fairness_plot`. |
+| `feature_importance`, `permutation_importance`, `shap_importance` | `importance_plot` of the table. |
+| `pca` | `scree_plot`: each component's share of the variance, and their cumulative share. |
+| `regression_table` | `estimates_plot`: every model's estimates with their confidence intervals. |
+| `scorecard` | `scorecard_plot`: each branch's score on each metric. |
+| An inferer that estimates effects | `coefficient_plot` of the effects. |
+| `pcmci`, `pcmci_plus`, `lpcmci` | `causal_graph`: tigramite's graph of the causal links. |
+
+These plots are ordinary plots too, so the artist can draw them, and each
+makes the table it draws if it is missing (except `causal_graph`, which
+needs a table of links). A figure that cannot be drawn (because the `plots`
+extra is not installed, or the plot does not suit the table) does not stop
+the technique: a warning is logged, the table is kept, and its entry in
+`history` has the reason as "figure_error". Every plot's `make_figure`
+returns its figure without adding it to the dataset, which is how the
+explorers and critics draw theirs.
 
 ### Axes
 

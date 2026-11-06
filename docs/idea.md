@@ -211,6 +211,8 @@ Every setting in it is optional.
 | `seed` | A whole number | None | Seed for every random process, which makes the results reproducible. |
 | `groups` | A column name, or a list of them | None | Columns that identify groups of rows, which are not used as features. |
 | `use_gpu` | true or false | false | Whether to fit the models that can use a GPU on an NVIDIA GPU. |
+| `visualize_explorers` | true or false | Not set (false) | Whether every explorer draws a figure of its table, whatever its own `visualize` parameter. |
+| `visualize_critics` | true or false | Not set (false) | Whether every critic draws a figure of its table, whatever its own `visualize` parameter. |
 | `conserve_memory` | true or false | false | Whether every experiment keeps only the best combination's whole dataset while it tries them. |
 | `pipeline` | The name of a pipeline | None | Fills in the settings of the analyst, critic, and artist for a kind of study. |
 
@@ -221,8 +223,9 @@ data:
 * If you pass data (such as a `DataFrame` or the path to a data file), the
   dataset is made with these settings.
 * If you pass a `Dataset`, it keeps its own label, task, seed, and groups,
-  and the settings fill in only those it lacks. "use_gpu" replaces the
-  dataset's own if it is set.
+  and the settings fill in only those it lacks. "use_gpu",
+  "visualize_explorers", and "visualize_critics" replace the dataset's own
+  if they are set.
 * If the workflow loads its own data with a loader (such as `load_file`),
   "label", "task", and "groups" are the loader's default parameters, and
   "seed" is the dataset's seed. Parameters in the loader's own section take
@@ -404,6 +407,56 @@ technique runs on the CPU either way. It must be true or false, or an error
 is raised. See [Fitting models on a GPU](advanced.md#fitting-models-on-a-gpu)
 for the details, including how to keep one model on the CPU and which GPUs
 need older packages.
+
+### visualize_explorers and visualize_critics
+
+Every explorer (a describer, such as `summarize`) and every critic (an
+evaluator, such as `confusion`, or an inferer, such as `partially_linear`)
+can draw a figure of the table it makes, if it is given `visualize = true`.
+The figure is drawn in the style of every plot and stored in the dataset's
+`figures` under the technique's name, so `Project.export` saves it. Each
+technique draws the figure that suits its table: `correlations` draws a
+`correlation_heatmap`, `confusion` a `confusion_heatmap`, `pca` a
+`scree_plot`, an inferer a `coefficient_plot` of its effects, and so on (the
+[advanced guide](advanced.md#figures-of-explorers-and-critics) lists them).
+
+`visualize` is false unless you set it, for one technique, in its
+parameters:
+
+```ini
+[summarize_parameters]
+visualize = true
+```
+
+To draw the figures of a whole stage, set "visualize_explorers" or
+"visualize_critics" in the "general" section. When either is set, it
+replaces the `visualize` parameter of every technique of its stage: true
+draws every figure, and false draws none, even for a technique whose
+parameters ask for one. When it is not set (the default), each technique's
+own `visualize` decides, so no figures are drawn unless one asks.
+
+```ini
+[general]
+label = target
+visualize_explorers = true
+visualize_critics = true
+```
+
+```python
+settings = {
+    "general": {"label": "target", "seed": 43, "visualize_explorers": True},
+    "cancer_project": {"cancer_workers": ["explorer"]},
+    "explorer": {"techniques": "summarize, missing_values"},
+}
+project = amos.Project.create(settings, item = data)
+print(sorted(project.result.figures))
+# ['missing_values', 'summarize']
+```
+
+Each must be true or false, or an error is raised. A figure that cannot be
+drawn (because the `plots` extra is not installed, say) does not stop the
+technique: a warning is logged, its table is kept, and its entry in the
+dataset's `history` has the reason as "figure_error".
 
 ### conserve_memory
 

@@ -141,7 +141,8 @@ class Loader(base.Operation, abc.ABC):
             ValueError: if there is no "source".
 
         Returns:
-            The loaded data, with the seed and history of `item`.
+            The loaded data, with the seed, history, and switches (such as
+                `use_gpu` and `visualize_critics`) of `item`.
 
         """
         source = kwargs.pop('source', None)
@@ -162,7 +163,9 @@ class Loader(base.Operation, abc.ABC):
             task = task,
             seed = item.seed,
             groups = groups,
-            use_gpu = item.use_gpu)
+            use_gpu = item.use_gpu,
+            visualize_explorers = item.visualize_explorers,
+            visualize_critics = item.visualize_critics)
         loaded.history = item.history
         rows, columns = loaded.data.shape
         loaded.record(

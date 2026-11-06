@@ -4,7 +4,10 @@ These are techniques of the "critic" stage. Each one adds a table to the
 dataset's `tables` (under the technique's name). Most evaluate the model on
 the test rows (or on every row, if the data has not been split).
 `factor_analysis` and `pca` instead describe the features that the model
-learned from, so they work in any stage.
+learned from, so they work in any stage. Pass `visualize = True` (or set
+"visualize_critics" in the "general" section of the settings) and each one
+also draws its table as a figure in the dataset's `figures`, under its name
+(see `base.Visualizer`).
 
 Contents:
     Evaluator: base class for techniques that evaluate a model with a table.
@@ -95,11 +98,13 @@ _LATEX_ESCAPES: dict[int, str] = str.maketrans({
 
 
 @dataclasses.dataclass
-class Evaluator(base.Operation, abc.ABC):
+class Evaluator(base.Operation, base.Visualizer, abc.ABC):
     """Base class for techniques that evaluate a model with a table.
 
     A subclass writes an `evaluate` method, which returns a `DataFrame`. It is
-    stored in the dataset's `tables` under the technique's name.
+    stored in the dataset's `tables` under the technique's name. A subclass
+    names the plot that draws its table as `visual`, which `apply` uses if
+    it is given `visualize` (see `base.Visualizer`).
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -109,6 +114,8 @@ class Evaluator(base.Operation, abc.ABC):
             `dict`.
 
     """
+
+    stage_setting: ClassVar[str] = 'visualize_critics'
 
     """ Required Methods """
 
@@ -127,19 +134,30 @@ class Evaluator(base.Operation, abc.ABC):
 
     """ Public Methods """
 
-    def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
+    def apply(
+        self,
+        item: base.Dataset,
+        *,
+        visualize: bool = False,
+        **kwargs: Any) -> base.Dataset:
         """Adds the table from `evaluate` to the tables of `item`.
 
         Args:
             item: the dataset with a fitted model.
+            visualize: whether to draw the table as a figure (with the plot
+                named by `visual`), which is added to the figures of `item`
+                under the technique's name. The dataset's
+                `visualize_critics` (the setting of the "general" section)
+                replaces it, if it is set. Defaults to `False`.
             **kwargs: parameters for `evaluate`.
 
         Returns:
-            The dataset, with the new table.
+            The dataset, with the new table (and figure).
 
         """
         item.tables[self.name] = self.evaluate(item, **kwargs)
         item.record(self.name, table = self.name)
+        self._visualize(item, visualize, kwargs)
         return item
 
 
@@ -517,6 +535,8 @@ class BiasVariance(Evaluator):
 
     """
 
+    visual: ClassVar[str] = 'bias_variance_plot'
+
     def evaluate(
         self,
         item: base.Dataset,
@@ -586,6 +606,8 @@ class ClassificationReport(Evaluator):
 
     """
 
+    visual: ClassVar[str] = 'classification_report_heatmap'
+
     def evaluate(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns scikit-learn's classification report as a table.
 
@@ -613,6 +635,8 @@ class Confusion(Evaluator):
         from scikit-learn.
 
     """
+
+    visual: ClassVar[str] = 'confusion_heatmap'
 
     def evaluate(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns the confusion matrix.
@@ -657,6 +681,8 @@ class Conformal(Evaluator):
           from MAPIE, to regress.
 
     """
+
+    visual: ClassVar[str] = 'prediction_intervals'
 
     def evaluate(
         self,
@@ -732,7 +758,8 @@ class Conformal(Evaluator):
 
         Args:
             item: the dataset with a fitted model.
-            **kwargs: parameters for `evaluate`.
+            **kwargs: parameters for `evaluate`, and `visualize` (see
+                `Evaluator.apply`).
 
         Returns:
             The dataset, with the table in `tables` and the coverage in
@@ -763,6 +790,8 @@ class ExplainWeights(Evaluator):
         from eli5.
 
     """
+
+    visual: ClassVar[str] = 'weights_plot'
 
     def evaluate(
         self,
@@ -815,6 +844,8 @@ class FactorAnalysis(Evaluator):
         from statsmodels.
 
     """
+
+    visual: ClassVar[str] = 'loadings_heatmap'
 
     def evaluate(
         self,
@@ -877,6 +908,8 @@ class Fairness(Evaluator):
 
     """
 
+    visual: ClassVar[str] = 'fairness_plot'
+
     def evaluate(
         self,
         item: base.Dataset,
@@ -930,6 +963,8 @@ class FeatureImportance(Evaluator):
     `permutation_importance`.
 
     """
+
+    visual: ClassVar[str] = 'importance_plot'
 
     def evaluate(self, item: base.Dataset, **kwargs: Any) -> pd.DataFrame:
         """Returns the importance of each feature, largest first.
@@ -992,6 +1027,8 @@ class PCA(Evaluator):
         from statsmodels.
 
     """
+
+    visual: ClassVar[str] = 'scree_plot'
 
     def evaluate(
         self,
@@ -1060,6 +1097,8 @@ class PermutationImportance(Evaluator):
         from scikit-learn.
 
     """
+
+    visual: ClassVar[str] = 'importance_plot'
 
     def evaluate(
         self,
@@ -1209,6 +1248,8 @@ class RegressionTable(_Published, Evaluator):
 
     """
 
+    visual: ClassVar[str] = 'estimates_plot'
+
     title: str | None = None
     digits: int = 3
     stars: tuple[float, ...] = (0.1, 0.05, 0.01)
@@ -1327,7 +1368,8 @@ class RegressionTable(_Published, Evaluator):
 
         Args:
             item: the dataset with a fitted model.
-            **kwargs: parameters for `evaluate`.
+            **kwargs: parameters for `evaluate`, and `visualize` (see
+                `Evaluator.apply`).
 
         Returns:
             The dataset, with the estimates in `tables` under the technique's
@@ -2001,6 +2043,8 @@ class Scorecard(_Published, Evaluator):
 
     """
 
+    visual: ClassVar[str] = 'scorecard_plot'
+
     title: str | None = None
     digits: int = 3
     table: pd.DataFrame | None = dataclasses.field(default = None, repr = False)
@@ -2150,7 +2194,8 @@ class Scorecard(_Published, Evaluator):
             item: the dataset with a fitted model.
             metrics: names of the metrics to use. Defaults to `None`, which
                 uses `defaults` for the task.
-            **kwargs: other parameters for `evaluate`.
+            **kwargs: other parameters for `evaluate`, and `visualize` (see
+                `Evaluator.apply`).
 
         Returns:
             The dataset, with the scorecard in `tables` and the final model's
@@ -2281,6 +2326,8 @@ class ShapImportance(Evaluator):
         from shap.
 
     """
+
+    visual: ClassVar[str] = 'importance_plot'
 
     def evaluate(
         self,

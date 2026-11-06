@@ -11,19 +11,25 @@ shown by making it the last line of a cell.
 
 Every plot accepts "width" and "height" (in inches) and "title" parameters,
 and "style", "colors", "latex", and "start_at_zero" parameters that set how
-it looks (see `Plot.apply`). The axes start at 0 unless they show something
-with no natural zero (such as the values of a feature, the label of a
-regression, or the parameters of a model), and the panels of a plot that
-measure the same thing share their ranges. By default, figures have
+it looks (see `Plot.make_figure`). The axes start at 0 unless they show
+something with no natural zero (such as the values of a feature, the label
+of a regression, or the parameters of a model), and the panels of a plot
+that measure the same thing share their ranges. By default, figures have
 SciencePlots' style for scientific figures, with the size and fonts of a
 figure in Nature, and a cycle of colors that people with color blindness can
-tell apart.
+tell apart. Explorers and critics draw their tables with these plots, in the
+same style, when they are given `visualize` (see `base.Visualizer`).
 
 Contents:
     Plot: base class for techniques that draw a figure.
     ActualVsPredicted: the label against the predictions (regression).
+    AssociationRulesPlot: the support and confidence of each association
+        rule, colored by lift.
+    BiasVariancePlot: the model's expected loss, bias, and variance.
     BoxPlots: each numeric feature as a box, split by class.
     CalibrationCurve: the share in each class against its probability.
+    CausalGraph: the causal links that tigramite found, as a graph.
+    ClassificationReportHeatmap: the precision, recall, and f1 of each class.
     CoefficientPlot: coefficients with their confidence intervals.
     ConfusionHeatmap: the confusion matrix as a heatmap (classification).
     CorrelationHeatmap: the correlations between numeric columns.
@@ -31,12 +37,17 @@ Contents:
     DecisionRegions: the class predicted across two features
         (classification).
     DetCurve: the detection error tradeoff curve (classification).
+    DistributionPlots: the distribution of every column.
+    EstimatesPlot: every model's estimates in a regression table.
     FairnessPlot: the model's fairness metrics for each group.
+    FrequencyPlots: the share of the rows with each value of each column.
     Histograms: the distribution of each numeric feature.
     ImportancePlot: the most important features, as bars.
     InfluencePlot: the influence of each row on a statsmodels regression.
     LabelPlot: the distribution of the label.
     LearningCurve: the model's score as it learns from more rows.
+    LoadingsHeatmap: how strongly each feature loads on each factor.
+    MissingBars: the share of each column's values that are missing.
     MissingHeatmap: where values are missing.
     PairPlot: each pair of numeric features against each other.
     PartialDependence: the average prediction as features change.
@@ -45,6 +56,8 @@ Contents:
     QqPlot: the quantiles of the residuals against a normal distribution's.
     ResidualPlot: the errors against the predictions (regression).
     RocCurve: the ROC curve (classification).
+    ScorecardPlot: each branch's score on each metric of a scorecard.
+    ScreePlot: the share of the variance of each principal component.
     SearchPlot: the score of each try in a hyperparameter search.
     ShapBar: the mean absolute SHAP value of the most important features.
     ShapBeeswarm: the SHAP value of each row for the most important features.
@@ -67,6 +80,7 @@ Contents:
     TreePredictionPath: how much each feature decides one row's path down a
         decision tree.
     ValidationCurve: the model's score as one of its parameters changes.
+    WeightsPlot: the weights of the features that eli5 explains.
 
 """
 
@@ -107,6 +121,13 @@ _FONT_SIZES: tuple[str, ...] = (
 _INFLUENCE: frozenset[str] = frozenset({'glm', 'ols'})
 # Columns of a table of coefficients that a `coefficient_plot` draws.
 _INTERVAL_COLUMNS: tuple[str, ...] = ('coefficient', 'ci_lower', 'ci_upper')
+# Columns of a table of causal links that a `causal_graph` draws.
+_LINK_COLUMNS: tuple[str, ...] = ('cause', 'effect', 'lag', 'link', 'strength')
+# Most cells of a heatmap that are labeled with their numbers.
+_ANNOTATED_CELLS: int = 100
+# Swaps the ends of a link of tigramite's (such as "o->"), which is read
+# backward from its other end (as "<-o").
+_REVERSED_ENDS: dict[int, int] = str.maketrans('<>', '><')
 # The warning of scikit-learn when a model that learned from named features
 # is given an array.
 _UNNAMED_WARNING: str = 'X does not have valid feature names'
@@ -193,11 +214,66 @@ class Plot(base.Operation, abc.ABC):
         **kwargs: Any) -> base.Dataset:
         """Draws a figure in a style and adds it to the figures of `item`.
 
-        The ranges of the axes in `starts_at_zero` are widened to start at 0,
-        and the panels of a plot share the ranges of its `shared_axes`. An
-        axis that is not a linear scale of numbers (such as one of names,
-        dates, or a logarithmic scale), and an axis of an image (such as a
-        heatmap), are left as they are.
+        The figure is drawn by `make_figure`, which describes the parameters.
+
+        Args:
+            item: the dataset to draw.
+            width: width of the figure in inches. Defaults to `None`, which
+                uses the plot's usual width for the style.
+            height: height of the figure in inches. Defaults to `None`, which
+                uses the plot's usual height for the style.
+            title: title of the figure. Defaults to `None`.
+            style: names of `matplotlib` or SciencePlots styles, or "xkcd".
+                Defaults to `options._PLOT_STYLE`.
+            colors: name of a color cycle. Defaults to
+                `options._PLOT_COLORS`.
+            latex: whether to set the text with LaTeX. Defaults to `False`.
+            start_at_zero: the axes whose ranges start at 0. Defaults to
+                `None`, which uses the plot's `starts_at_zero`.
+            **kwargs: parameters for `draw`.
+
+        Returns:
+            The dataset, with the new figure.
+
+        Raises:
+            ValueError: if `start_at_zero` names an axis that is not "x" or
+                "y".
+
+        """
+        item.figures[self.name] = self.make_figure(
+            item,
+            width,
+            height,
+            title,
+            style = style,
+            colors = colors,
+            latex = latex,
+            start_at_zero = start_at_zero,
+            **kwargs)
+        item.record(self.name, figure = self.name)
+        return item
+
+    def make_figure(
+        self,
+        item: base.Dataset,
+        width: float | None = None,
+        height: float | None = None,
+        title: str | None = None,
+        *,
+        style: str | Sequence[str] | None = options._PLOT_STYLE,
+        colors: str | None = options._PLOT_COLORS,
+        latex: bool = False,
+        start_at_zero: str | None = None,
+        **kwargs: Any) -> Any:
+        """Returns a figure drawn in a style, without adding it to `item`.
+
+        `apply` stores the figure in the dataset's `figures`, and explorers
+        and critics use this to draw the figures of their tables (see
+        `base.Visualizer`). The ranges of the axes in `starts_at_zero` are
+        widened to start at 0, and the panels of a plot share the ranges of
+        its `shared_axes`. An axis that is not a linear scale of numbers
+        (such as one of names, dates, or a logarithmic scale), and an axis of
+        an image (such as a heatmap), are left as they are.
 
         Args:
             item: the dataset to draw.
@@ -228,7 +304,7 @@ class Plot(base.Operation, abc.ABC):
             **kwargs: parameters for `draw`.
 
         Returns:
-            The dataset, with the new figure.
+            The `matplotlib.figure.Figure`.
 
         Raises:
             ValueError: if `start_at_zero` names an axis that is not "x" or
@@ -279,9 +355,7 @@ class Plot(base.Operation, abc.ABC):
             _fix_colors(figure)
             _hide_minor_ticks(figure)
             figure.draw_without_rendering()
-        item.figures[self.name] = figure
-        item.record(self.name, figure = self.name)
-        return item
+        return figure
 
 
 @dataclasses.dataclass
@@ -309,12 +383,96 @@ class ActualVsPredicted(Plot):
 
 
 @dataclasses.dataclass
+class AssociationRulesPlot(Plot):
+    """The support and confidence of each association rule, colored by lift.
+
+    Draws the table made by `association_rules` (which is applied if it has
+    not been, or the table named by "source"): a dot for each rule, at the
+    share of the rows that have all of its items (its support) and the share
+    of the rows with its antecedents that also have its consequents (its
+    confidence), colored by its lift. The strongest rules are at the top
+    right, in the brightest colors.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        **kwargs: Any) -> None:
+        """Draws a dot for each rule.
+
+        Args:
+            item: the dataset to draw.
+            figure: the figure to draw on.
+            source: name of the table of rules. Defaults to `None`, which
+                uses the table named "association_rules", or makes it.
+            **kwargs: not used.
+
+        """
+        table = _table(
+            item, source, 'association_rules',
+            describers.AssociationRules().describe)
+        axes = figure.subplots()
+        if len(table):
+            points = axes.scatter(
+                table['support'], table['confidence'], c = table['lift'],
+                cmap = 'viridis', s = 12)
+            figure.colorbar(points, ax = axes, label = 'lift')
+        axes.set_xlabel('support')
+        axes.set_ylabel('confidence')
+
+
+@dataclasses.dataclass
+class BiasVariancePlot(Plot):
+    """The model's expected loss, beside its bias and variance, as bars.
+
+    Draws the table made by `bias_variance` (which is applied if it has not
+    been, or the table named by "source"). For the mean squared error of a
+    regression, the expected loss is the bias (squared) plus the variance;
+    for the share of a classifier's errors, it is not their sum, but the bars
+    still show which of the two is larger.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        **kwargs: Any) -> None:
+        """Draws the expected loss, the bias, and the variance.
+
+        Args:
+            item: the dataset with a fitted scikit-learn model and test rows.
+            figure: the figure to draw on.
+            source: name of the table to draw. Defaults to `None`, which uses
+                the table named "bias_variance", or makes it.
+            **kwargs: not used.
+
+        """
+        table = _table(
+            item, source, 'bias_variance', evaluators.BiasVariance().evaluate)
+        row = table.iloc[0]
+        axes = figure.subplots()
+        axes.bar(
+            ['expected loss', 'bias', 'variance'],
+            [row['expected_loss'], row['bias'], row['variance']],
+            color = ['C0', 'C1', 'C2'])
+        axes.set_ylabel(f'loss ({row["loss"]})')
+
+
+@dataclasses.dataclass
 class BoxPlots(Plot):
     """Each numeric feature as a box, split by class.
 
     Draws seaborn's box plot of each numeric feature (or of `columns`), in a
     grid. The boxes are split by the column `by`, or by the classes of the
-    label (for classification), or by the dataset's first group.
+    label (for classification), or by the dataset's first group, unless
+    `split` is `False`.
 
     Wraps:
         [`seaborn.boxplot`](https://seaborn.pydata.org/generated/seaborn.boxplot.html)
@@ -331,6 +489,7 @@ class BoxPlots(Plot):
         *,
         columns: Sequence[str] | None = None,
         by: str | None = None,
+        split: bool = True,
         limit: int = 16,
         **kwargs: Any) -> None:
         """Draws a box plot of each column.
@@ -342,13 +501,18 @@ class BoxPlots(Plot):
                 numeric features.
             by: column that splits the boxes. Defaults to `None`, which uses
                 the label's classes or the dataset's first group (if either).
+            split: whether to split the boxes. Defaults to `True`. If it is
+                `False`, each column is one box, and `by` is not used.
             limit: most columns to draw. Defaults to 16.
             **kwargs: not used.
 
         """
         seaborn = utilities.import_tool('seaborn')
         columns = list(item.numerics if columns is None else columns)[:limit]
-        data, by, order = _split(item, by)
+        if split:
+            data, by, order = _split(item, by)
+        else:
+            data, by, order = item.data, None, None
         for axes, column in zip(
             _grid(figure, len(columns)), columns, strict = True):
             seaborn.boxplot(
@@ -407,6 +571,136 @@ class CalibrationCurve(Plot):
                 name = name,
                 ref_line = number == 0,
                 ax = axes)
+
+
+@dataclasses.dataclass
+class CausalGraph(Plot):
+    """The causal links that tigramite found, as a graph of the variables.
+
+    Draws the table of links made by `pcmci`, `pcmci_plus`, or `lpcmci` (the
+    table named by "source", or the last table of links made) with
+    tigramite's `plot_graph`: a node for each variable (the features and the
+    label), colored by how strongly it depends on its own past, and an arrow
+    for each link between two variables, colored by its strength and
+    labeled with its lags. A link whose direction is not known is drawn
+    without an arrowhead.
+
+    Wraps:
+        [`tigramite.plotting.plot_graph`](https://jakobrunge.github.io/tigramite/#tigramite.plotting.plot_graph)
+        from tigramite.
+
+    """
+
+    starts_at_zero: ClassVar[str] = ''
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        **kwargs: Any) -> None:
+        """Draws the graph of the causal links.
+
+        Args:
+            item: the dataset with a table of causal links.
+            figure: the figure to draw on.
+            source: name of the table of links. Defaults to `None`, which
+                uses the last table of links made.
+            **kwargs: not used.
+
+        Raises:
+            IncompatibleTechniqueError: if no table of links was made and
+                `source` does not name one.
+
+        """
+        plotting = utilities.import_tool('tigramite.plotting')
+        matplotlib = importlib.import_module('matplotlib')
+        table = _links(item, source)
+        names = [
+            str(c) for c in item.data.columns
+            if c in item.features or c == item.label]
+        found = pd.unique(table[['cause', 'effect']].to_numpy().ravel())
+        names.extend(str(n) for n in found if str(n) not in names)
+        positions = {n: i for i, n in enumerate(names)}
+        lags = int(table['lag'].max()) if len(table) else 0
+        graph = np.full((len(names), len(names), lags + 1), '', dtype = '<U3')
+        strengths = np.zeros(graph.shape)
+        for cause, effect, lag, link, strength in table[
+            ['cause', 'effect', 'lag', 'link', 'strength']].itertuples(
+                index = False):
+            i, j = positions[str(cause)], positions[str(effect)]
+            graph[i, j, lag], strengths[i, j, lag] = link, strength
+            if lag == 0:
+                # tigramite lists a link at the same time from both ends.
+                graph[j, i, 0] = link[::-1].translate(_REVERSED_ENDS)
+                strengths[j, i, 0] = strength
+        limit = max(1.0, float(np.abs(strengths).max(initial = 0)))
+        # tigramite sizes its text in points, so it is given the style's.
+        text = matplotlib.rcParams['font.size']
+        ticks = matplotlib.rcParams['xtick.labelsize']
+        axes = figure.subplots()
+        plotting.plot_graph(
+            graph,
+            val_matrix = strengths,
+            var_names = names,
+            fig_ax = (figure, axes),
+            vmin_edges = -limit,
+            vmax_edges = limit,
+            vmin_nodes = -limit,
+            vmax_nodes = limit,
+            label_fontsize = text,
+            node_label_size = text,
+            link_label_fontsize = text,
+            tick_label_size = ticks,
+            link_colorbar_label = 'strength of the link',
+            node_colorbar_label = 'strength of its own past')
+
+
+@dataclasses.dataclass
+class ClassificationReportHeatmap(Plot):
+    """The precision, recall, and f1 of each class, as a heatmap.
+
+    Draws the table made by `classification_report` (which is applied if it
+    has not been, or the table named by "source"): a row for each class and
+    for the macro and weighted averages, and a column for each score, from
+    0 (pale) to 1 (dark).
+
+    Wraps:
+        [`seaborn.heatmap`](https://seaborn.pydata.org/generated/seaborn.heatmap.html)
+        from seaborn.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        **kwargs: Any) -> None:
+        """Draws the scores of each class.
+
+        Args:
+            item: the dataset with a fitted classifier.
+            figure: the figure to draw on.
+            source: name of the table to draw. Defaults to `None`, which uses
+                the table named "classification_report", or makes it.
+            **kwargs: not used.
+
+        """
+        seaborn = utilities.import_tool('seaborn')
+        table = _table(
+            item, source, 'classification_report',
+            evaluators.ClassificationReport().evaluate)
+        scores = table.drop(index = 'accuracy', errors = 'ignore')[
+            ['precision', 'recall', 'f1-score']].astype(float)
+        axes = figure.subplots()
+        seaborn.heatmap(
+            scores, annot = True, fmt = '.2f', cmap = 'Blues', vmin = 0,
+            vmax = 1, ax = axes)
+        # Minor ticks (which some styles show) mean nothing between classes.
+        axes.minorticks_off()
 
 
 @dataclasses.dataclass
@@ -474,17 +768,27 @@ class ConfusionHeatmap(Plot):
 
     """
 
-    def draw(self, item: base.Dataset, figure: Any, **kwargs: Any) -> None:
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        **kwargs: Any) -> None:
         """Draws the confusion matrix.
 
         Args:
             item: the dataset with a fitted classifier.
             figure: the figure to draw on.
+            source: name of a table made by `confusion` to draw. Defaults to
+                `None`, which finds the confusion matrix again.
             **kwargs: not used.
 
         """
         seaborn = utilities.import_tool('seaborn')
-        matrix = evaluators.Confusion().evaluate(item)
+        matrix = (
+            evaluators.Confusion().evaluate(item) if source is None
+            else _table(item, source))
         axes = figure.subplots()
         seaborn.heatmap(
             matrix, annot = True, fmt = 'd', cmap = 'Blues', ax = axes)
@@ -507,6 +811,8 @@ class CorrelationHeatmap(Plot):
         item: base.Dataset,
         figure: Any,
         method: describers.CorrelationMethod = 'pearson',
+        *,
+        source: str | None = None,
         **kwargs: Any) -> None:
         """Draws the correlations.
 
@@ -515,11 +821,16 @@ class CorrelationHeatmap(Plot):
             figure: the figure to draw on.
             method: "pearson", "spearman", or "kendall". Defaults to
                 "pearson".
+            source: name of a table made by `correlations` to draw, in place
+                of finding the correlations with `method`. Defaults to
+                `None`.
             **kwargs: not used.
 
         """
         seaborn = utilities.import_tool('seaborn')
-        table = describers.Correlations().describe(item, method = method)
+        table = (
+            describers.Correlations().describe(item, method = method)
+            if source is None else _table(item, source))
         axes = figure.subplots()
         seaborn.heatmap(
             table,
@@ -727,6 +1038,148 @@ class DetCurve(Plot):
 
 
 @dataclasses.dataclass
+class DistributionPlots(Plot):
+    """The distribution of every column, in a grid.
+
+    Each column (or each of `columns`) is a panel: a histogram of a column of
+    numbers or dates, and bars of the `top` most common values of any other
+    column (with missing values left out). Unlike `histograms` and
+    `count_plots`, it draws the label and the groups too, and it does not
+    split the rows by class.
+
+    Wraps:
+        [`matplotlib.axes.Axes.hist`](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.hist.html)
+        from matplotlib.
+
+    """
+
+    # Wider than most plots, so that the numbers of each panel fit.
+    size: ClassVar[tuple[float, float]] = (9.6, 6.4)
+    starts_at_zero: ClassVar[str] = 'y'
+    shared_axes: ClassVar[str] = 'y'
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        columns: Sequence[str] | None = None,
+        bins: int = 20,
+        top: int = 10,
+        limit: int = 16,
+        **kwargs: Any) -> None:
+        """Draws the distribution of each column.
+
+        Args:
+            item: the dataset to draw.
+            figure: the figure to draw on.
+            columns: columns to draw. Defaults to `None`, which draws every
+                column of the data.
+            bins: number of bins in each histogram. Defaults to 20.
+            top: most values of each other column to draw. Defaults to 10.
+            limit: most columns to draw. Defaults to 16.
+            **kwargs: not used.
+
+        """
+        dates = importlib.import_module('matplotlib.dates')
+        ticker = importlib.import_module('matplotlib.ticker')
+        columns = list(item.data.columns if columns is None else columns)
+        columns = columns[:limit]
+        for axes, column in zip(
+            _grid(figure, len(columns)), columns, strict = True):
+            values = item.data[column].dropna()
+            kind = base._kind_of(values)
+            if kind == 'dates':
+                axes.hist(values, bins = bins)
+                # A small panel has room for only a few dates.
+                locator = dates.AutoDateLocator(minticks = 2, maxticks = 3)
+                axes.xaxis.set_major_locator(locator)
+                axes.xaxis.set_major_formatter(
+                    dates.ConciseDateFormatter(locator))
+            elif kind == 'numerics':
+                axes.hist(values, bins = bins)
+                axes.xaxis.set_major_locator(ticker.MaxNLocator(nbins = 4))
+                # Large numbers would run into each other side by side.
+                axes.tick_params(axis = 'x', labelrotation = 90)
+            else:
+                counts = values.astype(str).value_counts().head(top)
+                axes.bar(list(counts.index), counts.to_numpy())
+                axes.tick_params(axis = 'x', labelrotation = 90)
+            axes.set_title(str(column), fontsize = 'small')
+
+
+@dataclasses.dataclass
+class EstimatesPlot(Plot):
+    """Every model's estimates with their confidence intervals.
+
+    Draws the table made by `regression_table` (which is applied if it has
+    not been, or the table named by "source") as a forest plot: a row for
+    each term, with a dot for each model's estimate and a line for its 95%
+    confidence interval, in a color for each model, and a dashed line at
+    zero. The intercept is left out unless `intercept` is `True`.
+
+    """
+
+    starts_at_zero: ClassVar[str] = 'x'
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        intercept: bool = False,
+        limit: int = 30,
+        **kwargs: Any) -> None:
+        """Draws the estimates of each model.
+
+        Args:
+            item: the dataset with a fitted model.
+            figure: the figure to draw on.
+            source: name of the table to draw. Defaults to `None`, which uses
+                the table named "regression_table", or makes it.
+            intercept: whether to draw the intercept. Defaults to `False`.
+            limit: most terms to draw. Defaults to 30.
+            **kwargs: not used.
+
+        """
+        table = _table(
+            item, source, 'regression_table',
+            evaluators.RegressionTable().evaluate)
+        models = list(dict.fromkeys(table.index.get_level_values('model')))
+        terms = [
+            t for t in dict.fromkeys(table.index.get_level_values('term'))
+            if intercept or str(t).split(' (')[0] not in _INTERCEPTS][:limit]
+        rows = np.arange(len(terms))[::-1]
+        # The models' dots for a term are spread across a band around it.
+        offsets = np.linspace(-0.3, 0.3, len(models)) if len(models) > 1 else (
+            np.zeros(1))
+        axes = figure.subplots()
+        for model, offset in zip(models, offsets, strict = True):
+            estimates = table.xs(model, level = 'model').reindex(terms)
+            shown = estimates['estimate'].notna().to_numpy()
+            values = estimates['estimate'].to_numpy(dtype = float)[shown]
+            axes.errorbar(
+                values,
+                (rows + offset)[shown],
+                xerr = [
+                    values - estimates['ci_lower'].to_numpy(
+                        dtype = float)[shown],
+                    estimates['ci_upper'].to_numpy(dtype = float)[shown]
+                    - values],
+                fmt = 'o',
+                markersize = 3,
+                capsize = 2,
+                label = str(model))
+        axes.set_yticks(rows, [str(t) for t in terms])
+        axes.axvline(0, color = 'gray', linestyle = '--', linewidth = 1)
+        axes.set_xlabel('estimate, with its 95% confidence interval')
+        if len(models) > 1:
+            axes.legend()
+            _figure_legend(figure, axes, 'model')
+
+
+@dataclasses.dataclass
 class FairnessPlot(Plot):
     """The model's fairness metrics for each group, as bars.
 
@@ -747,6 +1200,7 @@ class FairnessPlot(Plot):
         figure: Any,
         *,
         group: str | None = None,
+        source: str | None = None,
         **kwargs: Any) -> None:
         """Draws each fairness metric for each group.
 
@@ -755,12 +1209,19 @@ class FairnessPlot(Plot):
             figure: the figure to draw on.
             group: column of groups. Defaults to `None`, which uses the table
                 that `fairness` made or the dataset's first group.
+            source: name of a table made by `fairness` to draw. Defaults to
+                `None`, which uses the table named "fairness" (if it is for
+                `group`), or makes it.
             **kwargs: not used.
 
         """
-        table = item.tables.get('fairness')
-        if table is None or group not in {None, table.index.name}:
+        found = item.tables.get('fairness')
+        if source is not None:
+            table = _table(item, source)
+        elif found is None or group not in {None, found.index.name}:
             table = evaluators.Fairness().evaluate(item, group = group)
+        else:
+            table = found
         groups = table.drop(index = ['difference', 'ratio'], errors = 'ignore')
         columns = [c for c in groups.columns if c != 'count']
         for axes, column in zip(
@@ -768,6 +1229,52 @@ class FairnessPlot(Plot):
             axes.bar([str(g) for g in groups.index], groups[column])
             axes.set_ylim(0, 1)
             axes.set_title(column.replace('_', ' '), fontsize = 'small')
+
+
+@dataclasses.dataclass
+class FrequencyPlots(Plot):
+    """The share of the rows with each value of each column, in a grid.
+
+    Draws the table made by `frequencies` (which is applied if it has not
+    been, or the table named by "source"): a panel for each column, with a
+    bar for each of its `top` most common values (missing values included).
+
+    """
+
+    shared_axes: ClassVar[str] = 'x'
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        top: int = 10,
+        limit: int = 16,
+        **kwargs: Any) -> None:
+        """Draws the share of each value of each column.
+
+        Args:
+            item: the dataset to draw.
+            figure: the figure to draw on.
+            source: name of the table to draw. Defaults to `None`, which uses
+                the table named "frequencies", or makes it.
+            top: most values of each column to draw. Defaults to 10.
+            limit: most columns to draw. Defaults to 16.
+            **kwargs: not used.
+
+        """
+        table = _table(
+            item, source, 'frequencies', describers.Frequencies().describe)
+        columns = list(dict.fromkeys(table['column']))[:limit]
+        for axes, column in zip(
+            _grid(figure, len(columns)), columns, strict = True):
+            shares = table.loc[table['column'] == column].nlargest(
+                top, 'share').iloc[::-1]
+            axes.barh(shares['value'].astype(str), shares['share'])
+            axes.set_title(str(column), fontsize = 'small')
+        if columns:
+            figure.supxlabel('share of the rows', fontsize = 'small')
 
 
 @dataclasses.dataclass
@@ -997,6 +1504,104 @@ class LearningCurve(Plot):
             shuffle = True,
             random_state = item.seed,
             ax = figure.subplots())
+
+
+@dataclasses.dataclass
+class LoadingsHeatmap(Plot):
+    """How strongly each feature loads on each factor, as a heatmap.
+
+    Draws the loadings in the table made by `factor_analysis` (which is
+    applied if it has not been, or the table named by "source"): a row for
+    each feature and a column for each factor, from -1 (blue) to 1 (red).
+    Features that load strongly on the same factor move together.
+
+    Wraps:
+        [`seaborn.heatmap`](https://seaborn.pydata.org/generated/seaborn.heatmap.html)
+        from seaborn.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        **kwargs: Any) -> None:
+        """Draws the loadings of each feature.
+
+        Args:
+            item: the dataset to draw.
+            figure: the figure to draw on.
+            source: name of the table to draw. Defaults to `None`, which uses
+                the table named "factor_analysis", or makes it.
+            **kwargs: not used.
+
+        """
+        seaborn = utilities.import_tool('seaborn')
+        table = _table(
+            item, source, 'factor_analysis',
+            evaluators.FactorAnalysis().evaluate)
+        loadings = table[
+            [c for c in table.columns if str(c).startswith('factor_')]]
+        axes = figure.subplots()
+        seaborn.heatmap(
+            loadings.astype(float),
+            cmap = 'vlag',
+            center = 0,
+            vmin = -1,
+            vmax = 1,
+            # Numbers in more cells than this would not fit.
+            annot = loadings.size <= _ANNOTATED_CELLS,
+            fmt = '.2f',
+            ax = axes)
+        # Minor ticks (which some styles show) mean nothing between features.
+        axes.minorticks_off()
+
+
+@dataclasses.dataclass
+class MissingBars(Plot):
+    """The share of each column's values that are missing, as bars.
+
+    Draws the table made by `missing_values` (which is applied if it has not
+    been, or the table named by "source"): a bar for each column with
+    missing values (up to `limit`, most missing first). If no value is
+    missing, the figure says so.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        limit: int = 30,
+        **kwargs: Any) -> None:
+        """Draws the share of missing values of each column.
+
+        Args:
+            item: the dataset to draw.
+            figure: the figure to draw on.
+            source: name of the table to draw. Defaults to `None`, which uses
+                the table named "missing_values", or makes it.
+            limit: most columns to draw. Defaults to 30.
+            **kwargs: not used.
+
+        """
+        table = _table(
+            item, source, 'missing_values',
+            describers.MissingValues().describe)
+        shares = table['share'].loc[table['share'] > 0]
+        shares = shares.sort_values(
+            ascending = False, kind = 'stable').head(limit).iloc[::-1]
+        axes = figure.subplots()
+        axes.barh([str(c) for c in shares.index], shares.to_numpy())
+        axes.set_xlabel('share of the rows that are missing')
+        if shares.empty:
+            axes.text(
+                0.5, 0.5, 'no values are missing', ha = 'center',
+                va = 'center', transform = axes.transAxes)
 
 
 @dataclasses.dataclass
@@ -1271,6 +1876,7 @@ class PredictionIntervals(Plot):
         figure: Any,
         *,
         rows: int = 100,
+        source: str | None = None,
         **kwargs: Any) -> None:
         """Draws the prediction intervals or the sizes of the sets.
 
@@ -1279,12 +1885,14 @@ class PredictionIntervals(Plot):
             figure: the figure to draw on.
             rows: most rows to draw (evenly spaced) for regression. Defaults
                 to 100.
+            source: name of the table made by `conformal` to draw. Defaults
+                to `None`, which uses the table named "conformal", or makes
+                it.
             **kwargs: not used.
 
         """
-        table = item.tables.get('conformal')
-        if table is None:
-            table = evaluators.Conformal().evaluate(item)
+        table = _table(
+            item, source, 'conformal', evaluators.Conformal().evaluate)
         axes = figure.subplots()
         if 'lower' not in table:
             counts = pd.crosstab(table['size'], table['covered'])
@@ -1421,6 +2029,102 @@ class RocCurve(Plot):
             metrics.RocCurveDisplay.from_predictions(
                 y_true, y_score, pos_label = positive, name = name, ax = axes)
         axes.plot([0, 1], [0, 1], linestyle = '--', color = 'gray')
+
+
+@dataclasses.dataclass
+class ScorecardPlot(Plot):
+    """Each branch's score on each metric of a scorecard, as dots.
+
+    Draws the table made by `scorecard` (which is applied if it has not
+    been, or the table named by "source"): a panel for each metric, with a
+    dot for each branch (named by its techniques), best first. Branches
+    whose dots are close did about as well.
+
+    """
+
+    size: ClassVar[tuple[float, float]] = (9.6, 3.6)
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        **kwargs: Any) -> None:
+        """Draws the score of each branch on each metric.
+
+        Args:
+            item: the dataset with a fitted model.
+            figure: the figure to draw on.
+            source: name of the table to draw. Defaults to `None`, which uses
+                the table named "scorecard", or makes it.
+            **kwargs: not used.
+
+        """
+        table = _table(
+            item, source, 'scorecard', evaluators.Scorecard().evaluate)
+        metrics = [
+            c for c in table.columns
+            if c != 'rank' and pd.api.types.is_numeric_dtype(table[c])]
+        steps = [c for c in table.columns if c != 'rank' and c not in metrics]
+        if steps:
+            names = [
+                ' / '.join(str(v) for v in row)
+                for row in table[steps].itertuples(index = False)]
+        else:
+            names = [f'rank {r}' for r in table['rank']]
+        # The best branch is at the top.
+        rows = np.arange(len(table))[::-1]
+        for axes, metric in zip(
+            _grid(figure, len(metrics)), metrics, strict = True):
+            axes.scatter(table[metric].to_numpy(dtype = float), rows, s = 12)
+            # Only the panels at the left name the branches.
+            first = axes.get_subplotspec().is_first_col()
+            axes.set_yticks(rows, names if first else [])
+            axes.set_title(str(metric).replace('_', ' '), fontsize = 'small')
+
+
+@dataclasses.dataclass
+class ScreePlot(Plot):
+    """The share of the variance that each principal component explains.
+
+    Draws the table made by `pca` (which is applied if it has not been, or
+    the table named by "source"): a bar for each component's share of the
+    variance of the features, and a line for the share of the components up
+    to it. Where the bars level off (the "elbow") suggests how many
+    components to keep.
+
+    """
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        **kwargs: Any) -> None:
+        """Draws the share of the variance of each component.
+
+        Args:
+            item: the dataset to draw.
+            figure: the figure to draw on.
+            source: name of the table to draw. Defaults to `None`, which uses
+                the table named "pca", or makes it.
+            **kwargs: not used.
+
+        """
+        ticker = importlib.import_module('matplotlib.ticker')
+        table = _table(item, source, 'pca', evaluators.PCA().evaluate)
+        components = np.arange(1, len(table) + 1)
+        axes = figure.subplots()
+        axes.bar(components, table['share'], label = 'component')
+        axes.plot(
+            components, table['cumulative'], marker = 'o', markersize = 3,
+            color = 'C1', label = 'cumulative')
+        axes.xaxis.set_major_locator(ticker.MaxNLocator(integer = True))
+        axes.set_xlabel('principal component')
+        axes.set_ylabel('share of the variance')
+        axes.legend()
 
 
 @dataclasses.dataclass
@@ -2667,6 +3371,59 @@ class ValidationCurve(Plot):
             ax = figure.subplots())
 
 
+@dataclasses.dataclass
+class WeightsPlot(Plot):
+    """The weights of the features that eli5 explains, as bars.
+
+    Draws the table made by `explain_weights` (which is applied if it has
+    not been, or the table named by "source"): a bar for each of the `limit`
+    features with the largest weights, with its standard deviation if eli5
+    found one (for the trees of a forest), and a panel for each class if the
+    weights differ by class.
+
+    """
+
+    shared_axes: ClassVar[str] = 'x'
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        source: str | None = None,
+        limit: int = 15,
+        **kwargs: Any) -> None:
+        """Draws the weight of each feature.
+
+        Args:
+            item: the dataset with a fitted model.
+            figure: the figure to draw on.
+            source: name of the table to draw. Defaults to `None`, which uses
+                the table named "explain_weights", or makes it.
+            limit: most features to draw in each panel. Defaults to 15.
+            **kwargs: not used.
+
+        """
+        table = _table(
+            item, source, 'explain_weights',
+            evaluators.ExplainWeights().evaluate)
+        targets = (
+            list(dict.fromkeys(table['target'])) if 'target' in table
+            else [None])
+        for axes, target in zip(
+            _grid(figure, len(targets)), targets, strict = True):
+            weights = table if target is None else table.loc[
+                table['target'] == target]
+            weights = weights.head(limit).iloc[::-1]
+            axes.barh(
+                weights['feature'].astype(str),
+                weights['weight'],
+                xerr = weights.get('std'))
+            if len(targets) > 1:
+                axes.set_title(str(target), fontsize = 'small')
+        figure.supxlabel('weight', fontsize = 'small')
+
+
 """ Private Classes """
 
 
@@ -3225,6 +3982,33 @@ def _linear_axes(figure: Any, name: str) -> list[Any]:
     return found
 
 
+def _links(item: base.Dataset, source: str | None) -> pd.DataFrame:
+    """Returns a table of the causal links that tigramite found.
+
+    Args:
+        item: the dataset with a table of links.
+        source: name of the table, or `None` for the last one made.
+
+    Raises:
+        IncompatibleTechniqueError: if no such table was made and `source`
+            does not name one.
+
+    Returns:
+        The table, with "cause", "effect", "lag", "link", and "strength"
+            columns.
+
+    """
+    names = [
+        n for n, t in item.tables.items()
+        if set(_LINK_COLUMNS) <= set(t.columns)]
+    if source is None and not names:
+        message = (
+            'there is no table of causal links: apply "pcmci", "pcmci_plus", '
+            'or "lpcmci" first')
+        raise base.IncompatibleTechniqueError(message)
+    return _table(item, source or names[-1])
+
+
 def _match_ranges(panels: Sequence[tuple[Any, str]]) -> None:
     """Gives `panels` the range that holds all of their ranges.
 
@@ -3345,7 +4129,10 @@ def _pyplot(figure: Any, seed: int | None) -> Generator[Any, None, None]:
     jitter dots or to bootstrap), so they are seeded with `seed` in the
     context, and put back as they were afterwards. And shap's bar and
     waterfall plots are colored with the colors of the style (see
-    `_shap_colors`), and shap's own colors are put back afterwards.
+    `_shap_colors`), and shap's own colors are put back afterwards. The
+    numbers on the axes are written out in full, rather than in scientific
+    notation or beside a power of 10 or a number to add to them, unless they
+    are too large (see `options._SCIENTIFIC_LIMIT`).
 
     Args:
         figure: the figure to lend.
@@ -3363,6 +4150,10 @@ def _pyplot(figure: Any, seed: int | None) -> Generator[Any, None, None]:
     # plots) so that `matplotlib` would make billions of minor ticks between
     # them, so styles that show minor ticks (such as "science") cannot.
     minor = {'xtick.minor.visible': False, 'ytick.minor.visible': False}
+    plain = {
+        'axes.formatter.useoffset': False,
+        # No number is this small, so small numbers are never scientific.
+        'axes.formatter.limits': [-1000, options._SCIENTIFIC_LIMIT]}
     # shap's colors can only be set in versions that have this (experimental)
     # module.
     try:
@@ -3373,7 +4164,7 @@ def _pyplot(figure: Any, seed: int | None) -> Generator[Any, None, None]:
     try:
         if styles is not None:
             styles.set_style(**_shap_colors(matplotlib))
-        with _lent(figure), matplotlib.rc_context(minor):
+        with _lent(figure), matplotlib.rc_context({**minor, **plain}):
             yield shap
     finally:
         if styles is not None:
@@ -3619,6 +4410,44 @@ def _styled(
                 f for f in matplotlib.rcParams['font.family']
                 if f in installed] or ['sans-serif']
         yield matplotlib
+
+
+def _table(
+    item: base.Dataset,
+    source: str | None,
+    default: str | None = None,
+    make: Callable[[base.Dataset], pd.DataFrame] | None = None,
+    ) -> pd.DataFrame:
+    """Returns the table that a plot draws.
+
+    Args:
+        item: the dataset.
+        source: name of the table in the dataset's `tables`, or `None` for
+            the table named `default`.
+        default: the name that the technique that makes the table gives it.
+            Defaults to `None`.
+        make: makes the table (with that technique), if `source` is `None`
+            and there is no table named `default`. Defaults to `None`.
+
+    Raises:
+        KeyError: if `source` is not the name of a table, or if there is no
+            table to draw.
+
+    Returns:
+        The table.
+
+    """
+    if source is not None:
+        if source not in item.tables:
+            message = f'there is no table named {source!r} to draw'
+            raise KeyError(message)
+        return item.tables[source]
+    if default is not None and default in item.tables:
+        return item.tables[default]
+    if make is None:
+        message = 'there is no table to draw: name one as "source"'
+        raise KeyError(message)
+    return make(item)
 
 
 def _top_features(

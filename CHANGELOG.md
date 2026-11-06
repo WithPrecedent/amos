@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.7.0
 
 * A project whose workflow has an `experiment` or `contest` exports
   "{project}_replication.json" (such as "cancer_replication.json"), the
@@ -15,14 +15,42 @@ All notable changes to this project will be documented in this file.
   `file_name`, and `file_format`. `bobbie` writes the file, in json (the
   default), ini, toml, yaml, or py: set "replication_format" in the "files"
   section, or pass `replication_format` to `export`. Each contest becomes a
-  `flow`
-  in which each step keeps only its winning technique, the parameters of the
-  techniques that lost are dropped, a searched model gets the values its
-  search chose (without "search", "cv", "n_iter", and "scoring"), and
+  `flow` in which each step keeps only its winning technique, the parameters
+  of the techniques that lost are dropped, a searched model gets the values
+  its search chose (without "search", "cv", "n_iter", and "scoring"), and
   "pipeline" settings are dropped, since the pipeline is already filled in.
 * Requires `bobbie` 0.4.0 or later, which writes settings files. The new
   `settings` extra (part of `all`) installs its writers for toml and yaml
   files. "environment.json" records the version of `bobbie`.
+* Every explorer (describer) and critic (evaluator or inferer) takes
+  `visualize` (false by default), which draws its table as a figure in the
+  style of every plot and stores it in the dataset's `figures` under the
+  technique's name, with "figure" in its entry in `history`. The new
+  "visualize_explorers" and "visualize_critics" settings of the "general"
+  section (and the `Dataset` fields and `Dataset.create` arguments of the
+  same names) replace the `visualize` of every technique of their stage when
+  they are set: true draws every figure and false draws none. They are not
+  set by default, which leaves it to each technique (so nothing is drawn). A
+  figure that cannot be drawn logs a warning and records "figure_error"
+  rather than losing the table.
+* New plots that draw those tables (and can be used by the artist):
+  `association_rules_plot`, `bias_variance_plot`, `causal_graph` (tigramite's
+  graph of the links of `pcmci`, `pcmci_plus`, and `lpcmci`),
+  `classification_report_heatmap`, `distribution_plots`, `estimates_plot`
+  (every model of a `regression_table`), `frequency_plots`,
+  `loadings_heatmap`, `missing_bars`, `scorecard_plot`, `scree_plot`, and
+  `weights_plot`. Each takes a "source" table and makes it if it is missing
+  (except `causal_graph`).
+* `correlation_heatmap`, `confusion_heatmap`, `fairness_plot`, and
+  `prediction_intervals` take a "source" table to draw, `box_plots` takes
+  `split = false` to draw one box for each column, and the new
+  `Plot.make_figure` returns a plot's figure without adding it to the
+  dataset (`Plot.apply` uses it).
+* The axes of SHAP plots write numbers in full rather than in scientific
+  notation, unless they are a million or more (see the new
+  `options._SCIENTIFIC_LIMIT`). Small SHAP values were ticks of whole numbers
+  beside a power of 10 (such as "1, 2, 3" and "1e-7"), and are now ticks such
+  as "0.0000001", without a power of 10 or a number to add beside the axis.
 
 ## 0.6.4
 

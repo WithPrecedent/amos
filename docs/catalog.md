@@ -319,20 +319,29 @@ of a technique that uses them (such as `scorecard` or a validator).
 | Name | Description |
 | --- | --- |
 | [`actual_vs_predicted`][amos.plots.ActualVsPredicted] | The label against the model's predictions (regression). |
+| [`association_rules_plot`][amos.plots.AssociationRulesPlot] | The support and confidence of each association rule, colored by lift. |
+| [`bias_variance_plot`][amos.plots.BiasVariancePlot] | The model's expected loss, beside its bias and variance, as bars. |
 | [`box_plots`][amos.plots.BoxPlots] | Each numeric feature as a box, split by class. |
 | [`calibration_curve`][amos.plots.CalibrationCurve] | The share of rows in each class against its predicted probability. |
+| [`causal_graph`][amos.plots.CausalGraph] | The causal links that tigramite found, as a graph of the variables. |
+| [`classification_report_heatmap`][amos.plots.ClassificationReportHeatmap] | The precision, recall, and f1 of each class, as a heatmap. |
 | [`coefficient_plot`][amos.plots.CoefficientPlot] | Coefficients with their confidence intervals (a forest plot). |
 | [`confusion_heatmap`][amos.plots.ConfusionHeatmap] | The confusion matrix as a heatmap (classification). |
 | [`correlation_heatmap`][amos.plots.CorrelationHeatmap] | The correlations between the numeric columns as a heatmap. |
 | [`count_plots`][amos.plots.CountPlots] | The count of each value of each categorical feature, split by class. |
 | [`decision_regions`][amos.plots.DecisionRegions] | The class that the model predicts across two features (classification). |
 | [`det_curve`][amos.plots.DetCurve] | The detection error tradeoff (DET) curve (classification). |
+| [`distribution_plots`][amos.plots.DistributionPlots] | The distribution of every column, in a grid. |
+| [`estimates_plot`][amos.plots.EstimatesPlot] | Every model's estimates with their confidence intervals. |
 | [`fairness_plot`][amos.plots.FairnessPlot] | The model's fairness metrics for each group, as bars. |
+| [`frequency_plots`][amos.plots.FrequencyPlots] | The share of the rows with each value of each column, in a grid. |
 | [`histograms`][amos.plots.Histograms] | The distribution of each numeric feature, in a grid. |
 | [`importance_plot`][amos.plots.ImportancePlot] | The most important features, as horizontal bars. |
 | [`influence_plot`][amos.plots.InfluencePlot] | The influence of each training row on a statsmodels regression. |
 | [`label_plot`][amos.plots.LabelPlot] | The distribution of the label: a bar for each class, or a histogram. |
 | [`learning_curve`][amos.plots.LearningCurve] | The model's score as it learns from more of the training rows. |
+| [`loadings_heatmap`][amos.plots.LoadingsHeatmap] | How strongly each feature loads on each factor, as a heatmap. |
+| [`missing_bars`][amos.plots.MissingBars] | The share of each column's values that are missing, as bars. |
 | [`missing_heatmap`][amos.plots.MissingHeatmap] | Where values are missing, as a heatmap of the rows and columns. |
 | [`pair_plot`][amos.plots.PairPlot] | Each pair of numeric features against each other, colored by class. |
 | [`partial_dependence`][amos.plots.PartialDependence] | The model's average prediction as features change (partial dependence). |
@@ -341,6 +350,8 @@ of a technique that uses them (such as `scorecard` or a validator).
 | [`qq_plot`][amos.plots.QqPlot] | The quantiles of the residuals against a normal distribution's. |
 | [`residual_plot`][amos.plots.ResidualPlot] | The model's errors against its predictions (regression). |
 | [`roc_curve`][amos.plots.RocCurve] | The receiver operating characteristic (ROC) curve (classification). |
+| [`scorecard_plot`][amos.plots.ScorecardPlot] | Each branch's score on each metric of a scorecard, as dots. |
+| [`scree_plot`][amos.plots.ScreePlot] | The share of the variance that each principal component explains. |
 | [`search_plot`][amos.plots.SearchPlot] | The cross-validated score of each try in a hyperparameter search. |
 | [`shap_bar`][amos.plots.ShapBar] | The mean absolute SHAP value of the most important features. |
 | [`shap_beeswarm`][amos.plots.ShapBeeswarm] | The SHAP value of each row for the most important features. |
@@ -362,6 +373,7 @@ of a technique that uses them (such as `scorecard` or a validator).
 | [`tree_plot`][amos.plots.TreePlot] | The splits of a decision tree (or of one tree of a forest). |
 | [`tree_prediction_path`][amos.plots.TreePredictionPath] | How much each feature decides one row's path down a decision tree. |
 | [`validation_curve`][amos.plots.ValidationCurve] | The model's score as one of its parameters changes. |
+| [`weights_plot`][amos.plots.WeightsPlot] | The weights of the features that eli5 explains, as bars. |
 
 ## Choosers (any stage)
 

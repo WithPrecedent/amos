@@ -4,6 +4,8 @@ Contents:
     Dataset: data and everything learned from it in a workflow.
     Branch: one branch of an experiment and its result.
     Operation: base class for amos techniques, which work on a `Dataset`.
+    Visualizer: mixin for explorers and critics, which can draw a figure of
+        what they found.
     IncompatibleTechniqueError: raised by a technique that does not suit the
         dataset's model.
     skipping_incompatible_techniques: skips those techniques, rather than
@@ -29,7 +31,7 @@ from collections.abc import (
     MutableMapping,
     Sequence,
 )
-from typing import Any, TypeAlias
+from typing import Any, ClassVar, TypeAlias
 
 import camina
 import chrisjen
@@ -154,6 +156,14 @@ class Dataset:
             while it holds integers, though its type is a number. Other
             columns' kinds are found from their types. Defaults to an empty
             `dict`.
+        visualize_explorers: whether every explorer (describer) draws a
+            figure of its table, whatever its own `visualize` argument (see
+            `Visualizer`). Defaults to `None`, which leaves it to each
+            explorer's argument (which is `False` unless it is passed).
+        visualize_critics: whether every critic (evaluator or inferer) draws
+            a figure of its table, whatever its own `visualize` argument.
+            Defaults to `None`, which leaves it to each critic's argument
+            (which is `False` unless it is passed).
 
     A label that is not yet a column of the data is pending: the dataset keeps
     its name, and its task is inferred once a technique (such as
@@ -183,15 +193,26 @@ class Dataset:
     branches: list[Branch] = dataclasses.field(
         default_factory = list, repr = False)
     kinds: dict[str, str] = dataclasses.field(default_factory = dict)
+    visualize_explorers: bool | None = None
+    visualize_critics: bool | None = None
 
     """ Initialization Methods """
 
     def __post_init__(self) -> None:
-        """Validates `data`, `label`, `groups`, `use_gpu`, and `task`."""
+        """Validates `data`, `label`, `groups`, the switches, and `task`.
+
+        The switches are `use_gpu`, `visualize_explorers`, and
+        `visualize_critics`.
+
+        """
         if not isinstance(self.data, pd.DataFrame):
             self.data = pd.DataFrame(self.data)
         self.groups = _validate_groups(self.groups, self.data, self.label)
         self.use_gpu = _validate_use_gpu(self.use_gpu)
+        self.visualize_explorers = _validate_switch(
+            self.visualize_explorers, 'visualize_explorers')
+        self.visualize_critics = _validate_switch(
+            self.visualize_critics, 'visualize_critics')
         if self.task is None and self.has_label:
             self.task = self.infer_task()
         elif self.task is not None and self.task not in _TASKS:
@@ -209,7 +230,9 @@ class Dataset:
         task: str | None = None,
         seed: int | None = None,
         groups: Sequence[str] | str | None = None,
-        use_gpu: bool | None = None) -> Dataset:
+        use_gpu: bool | None = None,
+        visualize_explorers: bool | None = None,
+        visualize_critics: bool | None = None) -> Dataset:
         """Returns a `Dataset` made from `item`.
 
         Args:
@@ -228,6 +251,12 @@ class Dataset:
                 Defaults to `None`.
             use_gpu: whether models that can be fitted on a GPU use one.
                 Defaults to `None`, which is `False` for a new `Dataset`.
+            visualize_explorers: whether every explorer draws a figure of
+                its table. Defaults to `None`, which leaves it to each
+                explorer's `visualize` argument.
+            visualize_critics: whether every critic draws a figure of its
+                table. Defaults to `None`, which leaves it to each critic's
+                `visualize` argument.
 
         Raises:
             FileNotFoundError: if `item` is a path and there is no file there.
@@ -238,7 +267,8 @@ class Dataset:
         Returns:
             A `Dataset`. If `item` is already a `Dataset`, it is returned
                 with any of `label`, `task`, `seed`, and `groups` that it
-                lacks, and with `use_gpu` if it is passed.
+                lacks, and with `use_gpu`, `visualize_explorers`, and
+                `visualize_critics` if they are passed.
 
         """
         if isinstance(item, Dataset):
@@ -254,6 +284,12 @@ class Dataset:
                 item.groups = _validate_groups(groups, item.data, item.label)
             if use_gpu is not None:
                 item.use_gpu = _validate_use_gpu(use_gpu)
+            if visualize_explorers is not None:
+                item.visualize_explorers = _validate_switch(
+                    visualize_explorers, 'visualize_explorers')
+            if visualize_critics is not None:
+                item.visualize_critics = _validate_switch(
+                    visualize_critics, 'visualize_critics')
             return item
         if isinstance(item, str | pathlib.Path):
             # `loaders` imports this module, so it is imported here. The file
@@ -288,7 +324,9 @@ class Dataset:
             task = task,
             seed = seed,
             groups = camina.listify(groups),
-            use_gpu = _validate_use_gpu(use_gpu))
+            use_gpu = _validate_use_gpu(use_gpu),
+            visualize_explorers = visualize_explorers,
+            visualize_critics = visualize_critics)
 
     """ Properties """
 
@@ -934,6 +972,105 @@ class Operation(chrisjen.Technique, abc.ABC):
         return parameters
 
 
+class Visualizer:
+    """Mixin for explorers and critics, which can draw a figure of a table.
+
+    The `apply` of an explorer (a describer) or a critic (an evaluator or an
+    inferer) takes `visualize`, which is `False` unless it is passed (or set
+    in the technique's parameters). If it is `True`, the technique draws the
+    figure that suits its table with the plot named by `visual`, in the
+    style of every plot (see `plots.Plot.make_figure`), and stores it in the
+    dataset's `figures` under the technique's name. Its entry in `history`
+    then has "figure".
+
+    The dataset's `visualize_explorers` or `visualize_critics` (which a
+    project sets from the settings of the same names in the "general"
+    section) replaces the argument of every technique of its stage, if it is
+    set: `True` draws every figure, and `False` draws none, whatever the
+    argument says. Neither is set unless the settings or the dataset set it.
+
+    A figure that cannot be drawn (because matplotlib is not installed, or
+    the plot does not suit the table) does not end the technique: a warning
+    is logged, the table is kept, and the technique's entry in `history` has
+    the reason as "figure_error".
+
+    """
+
+    # The field of `Dataset` (and the setting of the "general" section) that
+    # decides whether every technique of the stage draws its figure, if it
+    # is set.
+    stage_setting: ClassVar[str] = ''
+    # Name of the plot (in `chrisjen.library`) that draws the figure, or an
+    # empty `str` for a technique without one.
+    visual: ClassVar[str] = ''
+    # The name of the technique (a field of `Operation`).
+    name: str
+
+    """ Private Methods """
+
+    def _visual_parameters(
+        self,
+        item: Dataset,  # noqa: ARG002
+        parameters: Mapping[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        """Returns the parameters of the plot that draws the figure.
+
+        Subclasses override this to pass parameters of their own (such as the
+        columns that the technique described) to the plot.
+
+        Args:
+            item: the dataset, with the technique's table.
+            parameters: the parameters that the technique was applied with.
+
+        Returns:
+            The parameters, which by default name the technique's table as
+                the plot's "source".
+
+        """
+        return {'source': self.name}
+
+    def _visualize(
+        self,
+        item: Dataset,
+        visualize: Any,
+        parameters: Mapping[str, Any] | None = None) -> None:
+        """Draws the figure of the technique's table, if it is asked for.
+
+        Call this after the technique has recorded itself in `history`, so
+        that its entry can say whether the figure was drawn.
+
+        Args:
+            item: the dataset, with the technique's table.
+            visualize: the technique's `visualize` argument: `True`, `False`,
+                or the text "true" or "false" (in any case).
+            parameters: the parameters that the technique was applied with.
+                Defaults to `None`, which means that it had none.
+
+        Raises:
+            TypeError: if `visualize` is not true or false.
+
+        """
+        visualize = _validate_switch(visualize, 'visualize')
+        setting = getattr(item, self.stage_setting, None)
+        if setting is not None:
+            visualize = setting
+        if not visualize or not self.visual:
+            return
+        entry: dict[str, Any] = next(
+            (e for e in reversed(item.history)
+             if e.get('technique') == self.name), {})
+        try:
+            plot: Any = chrisjen.library.borrow(self.visual)()
+            figure = plot.make_figure(
+                item, **self._visual_parameters(item, parameters or {}))
+        except Exception as error:  # noqa: BLE001
+            logger.warning(
+                f'the figure of {self.name!r} was not drawn: {error}')
+            entry['figure_error'] = str(error)
+            return
+        item.figures[self.name] = figure
+        entry['figure'] = self.name
+
+
 """ Private Functions """
 
 
@@ -982,13 +1119,32 @@ def _validate_use_gpu(value: Any) -> bool:
         Whether models that can be fitted on a GPU use one.
 
     """
+    return bool(_validate_switch(value, 'use_gpu'))
+
+
+def _validate_switch(value: Any, setting: str) -> bool | None:
+    """Returns a setting that is true or false as a `bool`, checking it.
+
+    Args:
+        value: `True`, `False`, or `None` (which means that it is not set).
+            The text "true" or "false" (in any case), as a settings `dict`
+            might hold it, is also accepted.
+        setting: name of the setting, for the message of an error.
+
+    Raises:
+        TypeError: if `value` is anything else.
+
+    Returns:
+        The setting, or `None` if it is not set.
+
+    """
     if value is None:
-        return False
+        return None
     if isinstance(value, bool | np.bool_):
         return bool(value)
     if isinstance(value, str) and value.strip().lower() in {'true', 'false'}:
         return value.strip().lower() == 'true'
-    message = f'use_gpu must be true or false, not {value!r}'
+    message = f'{setting} must be true or false, not {value!r}'
     raise TypeError(message)
 
 

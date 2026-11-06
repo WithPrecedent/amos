@@ -120,7 +120,7 @@ _Z_95: float = 1.959963984540054
 
 
 @dataclasses.dataclass
-class Inferer(base.Operation, abc.ABC):
+class Inferer(base.Operation, base.Visualizer, abc.ABC):
     """Base class for techniques that infer causal effects.
 
     Most inferers share these parameters (set in the settings or passed to
@@ -143,10 +143,17 @@ class Inferer(base.Operation, abc.ABC):
     sampler added to the training rows (the dataset's `synthetic` rows) are
     left out of the data, and the data is then restored.
 
+    Pass `visualize = True` to `apply` (or set "visualize_critics" in the
+    "general" section of the settings) to draw the estimates as a figure in
+    the dataset's `figures`, under the technique's name: a `coefficient_plot`
+    of the effects, or a `causal_graph` of the links that tigramite's
+    methods of causal discovery find (see `base.Visualizer`).
+
     The techniques of each package are a genre within this one: `Doubleml`,
     `Dowhy`, `Causalml`, and `Tigramite`, which write `apply`. To add a
     technique of one of those packages, subclass its genre; to add one of
-    another kind, subclass `Inferer` and write `apply`.
+    another kind, subclass `Inferer` and write `apply` (and call
+    `_visualize` after it records itself in `history`).
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -158,6 +165,9 @@ class Inferer(base.Operation, abc.ABC):
             `dict`.
 
     """
+
+    stage_setting: ClassVar[str] = 'visualize_critics'
+    visual: ClassVar[str] = 'coefficient_plot'
 
     """ Private Methods """
 
@@ -374,6 +384,7 @@ class Causalml(Inferer, abc.ABC):
         treatment_model: str | None = None,
         control: Any = None,
         n_folds: int = 5,
+        visualize: bool = False,
         **kwargs: Any) -> base.Dataset:
         """Estimates the effect of `treatment` on the label with causalml.
 
@@ -389,6 +400,12 @@ class Causalml(Inferer, abc.ABC):
                 to. Defaults to `None`, which uses the first in sorted order.
             n_folds: number of folds for cross-fitting the propensity scores.
                 Defaults to 5.
+            visualize: whether to draw the estimates as a figure (with
+                the plot named by `visual`), which is added to the
+                figures of `item` under the technique's name. The
+                dataset's `visualize_critics` (the setting of the
+                "general" section) replaces it, if it is set. Defaults
+                to `False`.
             **kwargs: not used.
 
         Raises:
@@ -455,6 +472,7 @@ class Causalml(Inferer, abc.ABC):
             item, self.name, estimator, table, treatment = treatment,
             control = control, outcome_model = outcome_model,
             treatment_model = treatment_model or outcome_model)
+        self._visualize(item, visualize)
         return item
 
     """ Private Methods """
@@ -710,6 +728,7 @@ class Doubleml(Inferer, abc.ABC):
         outcome_model: str = 'random_forest',
         treatment_model: str | None = None,
         n_folds: int = 5,
+        visualize: bool = False,
         **kwargs: Any) -> base.Dataset:
         """Estimates the effect of `treatment` on the label with DoubleML.
 
@@ -722,6 +741,12 @@ class Doubleml(Inferer, abc.ABC):
             treatment_model: name of an `amos` model for the treatment.
                 Defaults to `None`, which uses `outcome_model`.
             n_folds: number of folds for cross-fitting. Defaults to 5.
+            visualize: whether to draw the estimates as a figure (with
+                the plot named by `visual`), which is added to the
+                figures of `item` under the technique's name. The
+                dataset's `visualize_critics` (the setting of the
+                "general" section) replaces it, if it is set. Defaults
+                to `False`.
             **kwargs: the parameters of the model (see each technique).
 
         Raises:
@@ -769,6 +794,7 @@ class Doubleml(Inferer, abc.ABC):
             outcome_model = outcome_model,
             treatment_model = treatment_model or outcome_model,
             n_folds = n_folds, **named)
+        self._visualize(item, visualize)
         return item
 
     """ Private Methods """
@@ -1591,6 +1617,7 @@ class Dowhy(Inferer, abc.ABC):
         simulations: int = 100,
         refuters: Sequence[str] | str | None = None,
         instrument: str | None = None,
+        visualize: bool = False,
         **kwargs: Any) -> base.Dataset:
         """Estimates the effect of `treatment` on the label with DoWhy.
 
@@ -1603,6 +1630,12 @@ class Dowhy(Inferer, abc.ABC):
             refuters: names of DoWhy's refuters to run. Defaults to `None`.
             instrument: name of the column with an instrument, for
                 `instrumental_variable`. Defaults to `None`.
+            visualize: whether to draw the estimates as a figure (with
+                the plot named by `visual`), which is added to the
+                figures of `item` under the technique's name. The
+                dataset's `visualize_critics` (the setting of the
+                "general" section) replaces it, if it is set. Defaults
+                to `False`.
             **kwargs: not used.
 
         Raises:
@@ -1663,6 +1696,7 @@ class Dowhy(Inferer, abc.ABC):
             method = self.method, simulations = simulations,
             **({'instrument': instrument} if instrument else {}),
             **({'refuters': names} if names else {}))
+        self._visualize(item, visualize)
         return item
 
     """ Private Methods """
@@ -1914,6 +1948,8 @@ class Tigramite(Inferer, abc.ABC):
 
     """
 
+    visual: ClassVar[str] = 'causal_graph'
+
     def apply(
         self,
         item: base.Dataset,
@@ -1921,6 +1957,7 @@ class Tigramite(Inferer, abc.ABC):
         max_lag: int = 5,
         alpha: float = 0.05,
         test: str = 'parcorr',
+        visualize: bool = False,
         **kwargs: Any) -> base.Dataset:
         """Finds the causal links among the label and features.
 
@@ -1930,6 +1967,12 @@ class Tigramite(Inferer, abc.ABC):
             alpha: level at which links are significant. Defaults to 0.05.
             test: name of the test of conditional independence. Defaults to
                 "parcorr".
+            visualize: whether to draw the links as a figure (with
+                the plot named by `visual`), which is added to the
+                figures of `item` under the technique's name. The
+                dataset's `visualize_critics` (the setting of the
+                "general" section) replaces it, if it is set. Defaults
+                to `False`.
             **kwargs: not used.
 
         Returns:
@@ -1946,6 +1989,7 @@ class Tigramite(Inferer, abc.ABC):
         item.record(
             self.name, tool = utilities.describe_tool(self.contents),
             max_lag = max_lag, alpha = alpha, test = test, links = len(table))
+        self._visualize(item, visualize)
         return item
 
     """ Private Methods """
@@ -2116,6 +2160,7 @@ class TimeSeriesEffect(Tigramite):
     """
 
     contents: Any = 'tigramite.models.LinearMediation'
+    visual: ClassVar[str] = 'coefficient_plot'
 
     def apply(
         self,
@@ -2127,6 +2172,7 @@ class TimeSeriesEffect(Tigramite):
         alpha: float = 0.05,
         test: str = 'parcorr',
         simulations: int = 100,
+        visualize: bool = False,
         **kwargs: Any) -> base.Dataset:
         """Estimates the effect of `treatment` on the label `lag` periods later.
 
@@ -2142,6 +2188,12 @@ class TimeSeriesEffect(Tigramite):
             test: name of the test of conditional independence. Defaults to
                 "parcorr".
             simulations: number of bootstrap samples. Defaults to 100.
+            visualize: whether to draw the estimates as a figure (with
+                the plot named by `visual`), which is added to the
+                figures of `item` under the technique's name. The
+                dataset's `visualize_critics` (the setting of the
+                "general" section) replaces it, if it is set. Defaults
+                to `False`.
             **kwargs: not used.
 
         Raises:
@@ -2185,6 +2237,7 @@ class TimeSeriesEffect(Tigramite):
             item, self.name, mediation, table, treatment = treatment,
             lag = lag, max_lag = max_lag, alpha = alpha, test = test,
             simulations = simulations)
+        self._visualize(item, visualize)
         return item
 
     """ Private Methods """
