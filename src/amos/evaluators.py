@@ -116,6 +116,7 @@ class Evaluator(base.Operation, base.Visualizer, abc.ABC):
     """
 
     stage_setting: ClassVar[str] = 'visualize_critics'
+    model_specific_setting: ClassVar[str] = 'evaluators'
 
     """ Required Methods """
 

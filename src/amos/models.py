@@ -177,13 +177,21 @@ class Model(base.Operation, abc.ABC):
                 Defaults to 10.
             scoring: scikit-learn scorer for a search (such as "roc_auc").
                 Defaults to `None`, which uses the model's `score` method.
-            **kwargs: parameters for the model.
+            **kwargs: parameters for the model. Any "plots", "evaluators",
+                or "inferers" (the techniques that replace a workflow's for
+                this model) are left out.
 
         Returns:
             The dataset, with the fitted `model`, `predictions`, and (for a
                 classifier) `probabilities`.
 
         """
+        # The techniques that replace a workflow's plots, evaluators, and
+        # inferers for this model are not parameters of its tool (see
+        # `base.using_model_specific_techniques`).
+        kwargs = {
+            k: v for k, v in kwargs.items()
+            if k not in base._MODEL_SPECIFIC_GENRES}
         task = self._check_task(item)
         extras = self._extra_columns(item, kwargs)
         self._check_features(item, extras)
@@ -815,12 +823,18 @@ class Statsmodel:
             the name of a class in `statsmodels.genmod.cov_struct` in snake
             case ("independence" or "exchangeable"). Defaults to
             "independence".
+        reference: the class that the coefficients of an "mnlogit" compare
+            the other classes with. A class matches if it equals `reference`
+            or has the same text (so "2" matches the class 2). Defaults to
+            `None`, which uses the first class (sorted).
 
     Attributes:
         results: the fitted statsmodels results.
         classes_: the classes of a classifier, sorted.
-        levels_: the classes of an "ordinal_regression", in order: the order
-            of the categories of a label that is an ordered categorical, and
+        levels_: the classes of a model of any number of classes, in the
+            order that statsmodels numbers them: for an "ordinal_regression",
+            the order of the categories of a label that is an ordered
+            categorical; for an "mnlogit", the `reference` class first; and
             otherwise sorted.
         feature_names_in_: the features (not the groups or weights).
         dropped_: features that were left out because they are combinations
@@ -839,6 +853,7 @@ class Statsmodel:
     norm: str = 'huber_t'
     distribution: str = 'logit'
     covariance: str = 'independence'
+    reference: Any = None
     results: Any = dataclasses.field(default = None, init = False, repr = False)
     classes_: Any = dataclasses.field(
         default = None, init = False, repr = False)
@@ -854,8 +869,8 @@ class Statsmodel:
     def coef_(self) -> np.ndarray:
         """Returns the coefficients of the features.
 
-        An "mnlogit" has a row of coefficients for each class after the
-        first. A feature that was left out (see `dropped_`) has a missing
+        An "mnlogit" has a row of coefficients for each class other than
+        the reference, in the order of `levels_`. A feature that was left out (see `dropped_`) has a missing
         coefficient.
 
         """
@@ -919,7 +934,8 @@ class Statsmodel:
             One row for each coefficient, with its "coefficient",
                 "standard_error", "statistic", "p_value", "ci_lower", and
                 "ci_upper". The coefficients of an "mnlogit" are named
-                "{feature} ({class})". A "binomial_bayes_mixedglm" reports the
+                "{feature} ({class})", for each class other than the
+                reference. A "binomial_bayes_mixedglm" reports the
                 mean and standard deviation of each coefficient's posterior
                 and its 95% credible interval, and no p-values. A feature
                 that was left out (see `dropped_`) has an empty row, and the
@@ -951,7 +967,7 @@ class Statsmodel:
             except ValueError:
                 intervals = np.full((params.size, 2), np.nan)
             if isinstance(params, pd.DataFrame):
-                labels = [str(c) for c in self.classes_[1:]]
+                labels = [str(c) for c in self.levels_[1:]]
                 columns = [_by_class(frame, labels) for frame in columns]
             # The intervals are in the same order as the coefficients (class
             # by class, for an mnlogit).
@@ -1072,7 +1088,8 @@ class Statsmodel:
 
         Raises:
             ValueError: if a model of two classes is given another number of
-                classes, or a model of counts is given other values.
+                classes, a model of counts is given other values, or the
+                `reference` of an "mnlogit" is not one of its classes.
 
         Returns:
             The label as floats, or as 0 and 1 for a model of two classes, or
@@ -1098,6 +1115,9 @@ class Statsmodel:
                 and isinstance(dtype, pd.CategoricalDtype)
                 and dtype.ordered):
                 levels = [c for c in dtype.categories if c in set(levels)]
+            if self.kind == 'mnlogit' and self.reference is not None:
+                # statsmodels compares the other classes with class 0.
+                levels.insert(0, levels.pop(self._reference_position(levels)))
             self.levels_ = np.asarray(levels, dtype = object)
             positions = {c: i for i, c in enumerate(levels)}
             return np.asarray([positions[v] for v in target])
@@ -1256,6 +1276,34 @@ class Statsmodel:
             return np.column_stack([1 - values, values])
         levels = list(self.levels_)
         return values[:, [levels.index(c) for c in self.classes_]]
+
+    def _reference_position(self, levels: list[Any]) -> int:
+        """Returns the position of `reference` among the classes.
+
+        A class matches if it equals `reference`, or else if it has the same
+        text, so that a reference from a settings file (which may be text)
+        matches a class that is a number.
+
+        Args:
+            levels: the classes of the label.
+
+        Raises:
+            ValueError: if no class matches `reference`.
+
+        Returns:
+            The position of the first class that matches.
+
+        """
+        for matches in (
+            lambda c: c == self.reference,
+            lambda c: str(c) == str(self.reference)):
+            for position, level in enumerate(levels):
+                if matches(level):
+                    return position
+        message = (
+            f'the reference {self.reference!r} of a {self.kind} model is not '
+            f'one of its classes: {levels}')
+        raise ValueError(message)
 
     @property
     def _title(self) -> str:
@@ -2373,8 +2421,10 @@ class Mixedlm(_Statsmodels, Model):
 class Mnlogit(_Statsmodels, Model):
     """Multinomial logistic regression from statsmodels, with inference.
 
-    For a label of any number of classes. Each class after the first has its
-    own coefficients, compared with the first class.
+    For a label of any number of classes. Each class other than the
+    reference has its own coefficients, compared with the reference. Set
+    "reference" to the class to compare with (by default, the first class,
+    sorted).
 
     Wraps:
         [`statsmodels.discrete.discrete_model.MNLogit`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.MNLogit.html)
@@ -2769,8 +2819,8 @@ def _by_class(frame: pd.DataFrame, labels: Sequence[str]) -> pd.Series:
     """Returns a table with a column for each class as one column.
 
     Args:
-        frame: one row for each feature and one column for each class after
-            the first, as statsmodels reports an `mnlogit`.
+        frame: one row for each feature and one column for each class other
+            than the reference, as statsmodels reports an `mnlogit`.
         labels: the names of those classes.
 
     Returns:

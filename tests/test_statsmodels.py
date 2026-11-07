@@ -90,6 +90,24 @@ def test_classifiers_of_several_classes(multiclass: amos.Dataset) -> None:
     assert 'const' not in multiclass.tables['ordinal_regression_coefficients']
 
 
+def test_mnlogit_compares_the_classes_with_its_reference(
+    multiclass: amos.Dataset) -> None:
+    models.Mnlogit().apply(multiclass)
+    first = multiclass.tables['mnlogit_coefficients']['coefficient']
+    probabilities = multiclass.probabilities
+    # A reference read from a settings file may be text.
+    models.Mnlogit().apply(multiclass, reference = '2')
+    assert list(multiclass.model.levels_) == [2, 0, 1]
+    last = multiclass.tables['mnlogit_coefficients']['coefficient']
+    assert {'x0 (0)', 'x0 (1)'} == {n for n in last.index if 'x0' in n}
+    # The reference changes how the coefficients are reported, not the fit.
+    assert np.isclose(last['x0 (0)'], -first['x0 (2)'], atol = 1e-4)
+    assert list(multiclass.probabilities.columns) == [0, 1, 2]
+    assert np.allclose(multiclass.probabilities, probabilities, atol = 1e-4)
+    with pytest.raises(ValueError, match = 'not one of its classes'):
+        models.Mnlogit().apply(multiclass, reference = 'missing')
+
+
 def test_ordinal_regression_keeps_the_order_of_its_classes() -> None:
     rng = np.random.default_rng(SEED)
     data = pd.DataFrame({

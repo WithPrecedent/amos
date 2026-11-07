@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib
 import json
 import os
@@ -457,3 +458,126 @@ def test_export_replication_names_the_extra_for_a_missing_writer(
     monkeypatch.setitem(sys.modules, 'tomli_w', None)
     with pytest.raises(ImportError, match = r'amos\[settings\]'):
         project.export_replication(file_format = 'toml')
+
+
+def _model_specific_settings(**extra: Any) -> dict[str, Any]:
+    """Returns settings whose analyst compares logit with a baseline."""
+    return {
+        'general': {'label': 'target', 'seed': SEED},
+        'study_project': {'study_workers': 'analyst, critic, artist'},
+        'analyst': {
+            'design': 'experiment',
+            'criterion': 'accuracy',
+            'steps': 'split, model',
+            'split_techniques': 'stratified',
+            'model_techniques': 'logit, baseline'},
+        'critic': {'techniques': 'scorecard, confusion'},
+        'artist': {'techniques': 'confusion_heatmap, roc_curve'},
+        **extra}
+
+
+def test_the_winners_plots_and_evaluators_replace_the_workflows() -> None:
+    settings = _model_specific_settings(
+        logit_parameters = {
+            'plots': 'importance_plot',
+            'evaluators': 'confusion, classification_report'})
+    project = amos.Project.create(settings, item = make_numeric())
+    result = project.result
+    assert project.workflow is not None
+    workers = {node.name: node for node in project.workflow}
+    assert workers['analyst'].winner.endswith('logit_model')
+    assert set(result.figures) == {'importance_plot'}
+    assert 'scorecard' not in result.tables
+    assert {'confusion', 'classification_report'} <= set(result.tables)
+    replaced = {
+        entry['technique']: entry for entry in result.history
+        if 'replaced_by' in entry}
+    assert set(replaced) == {
+        'scorecard', 'confusion', 'confusion_heatmap', 'roc_curve'}
+    assert replaced['roc_curve']['model'] == 'logit'
+    assert replaced['roc_curve']['model_specific'] == 'plots'
+    assert replaced['roc_curve']['replaced_by'] == ['importance_plot']
+    # The first technique of each genre applies the model's techniques, and
+    # the others are left out, so each is applied once.
+    names = [entry['technique'] for entry in result.history]
+    assert names.count('importance_plot') == 1
+    assert names.count('classification_report') == 1
+
+
+def test_the_workflows_techniques_are_kept_for_other_models() -> None:
+    settings = _model_specific_settings(
+        baseline_parameters = {
+            'plots': 'importance_plot',
+            'evaluators': 'classification_report'})
+    project = amos.Project.create(settings, item = make_numeric())
+    result = project.result
+    assert set(result.figures) == {'confusion_heatmap', 'roc_curve'}
+    assert {'scorecard', 'confusion'} <= set(result.tables)
+    assert 'classification_report' not in result.tables
+    assert not any('replaced_by' in entry for entry in result.history)
+    # A losing model's settings are dropped from the winning settings, and
+    # the winner's are kept.
+    settings['logit_parameters'] = {'plots': ['roc_curve']}
+    project = amos.Project.create(settings, item = make_numeric())
+    winning = project.winning_settings()
+    assert winning is not None
+    assert winning['logit_parameters'] == {'plots': ['roc_curve']}
+    assert 'baseline_parameters' not in winning
+
+
+def test_the_models_inferers_replace_the_workflows() -> None:
+
+    @dataclasses.dataclass
+    class FirstEffect(amos.Inferer):
+        """Records a table of its name, as a stand-in for an inferer."""
+
+        def apply(self, item: amos.Dataset, **kwargs: Any) -> amos.Dataset:
+            """Adds a table named for the inferer."""
+            item.tables[self.name] = pd.DataFrame({'effect': [0.0]})
+            return item
+
+    @dataclasses.dataclass
+    class SecondEffect(FirstEffect):
+        """Another stand-in for an inferer."""
+
+    settings = _model_specific_settings(
+        critic = {'techniques': 'first_effect'},
+        logit_parameters = {'inferers': 'second_effect'})
+    del settings['artist']
+    settings['study_project']['study_workers'] = 'analyst, critic'
+    project = amos.Project.create(settings, item = make_numeric())
+    assert 'second_effect' in project.result.tables
+    assert 'first_effect' not in project.result.tables
+
+
+def test_model_specific_techniques_use_their_own_settings() -> None:
+    settings = _model_specific_settings(
+        logit2_parameters = {
+            'plots': ['auto'],
+            'evaluators': ['classification_report'],
+            'search': 'grid',
+            'C': [0.1, 1.0]},
+        classification_report_parameters = {'digits': 3})
+    settings['analyst']['model_techniques'] = 'logit2'
+    project = amos.Project.create(settings, item = make_numeric())
+    result = project.result
+    techniques = project.model_specific_techniques['logit2']
+    # An "auto" technique chooses techniques of the setting's genre.
+    assert techniques['plots'][0].genre == 'plot'
+    assert techniques['evaluators'][0].parameters == {'digits': 3}
+    assert 'auto_plot' in result.tables
+    # The settings are not parameters of the model, so they are not
+    # searched.
+    assert len(result.tables['logit2_search']) == 2
+    assert 'classification_report' in result.tables
+    assert 'scorecard' not in result.tables
+
+
+def test_a_technique_applied_outside_a_project_is_not_replaced() -> None:
+    settings = _model_specific_settings(
+        logit_parameters = {'evaluators': 'classification_report'})
+    project = amos.Project.create(settings, item = make_numeric())
+    dataset = project.result
+    amos.library.borrow('confusion')().apply(dataset)
+    assert dataset.history[-1]['technique'] == 'confusion'
+    assert 'replaced_by' not in dataset.history[-1]

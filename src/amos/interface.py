@@ -26,6 +26,7 @@ from . import (
     base,
     evaluators,
     loaders,
+    models,
     options,
     pipelines,
     selectors,
@@ -71,6 +72,11 @@ class Project(chrisjen.Project):
     * A "pipeline" named in the settings (such as `pipeline =
       classification` in the "general" section) fills in the settings of the
       analyst, critic, and artist (see the `pipelines` module).
+    * A model's parameters (such as the "xgboost_parameters" section) can
+      name the "plots", "evaluators", and "inferers" to use when it is the
+      dataset's model (such as the winner of a contest). They replace the
+      techniques of those genres that the workflow applies after the model
+      is fitted (see `base.using_model_specific_techniques`).
     * Each group named in a "feature_groups" section of the settings is a
       technique that keeps the features listed for it (see the `selectors`
       module).
@@ -111,8 +117,16 @@ class Project(chrisjen.Project):
 
     Attributes:
         result: the `Dataset` made by the last call to `apply`.
+        model_specific_techniques: the techniques that replace the plots,
+            evaluators, and inferers of the workflow for each model whose
+            parameters name them, by the name of the model and then by the
+            setting ("plots", "evaluators", or "inferers"). They are built
+            by `draft`.
 
     """
+
+    model_specific_techniques: dict[str, dict[str, list[Any]]] = (
+        dataclasses.field(default_factory = dict, init = False, repr = False))
 
     """ Initialization Methods """
 
@@ -185,13 +199,16 @@ class Project(chrisjen.Project):
         are added to the library as techniques (see
         `selectors.register_feature_groups`). Each "auto" technique in the
         workflow is told which kind of technique to choose, from the name of
-        its step or worker (see `auto.resolve`).
+        its step or worker (see `auto.resolve`). The techniques that each
+        model's parameters name for its "plots", "evaluators", and
+        "inferers" are built into `model_specific_techniques`.
 
         """
         pipelines.expand(self.idea, self.name)
         selectors.register_feature_groups(self.idea, self.library)
         super().draft()
         auto.resolve(self.workflow)
+        self.model_specific_techniques = _model_specific_techniques(self)
 
     def apply(self, item: Any = None, **kwargs: Any) -> Any:
         """Applies the workflow to a copy of the data and generates the report.
@@ -206,7 +223,10 @@ class Project(chrisjen.Project):
 
         """
         dataset = self._validate_item(self.item if item is None else item)
-        with base.skipping_incompatible_techniques():
+        with (
+            base.skipping_incompatible_techniques(),
+            base.using_model_specific_techniques(
+                self.model_specific_techniques)):
             result = super().apply(copy.deepcopy(dataset), **kwargs)
         if self.idea.get('files', {}).get('export_results', False):
             self.export()
@@ -696,6 +716,25 @@ def _importable(package: str) -> bool:
     return True
 
 
+def _is_model(name: str, project: Project) -> bool:
+    """Returns whether a technique named in the settings is a model.
+
+    Args:
+        name: the name of a technique, which may end in a number (such as
+            "xgboost2"), as in a workflow.
+        project: the project.
+
+    Returns:
+        Whether the library's class for `name` is a `Model`.
+
+    """
+    try:
+        kind = project.library.borrow(chrisjen.workshop._class_names(name))
+    except KeyError:
+        return False
+    return isinstance(kind, type) and issubclass(kind, models.Model)
+
+
 def _keep_winning_path(
     idea: chrisjen.Idea,
     worker: chrisjen.Contest,
@@ -742,6 +781,45 @@ def _keep_winning_path(
     for key in _COMPARISON_SETTINGS:
         _set_settings(idea, name, key, None)
     return losers
+
+
+def _model_specific_techniques(
+    project: Project) -> dict[str, dict[str, list[Any]]]:
+    """Returns the techniques that replace a workflow's for each model.
+
+    A model's "{name}_parameters" section can name, in its "plots",
+    "evaluators", and "inferers" settings, the techniques (or workers) to
+    use instead of those of the workflow when it is the dataset's model.
+    Each is built like any node of the workflow, with its own parameters.
+    An "auto" technique among them chooses techniques of the setting's
+    genre.
+
+    Args:
+        project: the project.
+
+    Returns:
+        The built techniques, by the name of the model and then by the
+            setting.
+
+    """
+    found: dict[str, dict[str, list[Any]]] = {}
+    for name, parameters in project.idea.parameters.items():
+        settings = {
+            k: v for k, v in parameters.items()
+            if k in base._MODEL_SPECIFIC_GENRES}
+        if not settings or not _is_model(name, project):
+            continue
+        found[name] = {}
+        for setting, value in settings.items():
+            nodes = [
+                chrisjen.workshop.build_node(technique, project)
+                for technique in chrisjen.utilities._listify_names(value)]
+            for node in nodes:
+                if isinstance(node, auto.Auto) and node.genre is None:
+                    node.genre = base._MODEL_SPECIFIC_GENRES[setting]
+                auto.resolve(node)
+            found[name][setting] = nodes
+    return found
 
 
 def _nodes(worker: Any) -> list[Any]:

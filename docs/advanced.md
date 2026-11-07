@@ -97,6 +97,7 @@ The `chrisjen` settings, in brief:
 | `criterion` or `{name}_criterion` | What an `experiment` or `contest` compares: a metric (such as `roc_auc`) or another `chrisjen.Criteria`. |
 | A section named `{name}_parameters` | Parameters for the technique, step, or worker `name`. |
 | A section named `{technique}_{step}_parameters` | Parameters for one technique in one step. |
+| `plots`, `evaluators`, `inferers` in a model's `{model}_parameters` section | The techniques that replace the workflow's plots, evaluators, or inferers when that model is the dataset's model (an `amos` setting; see "Critics and artists for each model" below). |
 
 The designs:
 
@@ -1131,11 +1132,16 @@ statsmodels stores the same table:
 | `poisson`, `negative_binomial`, `generalized_poisson`, `zero_inflated_poisson` | `Poisson`, `NegativeBinomial`, `GeneralizedPoisson`, `ZeroInflatedPoisson` | Counts: whole numbers of 0 or more, which may vary more than a Poisson's or have extra zeros. |
 | `logit_sm`, `probit` | `Logit`, `Probit` | Two classes. Unlike `logit` (scikit-learn's logistic regression), `logit_sm` has no penalty. |
 | `binomial_bayes_mixedglm` | `BinomialBayesMixedGLM` | Two classes, with a random intercept for each of "groups", fitted by variational Bayes. Its table has the mean and standard deviation of each coefficient's posterior and its 95% credible interval, and no p-values. |
-| `mnlogit` | `MNLogit` | Any number of classes. Each class after the first has its own coefficients, named "{feature} ({class})". |
+| `mnlogit` | `MNLogit` | Any number of classes. Each class other than the reference class (set by "reference"; the first class, sorted, by default) has its own coefficients, named "{feature} ({class})". |
 | `ordinal_regression` | `OrderedModel` | Ordered classes, as an ordered logit (or probit, with "distribution"). Its classes are ordered as the categories of an ordered categorical label, and otherwise sorted. |
 
 `mixedlm`, `gee`, and `binomial_bayes_mixedglm` use the dataset's first group
 unless "groups" names a column, and the groups and weights are not features.
+`mnlogit` compares each class with the first class (sorted) unless
+"reference" names another, as in
+`amos.models.Mnlogit().apply(dataset, reference = "granted")`. A class
+matches if it equals "reference" or has the same text, so "2" in a settings
+file matches the class 2.
 The predictions of `mixedlm` and `binomial_bayes_mixedglm` use the fixed
 effects only, so they suit groups that the model has not seen. A feature that is a
 combination of others (collinear) has no coefficient of its own. `ols`, `wls`,
@@ -1854,6 +1860,58 @@ winner = lean.apply(dataset)
 print(list(lean.results) == [lean.winner], len(winner.branches))
 # True 4
 ```
+
+### Critics and artists for each model
+
+Some evaluators, inferers, and plots suit only some models: an importance
+plot suits a random forest, and a ROC curve suits any classifier. A model's
+parameters section can name the "plots", "evaluators", and "inferers" to
+use when it is the dataset's model, such as the winner of a contest. They
+replace the techniques of those genres (and `auto_plot` and
+`auto_evaluator`, or an `auto` that chooses them) that the workflow applies
+after the model is fitted. A model that names none keeps the workflow's:
+
+```python
+settings = {
+    "general": {"label": "target", "seed": 43},
+    "cancer_project": {"cancer_workers": ["analyst", "critic", "artist"]},
+    "analyst": {
+        "design": "contest",
+        "criterion": "f1",
+        "steps": ["split", "scale", "model"],
+        "split_techniques": ["stratified"],
+        "scale_techniques": ["standard"],
+        "model_techniques": ["logit", "random_forest"],
+    },
+    "critic": {"techniques": ["scorecard"]},
+    "artist": {"techniques": ["confusion_heatmap"]},
+    "logit_parameters": {"plots": ["roc_curve", "precision_recall_curve"]},
+    "random_forest_parameters": {
+        "plots": ["importance_plot"],
+        "evaluators": ["permutation_importance"],
+    },
+}
+project = amos.Project.create(settings, item = cancer)
+print([entry["technique"] for entry in project.result.history])
+# ['stratified', 'standard', 'logit', 'scorecard', 'confusion_heatmap', 'roc_curve', 'precision_recall_curve']
+print(sorted(project.result.figures), "scorecard" in project.result.tables)
+# ['precision_recall_curve', 'roc_curve'] True
+settings["analyst"]["model_techniques"] = ["random_forest"]
+forest = amos.Project.create(settings, item = cancer)
+print(sorted(forest.result.figures), sorted(forest.result.tables))
+# ['importance_plot'] ['permutation_importance']
+```
+
+The first technique of a genre that the workflow applies after the model is
+fitted applies the model's techniques instead, and the later ones of that
+genre are left out. Each records the "model" and the techniques it was
+"replaced_by" in `history`. The model's techniques are built like any other,
+with their own parameters sections, and they may be workers. They are not
+parameters of the model (so a list of them is never searched), and they are
+kept in the winning settings that `export_replication` saves. Write them in
+the model's own "{model}_parameters" section (such as "xgboost_parameters",
+or "xgboost2_parameters" for "xgboost2"), not a step's. They apply only in a
+project: a technique applied by itself is never replaced.
 
 ## Cross-validation
 

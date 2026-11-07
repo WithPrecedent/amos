@@ -196,7 +196,7 @@ steps = split, encode,  # the first two steps
 | `files` | Where the project keeps its files, and whether it exports its results after every run (see the [settings reference](advanced.md#settings-reference)). |
 | `{name}_project` | The project. Its `{name}_workers` setting lists the workers, in order. |
 | A section named for a worker | The worker's steps, techniques, and design (see the [settings reference](advanced.md#settings-reference)). |
-| `{name}_parameters` | Parameters for the technique, step, or worker `name` (see [Set parameters](tutorial.md#6-set-parameters)). |
+| `{name}_parameters` | Parameters for the technique, step, or worker `name` (see [Set parameters](tutorial.md#6-set-parameters)). A model's section can also name the `plots`, `evaluators`, and `inferers` to use when it is the dataset's model (see [Critics and artists for each model](advanced.md#critics-and-artists-for-each-model)). |
 | `feature_groups` | Groups of features, each named as a technique that keeps only its features (see [Groups of features](advanced.md#groups-of-features)). |
 
 ## The general section

@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* A model's parameters section (such as "xgboost_parameters") can name the
+  "plots", "evaluators", and "inferers" to use when it is the dataset's
+  model, such as the winner of a contest. In a project, they replace the
+  techniques of those genres (and `auto_plot`, `auto_evaluator`, or an
+  `auto` that chooses them) that the workflow applies after the model is
+  fitted, so the critic and artist can suit whichever model won. A model
+  that names none keeps the workflow's. Each replaced technique records the
+  "model" and the techniques it was "replaced_by" in `history`, and the
+  settings are not passed to the model as parameters. The new
+  `Project.model_specific_techniques` holds them, built by `draft`, and
+  `base.using_model_specific_techniques` applies them.
+* `mnlogit` takes "reference", the class that its coefficients compare the
+  other classes with (the first class, sorted, by default). A class matches
+  if it equals "reference" or has the same text, so a reference read from a
+  settings file matches a class that is a number. `Statsmodel.levels_` now
+  puts the reference first, and its table of coefficients has a row for
+  each feature and class other than the reference.
+
 ## 0.7.0
 
 * A project whose workflow has an `experiment` or `contest` exports

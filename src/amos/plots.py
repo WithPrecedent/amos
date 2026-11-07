@@ -180,6 +180,7 @@ class Plot(base.Operation, abc.ABC):
     # regression these axes do not start at 0, unless the plot is given
     # "start_at_zero".
     label_axes: ClassVar[str] = ''
+    model_specific_setting: ClassVar[str] = 'plots'
 
     """ Required Methods """
 

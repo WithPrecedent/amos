@@ -280,7 +280,7 @@ in order, and the analyst tries every path through its steps:
 
 ```mermaid
 flowchart TB
-    data[("breast cancer data")] --> wrangler
+    data[("breast cancer<br/>data")] --> wrangler
 
     subgraph wrangler ["wrangler"]
         direction LR
@@ -292,7 +292,7 @@ flowchart TB
         summarize --> missing_values --> label_balance
     end
 
-    subgraph analyst ["analyst: an experiment of 12 combinations"]
+    subgraph analyst ["analyst: 12 combinations"]
         direction LR
         subgraph split ["split"]
             stratified
@@ -324,7 +324,7 @@ flowchart TB
     end
 
     wrangler --> explorer --> analyst
-    analyst -- "the combination with the best roc_auc" --> critic
+    analyst -- "the combination with<br/>the best roc_auc" --> critic
     critic --> artist
 ```
 

@@ -10,7 +10,18 @@ Contents:
         dataset's model.
     skipping_incompatible_techniques: skips those techniques, rather than
         raising their errors, in a workflow.
+    using_model_specific_techniques: replaces the plots, evaluators, and
+        inferers of a workflow with those that the dataset's model names.
     _SKIPS_INCOMPATIBLE: whether the code that is running is in a workflow.
+    _MODEL_SPECIFIC_GENRES: the settings of a model's parameters that name
+        the techniques that replace those of a workflow, and the genre of
+        the techniques that each replaces.
+    _TechniquesByModel: the type of the techniques that replace those of a
+        workflow, by the name of the model and the setting.
+    _MODEL_SPECIFIC_TECHNIQUES: the techniques that replace those of a
+        workflow, by the name of the model and the setting.
+    _OPERATION_DEPTH: how many operations are being applied, one inside
+        another.
 
 """
 
@@ -19,6 +30,7 @@ from __future__ import annotations
 import abc
 import contextlib
 import contextvars
+import copy
 import dataclasses
 import logging
 import pathlib
@@ -49,6 +61,24 @@ _TASKS: tuple[str, ...] = ('classify', 'regress')
 # Whether a technique that does not suit the model is skipped.
 _SKIPS_INCOMPATIBLE: contextvars.ContextVar[bool] = contextvars.ContextVar(
     'skips_incompatible', default = False)
+# The settings of a model's parameters that name the techniques that replace
+# those of a workflow when it is the dataset's model, and the genre of the
+# techniques that each replaces.
+_MODEL_SPECIFIC_GENRES: dict[str, str] = {
+    'plots': 'plot', 'evaluators': 'evaluator', 'inferers': 'inferer'}
+# The techniques (built nodes) that replace those of a workflow, by the name
+# of the model and then by the setting (a key of `_MODEL_SPECIFIC_GENRES`).
+_TechniquesByModel: TypeAlias = Mapping[str, Mapping[str, Sequence[Any]]]
+# The techniques that replace those of the workflow that is being applied.
+# The default is never changed (a new mapping is set instead).
+_MODEL_SPECIFIC_TECHNIQUES: contextvars.ContextVar[_TechniquesByModel] = (
+    contextvars.ContextVar(
+        'model_specific_techniques', default = {}))  # noqa: B039
+# How many operations are being applied, one inside another. Only an
+# operation that a workflow applies itself (not one that another operation
+# applies, such as a plot that `auto_plot` chose) is replaced.
+_OPERATION_DEPTH: contextvars.ContextVar[int] = contextvars.ContextVar(
+    'operation_depth', default = 0)
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +114,36 @@ def skipping_incompatible_techniques() -> Generator[None, None, None]:
         yield
     finally:
         _SKIPS_INCOMPATIBLE.reset(token)
+
+
+@contextlib.contextmanager
+def using_model_specific_techniques(
+    techniques: _TechniquesByModel) -> Generator[None, None, None]:
+    """Replaces a workflow's techniques with those that its model names.
+
+    A `Project` applies its workflow in this context, with the techniques
+    named by the "plots", "evaluators", and "inferers" settings of each
+    model's parameters. Inside it, when the dataset's model (the last model
+    in its `history`) names techniques for a genre, the first technique of
+    that genre that the workflow applies after the model was fitted applies
+    them instead of itself, and every later one is left out. Each records in
+    `history` the techniques that replaced it (see
+    `Operation._replace_with_model_specific`).
+
+    Args:
+        techniques: the techniques (built nodes) that replace those of the
+            workflow, by the name of the model and then by the setting
+            ("plots", "evaluators", or "inferers").
+
+    Yields:
+        None: control, to the code in the context.
+
+    """
+    token = _MODEL_SPECIFIC_TECHNIQUES.set(techniques)
+    try:
+        yield
+    finally:
+        _MODEL_SPECIFIC_TECHNIQUES.reset(token)
 
 
 # `eq` is `False` so that comparing datasets does not compare their data
@@ -799,9 +859,12 @@ class Operation(chrisjen.Technique, abc.ABC):
     `Operation` is a genre: its abstract subclasses (`Loader`, `Cleaner`,
     `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`,
     `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, and `Plot`) are
-    genres within it. To add a technique, subclass the genre that fits and
-    write the method it requires, or set `contents` to the tool to wrap. To
-    add a new kind of technique, subclass `Operation` and write `apply`.
+    genres within it. In a project, a plot, evaluator, or inferer can be
+    replaced by the techniques that the dataset's model names in its
+    parameters (see `using_model_specific_techniques`). To add a technique,
+    subclass the genre that fits and write the method it requires, or set
+    `contents` to the tool to wrap. To add a new kind of technique, subclass
+    `Operation` and write `apply`.
     (Metrics are not operations: see `amos.metrics.Metric`.)
 
     Args:
@@ -819,6 +882,10 @@ class Operation(chrisjen.Technique, abc.ABC):
     # An empty name is replaced with the snake case name of the class when the
     # technique is created (by `holden.Labeled`), so the name is never `None`.
     name: str = ''
+    # The setting of a model's parameters ("plots", "evaluators", or
+    # "inferers") whose techniques replace this one when that model is the
+    # dataset's model, or an empty `str` if none does.
+    model_specific_setting: ClassVar[str] = ''
 
     """ Public Methods """
 
@@ -863,11 +930,17 @@ class Operation(chrisjen.Technique, abc.ABC):
         Returns:
             The changed `Dataset`, or, in a workflow, the `Dataset` with a
                 record that the technique was skipped, if `method` raised an
-                `IncompatibleTechniqueError`.
+                `IncompatibleTechniqueError`. If the dataset's model names
+                techniques that replace this one, the `Dataset` changed by
+                them (see `_replace_with_model_specific`).
 
         """
         dataset = Dataset.create(item)
+        replaced = self._replace_with_model_specific(dataset)
+        if replaced is not None:
+            return replaced
         count = len(dataset.history)
+        token = _OPERATION_DEPTH.set(_OPERATION_DEPTH.get() + 1)
         try:
             result: Dataset = method(
                 self, dataset, **{**self._keywords(), **kwargs})
@@ -877,6 +950,8 @@ class Operation(chrisjen.Technique, abc.ABC):
             logger.warning(f'{self.name!r} was skipped: {error}')
             dataset.record(self.name, skipped = True, reason = str(error))
             return dataset
+        finally:
+            _OPERATION_DEPTH.reset(token)
         # Records the operation if `apply` did not record it in more detail.
         if len(result.history) == count:
             result.record(self.name, tool = utilities.describe_tool(
@@ -940,6 +1015,19 @@ class Operation(chrisjen.Technique, abc.ABC):
         """
         return {str(k): v for k, v in self.parameters.items()}
 
+    def _model_specific_key(self) -> str:
+        """Returns the setting of a model's parameters that can replace this.
+
+        Subclasses whose genre depends on the instance (such as the choosers)
+        override this.
+
+        Returns:
+            "plots", "evaluators", or "inferers", or an empty `str` if no
+                model's techniques replace this one.
+
+        """
+        return self.model_specific_setting
+
     def _namify(self) -> str:
         """Returns the snake case name of the class.
 
@@ -951,6 +1039,50 @@ class Operation(chrisjen.Technique, abc.ABC):
 
         """
         return str(camina.snakify(type(self).__name__))
+
+    def _replace_with_model_specific(self, item: Dataset) -> Dataset | None:
+        """Applies the techniques that the dataset's model names for this one.
+
+        This is done only in `using_model_specific_techniques`, and only for
+        an operation that a workflow applies itself (not one that another
+        operation applies). If the model (the last one in `history`) names
+        techniques for this one's setting (see `_model_specific_key`), this
+        one is not applied. The first of its genre since the model was fitted
+        applies those techniques (each a copy, as a contest copies its
+        nodes), and a later one does nothing. Either way, its entry in
+        `history` has the "model", the "model_specific" setting, and the
+        techniques it was "replaced_by".
+
+        Args:
+            item: the dataset.
+
+        Returns:
+            The dataset, changed by the model's techniques, or `None` if no
+                technique replaces this one, in which case it is applied.
+
+        """
+        setting = self._model_specific_key()
+        if not setting or _OPERATION_DEPTH.get():
+            return None
+        model, done = _model_and_replaced(item, setting)
+        techniques = _MODEL_SPECIFIC_TECHNIQUES.get().get(
+            model or '', {}).get(setting)
+        if model is None or techniques is None:
+            return None
+        item.record(
+            self.name,
+            model = model,
+            model_specific = setting,
+            replaced_by = [str(t.name) for t in techniques])
+        if done:
+            return item
+        token = _OPERATION_DEPTH.set(_OPERATION_DEPTH.get() + 1)
+        try:
+            for technique in techniques:
+                item = copy.deepcopy(technique).apply(item)
+        finally:
+            _OPERATION_DEPTH.reset(token)
+        return item
 
     def _prepare(
         self,
@@ -1072,6 +1204,31 @@ class Visualizer:
 
 
 """ Private Functions """
+
+
+def _model_and_replaced(
+    item: Dataset,
+    setting: str) -> tuple[str | None, bool]:
+    """Returns the dataset's model and whether its techniques were applied.
+
+    Args:
+        item: the dataset.
+        setting: "plots", "evaluators", or "inferers".
+
+    Returns:
+        The name of the last model in `history` (the last entry with a
+            "search", which only models record), or `None` if there is
+            none, and whether a technique was replaced by the techniques of
+            that model's `setting` since it was fitted.
+
+    """
+    replaced = False
+    for entry in reversed(item.history):
+        if 'search' in entry:
+            return str(entry.get('technique')), replaced
+        if entry.get('model_specific') == setting:
+            replaced = True
+    return None, replaced
 
 
 def _made_up(

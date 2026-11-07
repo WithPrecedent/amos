@@ -503,6 +503,20 @@ class Chooser(base.Operation, abc.ABC):
 
     """ Private Methods """
 
+    def _model_specific_key(self) -> str:
+        """Returns the setting of a model's parameters that can replace this.
+
+        A chooser of plots or evaluators (such as `auto_plot`) is replaced,
+        like the techniques it chooses, by those that the dataset's model
+        names (see `base.using_model_specific_techniques`).
+
+        Returns:
+            The setting for the genre that the chooser chooses ("plots" or
+                "evaluators"), or an empty `str` if there is none.
+
+        """
+        return _model_specific_key_of(self.chooses)
+
     def _apply_each(
         self,
         item: base.Dataset,
@@ -613,6 +627,8 @@ class Auto(Chooser):
 
     genre: str | None = None
 
+    """ Public Methods """
+
     def apply(self, item: base.Dataset, **kwargs: Any) -> base.Dataset:
         """Applies the chooser for `genre` to `item`.
 
@@ -643,6 +659,18 @@ class Auto(Chooser):
             raise ValueError(message)
         result: base.Dataset = kind().apply(item, **kwargs)
         return result
+
+    """ Private Methods """
+
+    def _model_specific_key(self) -> str:
+        """Returns the setting of a model's parameters that can replace this.
+
+        Returns:
+            The setting for `genre` ("plots" or "evaluators"), or an empty
+                `str` if there is none.
+
+        """
+        return _model_specific_key_of(self.genre or '')
 
 
 @dataclasses.dataclass
@@ -1895,6 +1923,24 @@ def _model_name(item: base.Dataset) -> str | None:
         if record.get('technique') in names:
             return str(record['technique'])
     return None
+
+
+def _model_specific_key_of(genre: str) -> str:
+    """Returns the setting of a model's parameters for a genre.
+
+    Args:
+        genre: the genre of a chooser's techniques (such as "plot").
+
+    Returns:
+        The setting of a model's parameters (such as "plots") whose
+            techniques replace those of `genre`, or an empty `str` if there
+            is none.
+
+    """
+    return next(
+        (setting for setting, kind in base._MODEL_SPECIFIC_GENRES.items()
+         if kind == genre),
+        '')
 
 
 def _profile_classes(found: Profile, y: pd.Series) -> None:
