@@ -84,8 +84,12 @@ pipeline](https://WithPrecedent.github.io/amos/idea/#pipeline), such as
 the analyst, critic, and artist for a kind of study, and adapts to your data
 as it runs: it fills missing values, encodes categories with many levels
 differently from those with few, balances rare classes, and chooses the
-models, evaluators, and figures that suit the data, recording why. Any
-setting you write yourself wins.
+models, evaluators, and figures that suit the data, recording why. Every
+model also has a pipeline of its own for each task (such as
+`pipeline = xgboost_classification` or `pipeline = ols_regression`), which
+prepares the data as that model needs (scaling only the models that need it,
+for example) and draws the figures that explain it best. Any setting you
+write yourself wins.
 
 ### Reproducible
 

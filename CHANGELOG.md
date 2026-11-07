@@ -6,6 +6,29 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+* Every model has a named pipeline of its own for each task that it can do,
+  such as `random_forest_classification`, `random_forest_regression`,
+  `ols_regression`, or `quantile_inference` (`fixest` has the panel
+  pipelines). Each prepares the data as its model needs: features are
+  scaled only for models that need it (standardized for penalized linear
+  models, support vector machines, nearest neighbors, and neural networks,
+  and made more normal for naive Bayes), missing values are left for the
+  models that handle them, categories are encoded against a reference level
+  for models with an intercept and no penalty, rare classes are weighted by
+  the models that can weigh them and resampled for the others (but not for
+  models for inference), models that overfit without tuning search for
+  their best settings, nearest neighbors keep the 20 features most related
+  to the label, and a neural network stops early. The critic and artist
+  choose among the evaluators and plots that explain the model's family
+  best, such as SHAP values for trees, the diagnostics of a model's
+  assumptions for models for inference, a learning curve for a neural
+  network, and survival curves for a Cox model. The technique catalog lists
+  every pipeline with its steps.
+* `Pipeline` has `grouped`, for a model that needs the dataset's groups
+  (`gee`, `mixedlm`, and `binomial_bayes_mixedglm`), and `required` and
+  `shared_with`, for parameters that the settings must give (such as the
+  "event" of `cox`, which `survival_curves` is also given). `Pipeline.models`
+  returns the models that a pipeline fits or chooses among.
 * A model's parameters section (such as "xgboost_parameters") can name the
   "plots", "evaluators", and "inferers" to use when it is the dataset's
   model, such as the winner of a contest. In a project, they replace the

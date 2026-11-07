@@ -567,6 +567,52 @@ their standard errors), and they encode each categorical feature against
 its first level, so its coefficients are differences from that level. The
 panel pipelines need "groups".
 
+Every model also has a pipeline of its own for each task that it can do,
+named for the model and the task: `random_forest_classification` and
+`random_forest_regression`, `ols_regression`, `logit_sm_classification`, and
+so on (for a model whose name ends in "_regression", "_inference" takes its
+place, as in `quantile_inference`). Each prepares the data as its
+model needs, and no more, and explains the model with the evaluators and
+plots that suit it:
+
+* Only models that need it are scaled: penalized linear models, support
+  vector machines, nearest neighbors, and neural networks are
+  standardized, and naive Bayes's features are made more normal (as it
+  assumes). Trees and models for inference are not scaled.
+* Missing values are left for the models that handle them (the boosting
+  models, explainable boosting, and TabPFN) and filled for the others.
+* Rare classes are weighted by the models that can weigh them, resampled for
+  those that cannot (nearest neighbors, neural networks, naive Bayes,
+  AdaBoost, and XGBoost), and kept as they are for models for inference.
+* Models that overfit without tuning search for their best settings (by
+  balanced accuracy or RMSE): a decision tree's depth, the penalty of a
+  lasso, ridge, elastic net, or logit model, the neighbors of nearest
+  neighbors, and so on. Nearest neighbors keep only the 20 features most
+  related to the label, and a neural network stops early.
+* The critic and artist choose among the evaluators and plots of the
+  model's family: SHAP values and partial dependence for trees, a
+  regression table and the plots that check the model's assumptions (a Q-Q
+  plot of its errors, influential rows, calibration) for models for
+  inference, shape functions for explainable boosting, a learning curve
+  for a neural network, and survival curves for a Cox model.
+
+`gee_classification`, `gee_regression`, `mixedlm_regression`, and
+`binomial_bayes_mixedglm_classification` need "groups", and are tested on
+groups that they have not seen. `cox_regression` needs "event" in the
+"cox_parameters" section, and `wls_regression` needs "weights" in the
+"wls_parameters" section. The [technique catalog](catalog.md#pipelines)
+lists every pipeline with its steps.
+
+```python
+knn = amos.pipelines.PIPELINES["knn_classification"]
+print(knn.analyst["steps"])
+# ['split', 'impute', 'scale', 'encode', 'select', 'sample', 'model']
+print(knn.analyst["scale_techniques"], knn.parameters["k_best"])
+# ['standard'] {'k': 20}
+print(amos.pipelines.PIPELINES["xgboost_regression"].analyst["steps"])
+# ['split', 'encode', 'model']
+```
+
 Every setting that you write yourself wins, so a pipeline is a starting
 point. Change what you need and keep the rest:
 

@@ -99,7 +99,28 @@ def tables() -> str:
                     f'| {_name(name, kind)} | {_tool(kind.contents)} | '
                     f'{_description(kind)} |\n')
         out.write('\n')
+    out.write(pipelines())
     return out.getvalue().rstrip('\n') + '\n'
+
+
+def pipelines() -> str:
+    """Returns the section of the catalog that lists the named pipelines.
+
+    Returns:
+        The Markdown of the section: a table with the task, models, steps of
+            the analyst, and description of each pipeline, sorted by name.
+
+    """
+    out = io.StringIO()
+    out.write('## Pipelines\n\n')
+    out.write('| Name | Task | Models | Analyst | Description |\n')
+    out.write('| --- | --- | --- | --- | --- |\n')
+    for name, pipeline in sorted(amos.pipelines.PIPELINES.items()):
+        models = ', '.join(f'`{model}`' for model in pipeline.models) or 'auto'
+        out.write(
+            f'| `{name}` | {pipeline.task} | {models} | '
+            f'{_steps(pipeline)} | {pipeline.description} |\n')
+    return out.getvalue()
 
 
 """ Private Functions """
@@ -132,6 +153,22 @@ def _name(name: str, kind: type) -> str:
 
     """
     return f'[`{name}`][{kind.__module__}.{kind.__qualname__}]'
+
+
+def _steps(pipeline: amos.Pipeline) -> str:
+    """Returns the steps of a pipeline's analyst and their techniques.
+
+    Args:
+        pipeline: a named pipeline.
+
+    Returns:
+        Each step and its techniques (such as "scale: standard"), in order.
+
+    """
+    analyst = pipeline.analyst
+    return ' → '.join(
+        f'{step}: {", ".join(analyst.get(f"{step}_techniques", []))}'
+        for step in analyst.get('steps', []))
 
 
 def _techniques(genre: str) -> list[tuple[str, type]]:
