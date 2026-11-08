@@ -4,8 +4,20 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.7.1
 
+* The statsmodels models need far less memory and time for millions of
+  rows. `Statsmodel` makes its features floats in one array (by columns),
+  which statsmodels shares rather than copies, instead of copying every row
+  as it makes them floats, adds the constant, and leaves out collinear
+  features. It finds the collinear features from one QR decomposition made
+  a block of rows at a time, instead of a singular value decomposition of
+  every row for each feature (the same features, by the same tolerance),
+  and the discrete models (such as `logit_sm`, `mnlogit`, and `poisson`)
+  no longer check the rank of the features again. A multinomial logit of a
+  million rows and 76 features is fitted in about a quarter of the time,
+  with about two thirds of the memory. A feature named "const" now raises
+  an error in a model with a constant, rather than pandas' error.
 * Every model has a named pipeline of its own for each task that it can do,
   such as `random_forest_classification`, `random_forest_regression`,
   `ols_regression`, or `quantile_inference` (`fixest` has the panel
