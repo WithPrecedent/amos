@@ -28,6 +28,7 @@ nav:
   - Idea File: idea.md
   - Advanced User Guide: advanced.md
   - Technique Catalog: catalog.md
+  - Pipeline Chart: pipelines.md
   - Recipes: recipes.md
 - API: reference/
 - Development:
@@ -86,6 +87,7 @@ theme:
 extra_css:
 - css/material.css
 - css/mkdocstrings.css
+- css/pipelines.css
 
 markdown_extensions:
 - attr_list

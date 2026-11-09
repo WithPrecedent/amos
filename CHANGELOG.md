@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* A "Pipeline Chart" page in the user guide, after the technique catalog,
+  shows the steps of every named pipeline side by side: the techniques of
+  each step of the analyst, critic, and artist of the pipelines for studies,
+  and the steps, search, validator, and extra plots of the pipeline of each
+  model, grouped by the model's family (with buttons that show the
+  pipelines of one task). `docs/scripts/pipeline_chart.py` draws it from
+  `PIPELINES` when the documentation is built, so it is never out of date.
+
 ## 0.7.1
 
 * The statsmodels models need far less memory and time for millions of

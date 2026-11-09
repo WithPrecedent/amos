@@ -1,0 +1,247 @@
+/* The pipeline chart (docs/pipelines.md, drawn by
+   docs/scripts/pipeline_chart.py). Each worker has a color: the analyst
+   blue, the critic amber, and the artist violet. */
+:root {
+  --pc-analyst: #2f6fd6;
+  --pc-analyst-bg: #e3edfc;
+  --pc-critic: #b5651d;
+  --pc-critic-bg: #fbeedd;
+  --pc-artist: #7a46c2;
+  --pc-artist-bg: #efe6fa;
+  --pc-classify: #0f7c6b;
+  --pc-regress: #b03a5b;
+}
+
+[data-md-color-scheme="slate"] {
+  --pc-analyst: #7aa8f5;
+  --pc-analyst-bg: #1b2c47;
+  --pc-critic: #e2a361;
+  --pc-critic-bg: #3a2a18;
+  --pc-artist: #b894ee;
+  --pc-artist-bg: #2c2142;
+  --pc-classify: #4fc7b2;
+  --pc-regress: #ee7f9c;
+}
+
+/* The strip of the three workers. */
+.md-typeset .pc-workers-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1em 0;
+}
+
+.md-typeset .pc-worker {
+  flex: 1 1 14rem;
+  min-width: 0;
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.2rem;
+}
+
+.md-typeset .pc-worker.pc-a {
+  flex-grow: 2.4;
+  background: var(--pc-analyst-bg);
+}
+
+.md-typeset .pc-worker.pc-c {
+  background: var(--pc-critic-bg);
+}
+
+.md-typeset .pc-worker.pc-r {
+  background: var(--pc-artist-bg);
+}
+
+.md-typeset .pc-worker.pc-a strong { color: var(--pc-analyst); }
+.md-typeset .pc-worker.pc-c strong { color: var(--pc-critic); }
+.md-typeset .pc-worker.pc-r strong { color: var(--pc-artist); }
+
+.md-typeset .pc-chain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.md-typeset .pc-chain i {
+  font-style: normal;
+  color: var(--md-default-fg-color--light);
+}
+
+/* Techniques and settings. */
+.md-typeset code.pc-chip {
+  display: inline-block;
+  margin: 0.1em 0.2em 0.1em 0;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.md-typeset code.pc-optional {
+  background: transparent;
+  outline: 1px dashed var(--md-default-fg-color--lighter);
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .pc-note,
+.md-typeset .pc-description,
+.md-typeset .pc-needs {
+  display: block;
+  margin-top: 0.2em;
+  font-size: 0.9em;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .pc-description {
+  max-width: 40ch;
+}
+
+.md-typeset .pc-needs {
+  color: var(--pc-critic);
+}
+
+.md-typeset .pc-skip {
+  color: var(--md-default-fg-color--lighter);
+}
+
+/* The tables. */
+.md-typeset .pc-scroll {
+  overflow-x: auto;
+  margin: 1em 0;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+}
+
+.md-typeset table.pc-table {
+  display: table;
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.64rem;
+}
+
+.md-typeset .pc-table th,
+.md-typeset .pc-table td {
+  padding: 0.45em 0.7em;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset .pc-table thead th {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.md-typeset .pc-table tr.pc-workers th {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.md-typeset .pc-table tr.pc-workers th span {
+  display: block;
+  padding-bottom: 0.25em;
+  border-bottom: 3px solid;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.md-typeset .pc-table th.pc-a span { color: var(--pc-analyst); }
+.md-typeset .pc-table th.pc-c span { color: var(--pc-critic); }
+.md-typeset .pc-table th.pc-r span { color: var(--pc-artist); }
+
+.md-typeset .pc-table tr.pc-columns th {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .pc-table td.pc-a {
+  background: color-mix(in srgb, var(--pc-analyst-bg) 45%, transparent);
+}
+
+.md-typeset .pc-table td.pc-c {
+  background: color-mix(in srgb, var(--pc-critic-bg) 45%, transparent);
+}
+
+.md-typeset .pc-table td.pc-r {
+  background: color-mix(in srgb, var(--pc-artist-bg) 45%, transparent);
+}
+
+.md-typeset .pc-table tr.pc-family td {
+  padding-top: 1em;
+  background: var(--md-default-bg-color);
+}
+
+.md-typeset .pc-table tr.pc-family span {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .pc-name {
+  display: block;
+  font-family: var(--md-code-font-family);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.md-typeset .pc-task {
+  display: inline-block;
+  margin-top: 0.2em;
+  padding: 0 0.4em;
+  border: 1px solid;
+  border-radius: 0.15rem;
+  font-size: 0.8em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.md-typeset .pc-task.pc-classify { color: var(--pc-classify); }
+.md-typeset .pc-task.pc-regress { color: var(--pc-regress); }
+
+/* The buttons that show the pipelines of one task, and the legend. */
+.md-typeset .pc-filter {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 0.2rem;
+}
+
+.md-typeset .pc-filter button {
+  padding: 0.35em 0.9em;
+  border: 0;
+  background: transparent;
+  color: var(--md-default-fg-color);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.md-typeset .pc-filter button + button {
+  border-left: 1px solid var(--md-default-fg-color--lighter);
+}
+
+.md-typeset .pc-filter button span {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .pc-filter button[aria-pressed="true"] {
+  background: var(--md-default-fg-color);
+  color: var(--md-default-bg-color);
+}
+
+.md-typeset .pc-filter button[aria-pressed="true"] span {
+  color: var(--md-default-bg-color--light);
+}
+
+.md-typeset .pc-filter button:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: -2px;
+}
+
+.md-typeset .pc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 1.2em;
+  font-size: 0.65rem;
+  color: var(--md-default-fg-color--light);
+}
