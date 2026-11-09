@@ -71,6 +71,7 @@ _EXTRAS: dict[str, str] = {
     'catboost': 'boosting',
     'category_encoders': 'encoders',
     'causalml': 'causal',
+    'diptest': 'statistics',
     'docx': 'word',
     'doubleml': 'causal',
     'dowhy': 'causal',

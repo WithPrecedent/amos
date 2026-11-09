@@ -4,8 +4,41 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.7.2
 
+* Explorers that test the distribution of each column (every column, unless
+  "columns" names some), with the usual test of each at a significance
+  level of "alpha" (0.05 by default): `is_normal` (Shapiro-Wilk, or
+  D'Agostino and Pearson's test beyond 5,000 values), `is_log_normal` (the
+  same test of the logarithms), `is_left_skewed` and `is_right_skewed`
+  (D'Agostino's test of skew), `is_poisson` and `is_binomial` (chi-square),
+  `is_uniform` (chi-square for whole numbers, Kolmogorov-Smirnov
+  otherwise), `is_exponential` (Anderson-Darling), `is_student` and
+  `is_beta` (Kolmogorov-Smirnov against the fit by maximum likelihood),
+  `is_bernoulli` (every value is 0 or 1), and `is_bimodal` (Hartigan's dip
+  test, with tied whole numbers spread evenly first). Each makes a table
+  with a boolean for each column, which is false for a column that is not
+  numeric or boolean or has fewer than 8 values. A binomial distribution's
+  number of trials is "trials", or by default the number that makes the
+  values most likely.
+* `distributions` names the distribution of each column: the one with the
+  lowest AIC that passes its test (or "none"), the "closest" one by AIC
+  whether or not it passes, and the direction of the "skew". Continuous
+  distributions are compared with discrete ones on whole numbers by the
+  probability within half of each value, and a bimodal distribution (a
+  mixture of two normal distributions) is considered only when the dip test
+  finds more than one peak.
+* The `distribution_fits` plot draws each numeric column's histogram (or
+  bars, for whole numbers) with the counts that a fitted distribution
+  expects, which the new explorers draw with `visualize`.
+* `describers` has the functions that they use: `fits_distribution`,
+  `fit_distribution`, `best_distribution`, and `is_skewed`. Student's t
+  distribution is fitted with the gradient of its likelihood, which takes
+  about a second for a million values, rather than SciPy's own `fit`.
+* The "statistics" extra installs diptest, for `is_bimodal`
+  (`distributions` leaves out a bimodal distribution, with a warning, if it
+  is not installed). SciPy 1.17 or later is required, for the p-values of
+  the Anderson-Darling test.
 * A "Pipeline Chart" page in the user guide, after the technique catalog,
   shows the steps of every named pipeline side by side: the techniques of
   each step of the analyst, critic, and artist of the pipelines for studies,

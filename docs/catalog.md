@@ -99,7 +99,20 @@ Every model has a pipeline of its own for each task that it can do. The
 | [`association_rules`][amos.describers.AssociationRules] | Rules of which values tend to appear in the same rows. |
 | [`correlations`][amos.describers.Correlations] | Correlations between the numeric columns (including the label). |
 | [`describe`][amos.describers.Describe] | The `pandas` description of every column, one row per column. |
+| [`distributions`][amos.describers.Distributions] | The distribution that fits each column best, and its skew. |
 | [`frequencies`][amos.describers.Frequencies] | The count and share of each value of the categorical columns. |
+| [`is_bernoulli`][amos.describers.IsBernoulli] | Whether each column is a Bernoulli distribution (0s and 1s). |
+| [`is_beta`][amos.describers.IsBeta] | Whether each column fits a beta distribution. |
+| [`is_bimodal`][amos.describers.IsBimodal] | Whether each column has more than one peak (Hartigan's dip test). |
+| [`is_binomial`][amos.describers.IsBinomial] | Whether each column fits a binomial distribution. |
+| [`is_exponential`][amos.describers.IsExponential] | Whether each column fits an exponential distribution. |
+| [`is_left_skewed`][amos.describers.IsLeftSkewed] | Whether each column is skewed to the left. |
+| [`is_log_normal`][amos.describers.IsLogNormal] | Whether each column fits a log-normal distribution. |
+| [`is_normal`][amos.describers.IsNormal] | Whether each column fits a normal distribution. |
+| [`is_poisson`][amos.describers.IsPoisson] | Whether each column fits a Poisson distribution. |
+| [`is_right_skewed`][amos.describers.IsRightSkewed] | Whether each column is skewed to the right. |
+| [`is_student`][amos.describers.IsStudent] | Whether each column fits a Student's t distribution. |
+| [`is_uniform`][amos.describers.IsUniform] | Whether each column fits a uniform distribution. |
 | [`kaplan_meier`][amos.describers.KaplanMeier] | The share of rows without an event over time (a survival curve). |
 | [`label_balance`][amos.describers.LabelBalance] | The count and share of each value of the label. |
 | [`missing_values`][amos.describers.MissingValues] | The count and share of missing values in each column. |
@@ -338,6 +351,7 @@ Every model has a pipeline of its own for each task that it can do. The
 | [`count_plots`][amos.plots.CountPlots] | The count of each value of each categorical feature, split by class. |
 | [`decision_regions`][amos.plots.DecisionRegions] | The class that the model predicts across two features (classification). |
 | [`det_curve`][amos.plots.DetCurve] | The detection error tradeoff (DET) curve (classification). |
+| [`distribution_fits`][amos.plots.DistributionFits] | Each column's histogram with a fitted distribution laid over it. |
 | [`distribution_plots`][amos.plots.DistributionPlots] | The distribution of every column, in a grid. |
 | [`estimates_plot`][amos.plots.EstimatesPlot] | Every model's estimates with their confidence intervals. |
 | [`fairness_plot`][amos.plots.FairnessPlot] | The model's fairness metrics for each group, as bars. |

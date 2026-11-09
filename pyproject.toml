@@ -7,7 +7,7 @@ authors = [{name = "Corey Rayburn Yung", email = "coreyrayburnyung@gmail.com"}]
 license = {text = "Apache Software License 2.0"}
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.7.1"
+version = "0.7.2"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -43,7 +43,7 @@ dependencies = [
     "numpy>=1.26",
     "pandas>=3.0",
     "scikit-learn>=1.5",
-    "scipy>=1.10"]
+    "scipy>=1.17"]
 
 [project.optional-dependencies]
 # Each extra adds the packages that one group of techniques wraps. A technique
@@ -70,7 +70,7 @@ polars = ["polars>=1.0", "pyarrow>=15"]
 sampling = ["imbalanced-learn>=0.12"]
 # Writers for the toml and yaml formats of settings files.
 settings = ["bobbie[toml,yaml]>=0.4.0"]
-statistics = ["pyfixest>=0.30", "statsmodels>=0.14"]
+statistics = ["diptest>=0.10", "pyfixest>=0.30", "statsmodels>=0.14"]
 survival = ["statsmodels>=0.14"]
 tables = ["great-tables>=0.15"]
 tuning = ["optuna>=4.0", "optuna-integration[sklearn]>=4.0"]
@@ -110,6 +110,7 @@ tests = [
     "catboost>=1.2",
     "category-encoders>=2.6",
     "causalml>=0.17; python_version < '3.13'",
+    "diptest>=0.10",
     "doubleml>=0.11",
     "dowhy>=0.14; python_version >= '3.13'",
     "dtreeviz>=2.2",

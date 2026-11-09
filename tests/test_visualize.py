@@ -25,7 +25,20 @@ DESCRIBERS: dict[str, dict[str, Any]] = {
     'association_rules': {'min_support': 0.05, 'min_threshold': 0.5},
     'correlations': {},
     'describe': {},
+    'distributions': {},
     'frequencies': {},
+    'is_bernoulli': {},
+    'is_beta': {},
+    'is_bimodal': {},
+    'is_binomial': {},
+    'is_exponential': {},
+    'is_left_skewed': {},
+    'is_log_normal': {},
+    'is_normal': {},
+    'is_poisson': {},
+    'is_right_skewed': {},
+    'is_student': {},
+    'is_uniform': {},
     'label_balance': {},
     'missing_values': {},
     'summarize': {}}
@@ -311,3 +324,31 @@ def test_the_general_section_turns_off_the_figures_of_a_stage() -> None:
     settings['general'].pop('visualize_explorers')
     project = amos.Project.create(settings, item = make_numeric())
     assert set(project.result.figures) == {'summarize'}
+
+
+def test_distribution_fits_draws_each_numeric_column(
+    mixed: amos.Dataset) -> None:
+    describers.Distributions().apply(mixed, visualize = True)
+    figure = mixed.figures['distributions']
+    titles = [axes.get_title() for axes in figure.axes if axes.get_visible()]
+    # The text, date, and label columns are left out.
+    assert titles == [
+        'age (normal)', 'income (log-normal)', 'member (bernoulli)']
+    # Each panel has the bars of its values and the line of its fit.
+    assert all(axes.lines for axes in figure.axes if axes.get_visible())
+
+
+def test_distribution_fits_without_numeric_columns(
+    mixed: amos.Dataset) -> None:
+    with pytest.raises(ValueError, match = 'no numeric or boolean'):
+        plots.DistributionFits().apply(mixed, columns = ['region'])
+
+
+def test_distribution_fits_without_a_fit(mixed: amos.Dataset) -> None:
+    plots.DistributionFits().apply(
+        mixed, columns = ['age', 'income'],
+        families = {'age': None, 'income': 'poisson'})
+    figure = mixed.figures['distribution_fits']
+    # Neither column is drawn with a fit: "income" is not whole numbers.
+    assert [axes.get_title() for axes in figure.axes[:2]] == ['age', 'income']
+    assert not any(axes.lines for axes in figure.axes)
