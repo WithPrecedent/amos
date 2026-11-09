@@ -27,7 +27,8 @@ techniques, so they are not steps of a workflow: name one as a worker's
 [Pipelines](#pipelines) are listed last. A pipeline is not a technique
 either: it is a set of settings for the analyst, critic, and artist of a
 study, which you name with `pipeline` (see [pipeline](idea.md#pipeline)).
-Every model has a pipeline of its own for each task that it can do.
+Every model has a pipeline of its own for each task that it can do. The
+[pipeline chart](pipelines.md) shows the steps of every pipeline side by side.
 
 ## Loaders (wrangler)
 
