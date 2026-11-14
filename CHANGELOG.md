@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.8.0
 
 * Fixed the defaults that `options` documents as changeable: the test size
   of splitters, the timeout of `download`, the threshold of
