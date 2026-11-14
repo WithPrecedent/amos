@@ -101,6 +101,46 @@ def test_applying_twice_gives_the_same_result() -> None:
     pd.testing.assert_frame_equal(project.item.data, data)
 
 
+def test_applying_leaves_the_callers_dataset_unchanged() -> None:
+    dataset = amos.Dataset(data = make_numeric())
+    project = amos.Project.create(_settings(), item = dataset)
+    assert project.result.label == 'target'
+    assert dataset.label is None
+    assert dataset.seed is None
+    assert dataset.history == []
+
+
+def test_the_model_name_is_the_last_fitted_model() -> None:
+    project = amos.Project.create(_settings(), item = make_numeric())
+    assert project.result.model_name in {'logit', 'baseline'}
+    assert amos.Dataset(data = make_numeric()).model_name is None
+
+
+def test_options_are_read_when_they_are_used(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(amos.options, '_DEFAULT_TEST_SIZE', 0.5)
+    monkeypatch.setattr(amos.options, '_DATA_FOLDER', 'raw')
+    dataset = amos.Dataset(data = make_numeric(), label = 'target')
+    split = chrisjen.library.borrow('train_test')().apply(dataset)
+    assert len(split.test) == len(split.train)
+    clerk = amos.Clerk(root_folder = pathlib.Path.cwd())
+    assert pathlib.Path(clerk.input_folder).name == 'raw'
+
+
+def test_an_experiment_can_apply_its_paths_at_once() -> None:
+    settings = _settings()
+    settings['analyst']['n_jobs'] = 2
+    together = amos.Project.create(settings, item = make_numeric())
+    alone = amos.Project.create(_settings(), item = make_numeric())
+    workers = {node.name: node for node in together.workflow}
+    assert workers['analyst'].n_jobs == 2
+    assert workers['analyst'].scores == {
+        node.name: node for node in alone.workflow}['analyst'].scores
+    pd.testing.assert_frame_equal(
+        together.result.tables['analyst_comparison'],
+        alone.result.tables['analyst_comparison'])
+
+
 def test_a_project_without_data_is_not_applied() -> None:
     project = amos.Project.create(_settings())
     assert project.result is None
@@ -531,10 +571,10 @@ def test_the_models_inferers_replace_the_workflows() -> None:
     class FirstEffect(amos.Inferer):
         """Records a table of its name, as a stand-in for an inferer."""
 
-        def apply(self, item: amos.Dataset, **kwargs: Any) -> amos.Dataset:
-            """Adds a table named for the inferer."""
-            item.tables[self.name] = pd.DataFrame({'effect': [0.0]})
-            return item
+        def infer(self, item: amos.Dataset, **kwargs: Any) -> amos.Inference:
+            """Returns a table of one effect."""
+            return amos.Inference(
+                table = pd.DataFrame({'coefficient': [0.0]}), fitted = None)
 
     @dataclasses.dataclass
     class SecondEffect(FirstEffect):

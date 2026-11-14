@@ -55,6 +55,7 @@ import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
+import camina
 import numpy as np
 import pandas as pd
 
@@ -110,7 +111,7 @@ class Munger(base.Operation, abc.ABC):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
+            an empty `str`, which uses the snake case name of the class.
         contents: not used by most mungers. Defaults to `None`.
         parameters: keyword arguments for `munge`. Defaults to an empty
             `dict`.
@@ -181,7 +182,7 @@ class AutoCategorize(Munger):
         self,
         data: pd.DataFrame,
         columns: Sequence[str] | None = None,
-        threshold: int = options._CATEGORY_THRESHOLD,
+        threshold: int | None = None,
         **kwargs: Any) -> pd.DataFrame:
         """Makes columns with `threshold` unique values or fewer categorical.
 
@@ -190,13 +191,16 @@ class AutoCategorize(Munger):
             columns: columns to check. Defaults to `None`, which checks every
                 column.
             threshold: most unique values that a categorical column can have.
-                Defaults to `options._CATEGORY_THRESHOLD`.
+                Defaults to `None`, which uses `options._CATEGORY_THRESHOLD`
+                (read when the munger is applied).
             **kwargs: not used.
 
         Returns:
             The data, with categorical columns.
 
         """
+        if threshold is None:
+            threshold = options._CATEGORY_THRESHOLD
         for column in utilities.select_columns(data, columns):
             values = data[column]
             if pd.api.types.is_bool_dtype(values.dtype):
@@ -383,7 +387,7 @@ class CountPatterns(Munger):
         flags = re.IGNORECASE if ignorecase else 0
         for name, sources in dict(patterns).items():
             counts = np.zeros(len(text), dtype = 'int64')
-            for source in _sequence(sources):
+            for source in camina.listify(sources):
                 pattern = _compile(source, flags).pattern
                 found = text.str.count(pattern, flags = flags)
                 counts += found.fillna(0).to_numpy(dtype = 'int64')
@@ -621,7 +625,7 @@ class FlagPatterns(Munger):
         flags = re.IGNORECASE if ignorecase else 0
         for name, sources in dict(patterns).items():
             found = np.zeros(len(text), dtype = bool)
-            for source in _sequence(sources):
+            for source in camina.listify(sources):
                 found |= _contains(text, _compile(source, flags).pattern, flags)
             data[name] = found
         return data
@@ -1270,7 +1274,7 @@ def register_value_map(
             f'{type(values).__name__}'
         )
         raise TypeError(message)
-    for column in _sequence(columns):
+    for column in camina.listify(columns):
         _VALUE_MAPS[column] = values
 
 
@@ -1376,7 +1380,7 @@ def _find_kinds(
     for name, columns in listed.items():
         if columns is None:
             continue
-        for column in utilities.select_columns(data, _sequence(columns)):
+        for column in utilities.select_columns(data, camina.listify(columns)):
             if kinds.get(column, _KINDS[name]) != _KINDS[name]:
                 message = f'set_kinds lists {column!r} as two kinds'
                 raise ValueError(message)
@@ -1472,19 +1476,6 @@ def _recode(values: pd.Series, mapping: Mapping[Any, Any]) -> pd.Series:
         index = values.index,
         name = values.name).infer_objects()
     return result.astype('category') if categorical else result
-
-
-def _sequence(item: str | Sequence[str]) -> list[str]:
-    """Returns a pattern, or a sequence of them, as a `list`.
-
-    Args:
-        item: a pattern or a sequence of patterns.
-
-    Returns:
-        The patterns.
-
-    """
-    return [item] if isinstance(item, str) else list(item)
 
 
 def _shrink(values: pd.Series, column: Any, kind: str) -> pd.Series:

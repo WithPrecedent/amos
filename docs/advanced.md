@@ -1728,8 +1728,10 @@ be named in settings right away.
 | `Describer` | `describe(self, item, **kwargs)` | A table, stored in `tables`. |
 | `Splitter` | `divide(self, item, test_size, **kwargs)` | The training and test index labels. |
 | `Evaluator` | `evaluate(self, item, **kwargs)` | A table, stored in `tables`. |
+| `Inferer` | `infer(self, item, **kwargs)` | An `amos.Inference`: the table of estimates (with a "coefficient" column), stored in `tables`, the fitted estimator, stored in `fitted`, and any other tables and details to record. |
 | `Plot` | `draw(self, item, figure, **kwargs)` | Nothing: it draws on `figure`. |
-| `Transformer`, `Sampler`, `Model`, `Validator`, `Metric` | Set `contents` to a tool. | |
+| `Transformer`, `Sampler`, `Model`, `Validator`, `Metric` | Set `contents` to a tool. A `Model` can also set `traits` (an `amos.models.ModelTraits`) to say what it needs and assumes, so that `auto_model` can choose it. | |
+| `Chooser` | `apply(self, item, **kwargs)`, and set `chooses` to a genre and `step_names` to the names of the steps that "auto" stands in for it in. | The changed `Dataset`. |
 | `Operation` | `apply(self, item, **kwargs)` | The changed `Dataset`. |
 
 An `apply` that a subclass writes always gets a `Dataset` and the technique's

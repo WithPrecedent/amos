@@ -68,7 +68,7 @@ class Loader(base.Operation, abc.ABC):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
+            an empty `str`, which uses the snake case name of the class.
         contents: the tool that the loader wraps, if any. Defaults to `None`.
         parameters: keyword arguments for `load`, and "source", "label",
             "task", and "groups". Defaults to an empty `dict`.
@@ -277,7 +277,7 @@ class Download(Loader):
         *,
         file_name: str | None = None,
         refresh: bool = False,
-        timeout: float = options._DOWNLOAD_TIMEOUT,
+        timeout: float | None = None,
         **kwargs: Any) -> Any:
         """Downloads the file at `source` (unless it was before) and loads it.
 
@@ -289,7 +289,8 @@ class Download(Loader):
             refresh: whether to download the file again even if it was
                 downloaded before. Defaults to `False`.
             timeout: seconds to wait for the server to answer. Defaults to
-                `options._DOWNLOAD_TIMEOUT`.
+                `None`, which uses `options._DOWNLOAD_TIMEOUT` (read when the
+                file is downloaded).
             **kwargs: parameters for `read`, such as "file_format", "member",
                 and parameters for the reader.
 
@@ -307,7 +308,10 @@ class Download(Loader):
         name = file_name or _name_of(url)
         path = pathlib.Path(self._get_clerk().input_folder) / name
         if refresh or not path.is_file():
-            _download(url, path, timeout)
+            _download(
+                url,
+                path,
+                options._DOWNLOAD_TIMEOUT if timeout is None else timeout)
         return self.read(path, **kwargs)
 
 

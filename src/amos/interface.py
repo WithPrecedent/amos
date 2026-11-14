@@ -9,13 +9,11 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-import importlib
 import json
 import pathlib
 from collections.abc import Mapping, MutableMapping
 from typing import Any, cast
 
-import bobbie
 import chrisjen
 import nagata
 import numpy as np
@@ -320,7 +318,7 @@ class Project(chrisjen.Project):
             # packages are installed.
             formats = ['csv', 'md'] + [
                 extension for extension, package in _SCORECARD_FORMATS
-                if _importable(package)]
+                if utilities.importable(package)]
             self.scorecard.export(folder, name = 'scorecard', formats = formats)
             for node in _nodes(self.workflow):
                 if (
@@ -371,9 +369,9 @@ class Project(chrisjen.Project):
             file_format = self.idea.get('files', {}).get(
                 'replication_format', options._REPLICATION_FORMAT)
         extension = str(file_format).lower().removeprefix('.')
-        kind = bobbie.options._FILE_EXTENSIONS.get(extension)
+        kind = utilities.settings_file_type(extension)
         if kind is None:
-            known = ', '.join(bobbie.options._FILE_EXTENSIONS)
+            known = ', '.join(utilities.settings_file_extensions())
             message = (
                 f'settings cannot be saved as {file_format!r}: the formats '
                 f'are {known}')
@@ -595,6 +593,11 @@ class Project(chrisjen.Project):
                 seed = general.get('seed'), use_gpu = use_gpu, **switches)
         if isinstance(item, str | pathlib.Path):
             item = loaders.LoadFile(clerk = self.clerk).read(item)
+        elif isinstance(item, base.Dataset):
+            # `Dataset.create` fills in a dataset's settings in place, so it
+            # is given a shallow copy: the caller's dataset is not changed,
+            # and `apply` copies the data itself.
+            item = copy.copy(item)
         return base.Dataset.create(
             item,
             label = general.get('label'),
@@ -699,23 +702,6 @@ def _drop_losing_settings(
             k: v for k, v in groups.items() if k not in unused}
 
 
-def _importable(package: str) -> bool:
-    """Returns whether `package` can be imported.
-
-    Args:
-        package: name of the package.
-
-    Returns:
-        Whether importing it succeeds.
-
-    """
-    try:
-        importlib.import_module(package)
-    except Exception:  # noqa: BLE001
-        return False
-    return True
-
-
 def _is_model(name: str, project: Project) -> bool:
     """Returns whether a technique named in the settings is a model.
 
@@ -729,7 +715,7 @@ def _is_model(name: str, project: Project) -> bool:
 
     """
     try:
-        kind = project.library.borrow(chrisjen.workshop._class_names(name))
+        kind = project.library.borrow(utilities.class_names(name))
     except KeyError:
         return False
     return isinstance(kind, type) and issubclass(kind, models.Model)
@@ -755,7 +741,7 @@ def _keep_winning_path(
     name = str(worker.name)
     path = next(
         (p for p in worker.walk()
-         if ' > '.join(str(getattr(n, 'name', n)) for n in p) == winner),
+         if utilities.label_path(p) == winner),
         None)
     if path is None:
         return []
@@ -765,9 +751,9 @@ def _keep_winning_path(
     losers: list[tuple[str, str]] = []
     for node in path:
         label = str(getattr(node, 'name', node))
-        if isinstance(node, chrisjen.Step) and node.contents is not None:
-            technique = str(node.contents.name)
-            step = label.removeprefix(f'{technique}_')
+        parts = utilities.technique_and_step(node)
+        if parts is not None:
+            technique, step = parts
         elif label in own:
             technique, step = label, name
         else:
@@ -813,7 +799,7 @@ def _model_specific_techniques(
         for setting, value in settings.items():
             nodes = [
                 chrisjen.workshop.build_node(technique, project)
-                for technique in chrisjen.utilities._listify_names(value)]
+                for technique in utilities.listify_names(value)]
             for node in nodes:
                 if isinstance(node, auto.Auto) and node.genre is None:
                     node.genre = base._MODEL_SPECIFIC_GENRES[setting]
@@ -870,11 +856,9 @@ def _pin_searched_parameters(
         chosen = _chosen_parameters(entry['parameters'])
         names = [f'{technique}_parameters']
         for node in _nodes(workflow):
-            if (
-                isinstance(node, chrisjen.Step)
-                and node.contents is not None
-                and str(node.contents.name) == technique):
-                step = str(node.name).removeprefix(f'{technique}_')
+            parts = utilities.technique_and_step(node)
+            if parts is not None and parts[0] == technique:
+                step = parts[1]
                 names.extend([
                     f'{step}_parameters', f'{technique}_{step}_parameters'])
         for name in names:

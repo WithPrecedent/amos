@@ -774,3 +774,25 @@ def test_an_experiment_can_compare_auto_with_other_techniques() -> None:
     table = project.result.tables['analyst_comparison']
     assert list(table.index) == [
         'stratified_split > auto_model', 'stratified_split > baseline_model']
+
+
+def test_every_model_that_auto_model_prefers_has_traits() -> None:
+    for name in auto._MODELS:
+        kind = amos.library.borrow(name, genre = 'model')
+        assert isinstance(kind.traits, amos.models.ModelTraits), name
+    assert auto._traits_of('ols') is not None
+    assert auto._traits_of('not_a_model') is None
+    assert auto._tasks_of('random_forest') == ('classify', 'regress')
+
+
+def test_choosers_are_found_by_their_genre() -> None:
+    choosers = auto._choosers()
+    assert choosers['model'] is auto.AutoModel
+    assert choosers['plot'] is auto.AutoPlot
+    assert auto._genre_of('imputation') == 'imputer'
+    with pytest.raises(ValueError, match = 'cannot tell which'):
+        auto._genre_of('nonsense')
+
+
+def test_warnings_from_amos_have_their_own_category() -> None:
+    assert issubclass(amos.AmosWarning, UserWarning)

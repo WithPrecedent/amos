@@ -37,7 +37,7 @@ class Splitter(base.Operation, abc.ABC):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
+            an empty `str`, which uses the snake case name of the class.
         contents: not used by most splitters. Defaults to `None`.
         parameters: keyword arguments for `divide`. Defaults to an empty
             `dict`.
@@ -69,14 +69,15 @@ class Splitter(base.Operation, abc.ABC):
     def apply(
         self,
         item: base.Dataset,
-        test_size: float = options._DEFAULT_TEST_SIZE,
+        test_size: float | None = None,
         **kwargs: Any) -> base.Dataset:
         """Splits `item` into training and test sets.
 
         Args:
             item: the dataset to split.
             test_size: share of the rows to put in the test set. Defaults to
-                `options._DEFAULT_TEST_SIZE`.
+                `None`, which uses `options._DEFAULT_TEST_SIZE` (read when the
+                splitter is applied, so a change to it takes effect).
             **kwargs: parameters for `divide`.
 
         Raises:
@@ -86,6 +87,8 @@ class Splitter(base.Operation, abc.ABC):
             The split dataset.
 
         """
+        if test_size is None:
+            test_size = options._DEFAULT_TEST_SIZE
         if not 0 < test_size < 1:
             message = f'test_size must be between 0 and 1, not {test_size}'
             raise ValueError(message)

@@ -88,6 +88,15 @@ def test_every_validator_scores_the_training_rows(
             'train', 'validation', 'accuracy', 'roc_auc']
 
 
+def test_folds_fitted_at_once_score_the_same() -> None:
+    one, many = _grouped(), _grouped()
+    amos.validators.StratifiedKFold().apply(one)
+    amos.validators.StratifiedKFold().apply(many, n_jobs = 2)
+    pd.testing.assert_frame_equal(
+        one.tables['stratified_k_fold'], many.tables['stratified_k_fold'])
+    assert one.metrics == many.metrics
+
+
 def test_folds_are_shuffled_with_the_seed() -> None:
     first, second = _grouped(), _grouped()
     amos.validators.KFold().apply(first)

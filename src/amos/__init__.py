@@ -7,6 +7,7 @@ __version__ = '0.7.0'
 __author__: str = 'Corey Rayburn Yung'
 
 __all__: list[str] = [
+    'AmosWarning',
     'Chooser',
     'Cleaner',
     'Clerk',
@@ -19,6 +20,7 @@ __all__: list[str] = [
     'GroupMetric',
     'Imputer',
     'IncompatibleTechniqueError',
+    'Inference',
     'Inferer',
     'Loader',
     'Merger',
@@ -47,12 +49,12 @@ __all__: list[str] = [
 from chrisjen import library
 
 from .auto import Chooser
-from .base import Dataset, IncompatibleTechniqueError, Operation
+from .base import AmosWarning, Dataset, IncompatibleTechniqueError, Operation
 from .cleaners import Cleaner
 from .clerks import Clerk
 from .describers import Describer
 from .evaluators import Evaluator
-from .inferers import Inferer
+from .inferers import Inference, Inferer
 from .interface import Project
 from .loaders import Loader
 from .mergers import Merger

@@ -77,7 +77,7 @@ class Shaper(base.Operation, abc.ABC):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
+            an empty `str`, which uses the snake case name of the class.
         contents: not used by most shapers. Defaults to `None`.
         parameters: keyword arguments for `shape`, and "label", "task", and
             "groups". Defaults to an empty `dict`.
@@ -700,9 +700,11 @@ def _plan(
     everywhere: list[str] | None = None
     if isinstance(how, Mapping):
         utilities.select_columns(data, list(how))
-        chosen = {c: _listed(summaries) for c, summaries in how.items()}
+        chosen = {
+            c: [str(s) for s in camina.listify(summaries)]
+            for c, summaries in how.items()}
     elif how is not None:
-        everywhere = _listed(how)
+        everywhere = [str(s) for s in camina.listify(how)]
     grouped = [c for c in chosen if c in keys]
     if grouped:
         message = (
@@ -724,19 +726,6 @@ def _plan(
             )
             raise ValueError(message)
     return plan
-
-
-def _listed(item: Sequence[str] | str) -> list[str]:
-    """Returns a summary, or a sequence of them, as a `list`.
-
-    Args:
-        item: the name of a summary or a sequence of names.
-
-    Returns:
-        The names.
-
-    """
-    return [item] if isinstance(item, str) else [str(i) for i in item]
 
 
 def _usual(data: pd.DataFrame, keys: Sequence[str], column: str) -> str:

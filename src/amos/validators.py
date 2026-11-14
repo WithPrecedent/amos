@@ -59,7 +59,7 @@ class Validator(base.Operation, abc.ABC):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
+            an empty `str`, which uses the snake case name of the class.
         contents: the splitter class or its import path. Defaults to `None`.
         parameters: keyword arguments for the splitter (such as "n_splits"),
             and "metrics", "groups", and "order". Defaults to an empty
@@ -84,6 +84,7 @@ class Validator(base.Operation, abc.ABC):
         metrics: Sequence[str] | None = None,
         groups: str | None = None,
         order: str | None = None,
+        n_jobs: int | None = 1,
         **kwargs: Any) -> base.Dataset:
         """Cross-validates the model on the training rows of `item`.
 
@@ -97,6 +98,10 @@ class Validator(base.Operation, abc.ABC):
             order: name of the column to order the rows by (such as a date)
                 before they are divided. Defaults to `None`, which uses the
                 current order of the rows.
+            n_jobs: how many folds to fit at once, each in its own process
+                (-1 for one for each processor). Each process holds a copy
+                of the training rows and of its model, so more use more
+                memory. Defaults to 1, which fits one fold at a time.
             **kwargs: parameters for the splitter.
 
         Raises:
@@ -109,9 +114,7 @@ class Validator(base.Operation, abc.ABC):
 
         """
         model = self._check(item)
-        clone = importlib.import_module('sklearn.base').clone
-        training = item._train_rows()
-        rows = training[~training.isin(item.synthetic)]
+        rows = item.real_train_rows
         if order is not None:
             rows = item.data.loc[rows].sort_values(order, kind = 'stable').index
         x = item.data.loc[rows, _columns(model, item)]
@@ -126,25 +129,40 @@ class Validator(base.Operation, abc.ABC):
         samplers = [
             tool for tool in item.fitted.values()
             if hasattr(tool, 'fit_resample')]
-        folds: list[_Fold] = []
-        divided = splitter.split(x, y, labels)
-        for number, (learn, score) in enumerate(divided, start = 1):
-            x_learn, y_learn = x.iloc[learn], y.iloc[learn]
-            for sampler in samplers:
-                x_learn, y_learn = _resampled(
-                    clone(sampler), x_learn, y_learn, features)
-            estimator = clone(model).fit(x_learn, y_learn)
-            folds.append(_Fold(
-                number, len(y_learn), *_predict(estimator, x.iloc[score], item)))
-            # A fitted model can be as large as its data, so it is freed before
-            # the next one is fitted. The results of pyfixest are in reference
-            # cycles, so they need a collection. It takes a noticeable time,
-            # which is too long for each of the many folds of a pooled
-            # validator, whose folds are too small to need it.
-            del estimator
-            if not self.pools:
-                gc.collect()
-        names = evaluators.Scorecard()._metric_names(item, [], metrics)
+        shared = {
+            'model': model,
+            'samplers': samplers,
+            'x': x,
+            'y': y,
+            'features': features}
+        target = _Target(
+            label = item.require_label(),
+            task = item.task,
+            classes = item.classes if item.task == 'classify' else [])
+        # The folds are made one at a time: a validator such as
+        # `leave_one_row_out` has as many folds as rows.
+        divided = enumerate(splitter.split(x, y, labels), start = 1)
+        folds: list[_Fold]
+        if n_jobs == 1:
+            folds = []
+            for number, (learn, score) in divided:
+                folds.append(_fit_fold(
+                    number, learn, score, target = target, **shared))
+                # A fitted model can be as large as its data, so the one of
+                # each fold is freed before the next is fitted. The results
+                # of pyfixest are in reference cycles, so they need a
+                # collection. It takes a noticeable time, which is too long
+                # for each of the many folds of a pooled validator, whose
+                # folds are too small to need it.
+                if not self.pools:
+                    gc.collect()
+        else:
+            joblib = importlib.import_module('joblib')
+            folds = list(joblib.Parallel(n_jobs = n_jobs)(
+                joblib.delayed(_fit_fold)(
+                    number, learn, score, target = target, **shared)
+                for number, (learn, score) in divided))
+        names = evaluators.Scorecard.metric_names(item, metrics = metrics)
         summarize = _pool if self.pools else _average
         table, scores = summarize(item, rows, folds, names)
         item.tables[self.name] = table
@@ -402,6 +420,26 @@ class _Fold:
     probabilities: pd.DataFrame | None
 
 
+@dataclasses.dataclass(frozen = True)
+class _Target:
+    """What the copy of the model of each fold predicts.
+
+    A fold needs only this from the dataset, so that a fold fitted in
+    another process is not sent the whole dataset.
+
+    Args:
+        label: name of the label.
+        task: "classify" or "regress".
+        classes: the classes of the label (for a classifier), sorted as the
+            dataset sorts them.
+
+    """
+
+    label: str
+    task: str | None
+    classes: list[Any]
+
+
 def _average(
     item: base.Dataset,
     rows: pd.Index,
@@ -552,7 +590,7 @@ def _dataset(
             probabilities.
 
     """
-    label = item._require_label()
+    label = item.require_label()
     scored = predictions.index
     dataset = base.Dataset(
         data = item.data.loc[rows, [label, *item.groups]],
@@ -564,6 +602,48 @@ def _dataset(
     dataset.predictions = predictions
     dataset.probabilities = probabilities
     return dataset
+
+
+def _fit_fold(
+    number: int,
+    learn: np.ndarray,
+    score: np.ndarray,
+    *,
+    model: Any,
+    samplers: Sequence[Any],
+    x: pd.DataFrame,
+    y: pd.Series,
+    features: Sequence[Any],
+    target: _Target) -> _Fold:
+    """Fits a copy of the model to one fold and predicts the rows it scores.
+
+    It needs nothing else from the validator, so that folds can be fitted
+    at once in other processes.
+
+    Args:
+        number: the number of the fold, from 1.
+        learn: positions (in `x`) of the rows that the copy learns from.
+        score: positions of the rows that it predicts.
+        model: the dataset's model, which is copied without its fit.
+        samplers: the samplers of the analysis, which resample the rows that
+            the copy learns from, as they resampled the training rows.
+        x: the columns of the training rows that the model uses.
+        y: the labels of the training rows.
+        features: the model's features.
+        target: what the model predicts.
+
+    Returns:
+        The predictions of the copy of the model for the fold.
+
+    """
+    clone = importlib.import_module('sklearn.base').clone
+    x_learn, y_learn = x.iloc[learn], y.iloc[learn]
+    for sampler in samplers:
+        x_learn, y_learn = _resampled(
+            clone(sampler), x_learn, y_learn, features)
+    estimator = clone(model).fit(x_learn, y_learn)
+    predictions, probabilities = _predict(estimator, x.iloc[score], target)
+    return _Fold(number, len(y_learn), predictions, probabilities)
 
 
 def _measure(item: base.Dataset, names: Sequence[str]) -> dict[str, float]:
@@ -640,13 +720,13 @@ def _pool(
 def _predict(
     estimator: Any,
     x: pd.DataFrame,
-    item: base.Dataset) -> tuple[pd.Series, pd.DataFrame | None]:
+    target: _Target) -> tuple[pd.Series, pd.DataFrame | None]:
     """Returns the predictions (and probabilities) of a copy of the model.
 
     Args:
         estimator: the copy of the model fitted for a fold.
         x: the features of the rows of the fold.
-        item: the dataset that is validated.
+        target: what the model predicts.
 
     Raises:
         ValueError: if the copy of the model could not predict some rows.
@@ -656,9 +736,8 @@ def _predict(
             classifier that has them (or `None`).
 
     """
-    label = item._require_label()
     predictions = pd.Series(
-        np.asarray(estimator.predict(x)), index = x.index, name = label)
+        np.asarray(estimator.predict(x)), index = x.index, name = target.label)
     missing = int(predictions.isna().sum())
     if missing:
         message = (
@@ -668,10 +747,10 @@ def _predict(
         )
         raise ValueError(message)
     probabilities = None
-    if item.task == 'classify' and hasattr(estimator, 'predict_proba'):
+    if target.task == 'classify' and hasattr(estimator, 'predict_proba'):
         classes = getattr(estimator, 'classes_', None)
         probabilities = pd.DataFrame(
             np.asarray(estimator.predict_proba(x)),
             index = x.index,
-            columns = list(item.classes if classes is None else classes))
+            columns = list(target.classes if classes is None else classes))
     return predictions, probabilities

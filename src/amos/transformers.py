@@ -79,7 +79,7 @@ class Transformer(base.Operation, abc.ABC):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
+            an empty `str`, which uses the snake case name of the class.
         contents: the transformer class or its import path. Defaults to
             `None`.
         parameters: keyword arguments for the transformer. A "columns"

@@ -73,9 +73,13 @@ class Clerk(nagata.FileManager):
     """
 
     root_folder: pathlib.Path | str | None = None  # type: ignore[assignment]
-    input_folder: pathlib.Path | str = options._DATA_FOLDER
+    # The defaults are read from `options` when a clerk is made, so that a
+    # change to them takes effect.
+    input_folder: pathlib.Path | str = dataclasses.field(
+        default_factory = lambda: options._DATA_FOLDER)
     interim_folder: pathlib.Path | str = 'input'
-    output_folder: pathlib.Path | str = options._STUDIES_FOLDER
+    output_folder: pathlib.Path | str = dataclasses.field(
+        default_factory = lambda: options._STUDIES_FOLDER)
     data_subfolder: pathlib.Path | str | None = None
 
     """ Initialization Methods """

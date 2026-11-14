@@ -48,7 +48,10 @@ Most contributions to `amos` are new techniques. To add one:
    `tools`), not by importing them at the top of a module. They are imported
    only when the technique is used, so `amos` stays light and its optional
    packages stay optional. If the tool comes from a new package, add the
-   package to an extra in `pyproject.toml` and to `options._EXTRAS`.
+   package to an extra in `pyproject.toml`: the message for a missing package
+   names the extra that installs it. If the package is imported by another
+   name (as scikit-learn is imported as `sklearn`), add it to
+   `options._IMPORT_NAMES`.
 3. Give the class a docstring whose first line describes the technique. The
    tables of the technique catalog in `docs/catalog.md` are made from these
    lines: write them again with `uv run python

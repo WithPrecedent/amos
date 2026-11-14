@@ -58,8 +58,8 @@ from __future__ import annotations
 import abc
 import copy
 import dataclasses
-import functools
 import importlib
+import inspect
 import math
 import warnings
 from collections.abc import Mapping, Sequence
@@ -70,26 +70,8 @@ import chrisjen
 import numpy as np
 import pandas as pd
 
-from . import base, models, plots, transformers
+from . import base, models, plots, transformers, utilities
 
-# Names of the steps (and workers) whose "auto" technique each chooser
-# replaces, by the genre of the techniques it chooses. A step named
-# "{technique}_{step}" in a workflow is matched by its step.
-_STEPS: dict[str, frozenset[str]] = {
-    'imputer': frozenset({
-        'fill', 'impute', 'imputer', 'imputers', 'imputation'}),
-    'encoder': frozenset({'encode', 'encoder', 'encoders', 'encoding'}),
-    'sampler': frozenset({
-        'balance', 'resample', 'sample', 'sampler', 'samplers', 'sampling'}),
-    'model': frozenset({
-        'estimate', 'estimator', 'fit', 'learn', 'model', 'modeler',
-        'modeling', 'models', 'predict'}),
-    'evaluator': frozenset({
-        'assess', 'critic', 'critique', 'evaluate', 'evaluation',
-        'evaluator', 'evaluators'}),
-    'plot': frozenset({
-        'artist', 'chart', 'charts', 'draw', 'figure', 'figures', 'graph',
-        'plot', 'plots', 'plotting', 'visualize'})}
 # Share of the values of a numeric feature that must be missing (in the
 # training rows) for `auto_imputer` to model each feature from the others
 # rather than fill it with its median.
@@ -179,112 +161,37 @@ _NONLINEAR: frozenset[str] = _TREES | {
     'explainable_boosting', 'knn', 'neural_network', 'svm', 'tabpfn'}
 
 
-@dataclasses.dataclass(frozen = True)
-class _Traits:
-    """What a model needs from the data, and what it assumes about it.
-
-    Args:
-        tasks: the tasks that the model can do.
-        package: the package that the model needs.
-        complexity: how complex the model is, from 1 (the simplest, such as a
-            linear model) up. Of models that score about as well, the
-            simplest is chosen.
-        missing: whether it can use missing values in the features.
-        categories: whether it can use categorical features directly.
-        scaled: whether it needs features on similar scales.
-        normal_errors: whether it assumes that a regression's errors are
-            normal.
-        normal_features: whether it assumes that the features are normal.
-        independent: whether it assumes that the features are not collinear.
-        wide: whether it can use more features than there are rows.
-        counts: the kind of counts it models: "equidispersed" (a variance
-            equal to the mean), "overdispersed", or "zero_inflated". `None`
-            for a model that is not only for counts.
-        ordinal: whether it is only for ordered classes.
-        outliers: whether it is only for errors with outliers (for a model
-            that is less precise without them).
-        min_rows: fewest training rows it learns well from.
-        max_rows: most training rows it can be fitted to in reasonable time.
-        max_features: most features it works well with.
-        min_classes: fewest classes of a classified label it can model.
-        max_classes: most classes of a classified label it can model.
-
-    """
-
-    tasks: tuple[str, ...]
-    package: str
-    complexity: int
-    missing: bool = False
-    categories: bool = False
-    scaled: bool = False
-    normal_errors: bool = False
-    normal_features: bool = False
-    independent: bool = False
-    wide: bool = True
-    counts: str | None = None
-    ordinal: bool = False
-    outliers: bool = False
-    min_rows: int = 0
-    max_rows: int | None = None
-    max_features: int | None = None
-    min_classes: int = 0
-    max_classes: int | None = None
-
-
+# The tasks of a model that wraps a tool of its own (with `contents`),
+# which may do either.
 _BOTH: tuple[str, ...] = ('classify', 'regress')
 # The models that `auto_model` considers, in the order it prefers them.
-_MODELS: dict[str, _Traits] = {
-    'poisson': _Traits(
-        ('regress',), 'statsmodels', 1, wide = False,
-        counts = 'equidispersed'),
-    'negative_binomial': _Traits(
-        ('regress',), 'statsmodels', 1, wide = False,
-        counts = 'overdispersed'),
-    'zero_inflated_poisson': _Traits(
-        ('regress',), 'statsmodels', 2, wide = False,
-        counts = 'zero_inflated'),
-    'ordinal_regression': _Traits(
-        ('classify',), 'statsmodels', 1, wide = False, ordinal = True),
-    'robust_regression': _Traits(
-        ('regress',), 'statsmodels', 1, wide = False, outliers = True),
-    'linear': _Traits(
-        ('regress',), 'sklearn', 1, normal_errors = True, independent = True,
-        wide = False),
-    'logit': _Traits(('classify',), 'sklearn', 1, scaled = True),
-    'ridge': _Traits(('regress',), 'sklearn', 1, scaled = True),
-    'random_forest': _Traits(_BOTH, 'sklearn', 3, missing = True),
-    'gradient_boosting': _Traits(
-        _BOTH, 'sklearn', 3, missing = True, categories = True),
-    'lightgbm': _Traits(
-        _BOTH, 'lightgbm', 3, missing = True, categories = True),
-    'xgboost': _Traits(_BOTH, 'xgboost', 3, missing = True),
-    'catboost': _Traits(
-        _BOTH, 'catboost', 3, missing = True, categories = True),
-    'lasso': _Traits(('regress',), 'sklearn', 1, scaled = True),
-    'naive_bayes': _Traits(
-        ('classify',), 'sklearn', 1, normal_features = True,
-        independent = True),
-    'svm': _Traits(_BOTH, 'sklearn', 2, scaled = True, max_rows = 10_000),
-    'knn': _Traits(
-        _BOTH, 'sklearn', 2, scaled = True, max_rows = 50_000,
-        max_features = 30),
-    'neural_network': _Traits(
-        _BOTH, 'sklearn', 4, scaled = True, min_rows = 1_000)}
-# Models whose needs and assumptions `auto_model` knows, but which it only
-# considers when they are named in "choices". They report coefficients with
-# standard errors, so they suit a study of the features more than a
-# prediction. `ols` does not need normal errors: its estimates are unbiased
-# without them, and with enough rows its standard errors are about right
-# (the Q-Q plot of `auto_plot` checks them).
-_OTHER_MODELS: dict[str, _Traits] = {
-    'ols': _Traits(
-        ('regress',), 'statsmodels', 1, independent = True, wide = False),
-    'logit_sm': _Traits(
-        ('classify',), 'statsmodels', 1, wide = False, max_classes = 2),
-    'probit': _Traits(
-        ('classify',), 'statsmodels', 1, wide = False, max_classes = 2),
-    'mnlogit': _Traits(
-        ('classify',), 'statsmodels', 2, wide = False, min_classes = 3)}
+# What each needs and assumes is its `traits` (see `models.ModelTraits`).
+# Other models with traits (such as `ols`, `logit_sm`, `probit`, and
+# `mnlogit`, which report coefficients with standard errors and so suit
+# a study of the features more than a prediction) are only considered
+# when they are named in "choices". `ols` does not need normal errors:
+# its estimates are unbiased without them, and with enough rows its
+# standard errors are about right (the Q-Q plot of `auto_plot` checks
+# them).
+_MODELS: tuple[str, ...] = (
+    'poisson',
+    'negative_binomial',
+    'zero_inflated_poisson',
+    'ordinal_regression',
+    'robust_regression',
+    'linear',
+    'logit',
+    'ridge',
+    'random_forest',
+    'gradient_boosting',
+    'lightgbm',
+    'xgboost',
+    'catboost',
+    'lasso',
+    'naive_bayes',
+    'svm',
+    'knn',
+    'neural_network')
 # The samplers that `auto_sampler` considers, in the order it prefers them.
 _SAMPLERS: tuple[str, ...] = (
     'random_under', 'smote_tomek', 'smote', 'random_over')
@@ -405,7 +312,7 @@ def profile(item: base.Dataset) -> Profile:
         The profile of the training rows that a sampler did not make up.
 
     """
-    rows = _real_rows(item)
+    rows = item.real_train_rows
     if len(rows) > _PROFILE_ROWS:
         generator = np.random.default_rng(item.seed)
         rows = pd.Index(generator.choice(
@@ -464,9 +371,12 @@ def resolve(worker: Any) -> None:
     for node in worker:
         if isinstance(node, chrisjen.Step):
             contents = node.contents
-            if isinstance(contents, Auto) and contents.genre is None:
-                step = str(node.name).removeprefix(f'{contents.name}_')
-                contents.genre = _genre_of(step)
+            parts = utilities.technique_and_step(node)
+            if (
+                isinstance(contents, Auto)
+                and contents.genre is None
+                and parts is not None):
+                contents.genre = _genre_of(parts[1])
             else:
                 resolve(contents)
         elif isinstance(node, Auto) and node.genre is None:
@@ -491,7 +401,7 @@ class Chooser(base.Operation, abc.ABC):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
+            an empty `str`, which uses the snake case name of the class.
         contents: not used. Defaults to `None`.
         parameters: "choices", and parameters for the techniques it applies.
             Defaults to an empty `dict`.
@@ -500,6 +410,9 @@ class Chooser(base.Operation, abc.ABC):
 
     # The genre of the techniques that the chooser chooses.
     chooses: ClassVar[str] = ''
+    # The names of steps (and workers) whose "auto" technique this chooser
+    # stands in for, such as "impute" or "imputation" for `auto_imputer`.
+    step_names: ClassVar[frozenset[str]] = frozenset()
 
     """ Private Methods """
 
@@ -564,6 +477,7 @@ class Chooser(base.Operation, abc.ABC):
                 warnings.warn(
                     f'{self.name!r} left out {name!r}, which could not be '
                     f'{done}: {error}',
+                    category = base.AmosWarning,
                     stacklevel = 3)
                 continue
             if item.history[-1].get('skipped'):
@@ -616,7 +530,7 @@ class Auto(Chooser):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is "auto".
+            an empty `str`, in which case it is "auto".
         contents: not used. Defaults to `None`.
         parameters: parameters for the chooser. Defaults to an empty `dict`.
         genre: "imputer", "encoder", "sampler", "model", "evaluator", or
@@ -650,10 +564,10 @@ class Auto(Chooser):
                 f'(such as "model"), or use {_chooser_names()}'
             )
             raise ValueError(message)
-        kind = _CHOOSERS.get(self.genre)
+        kind = _choosers().get(self.genre)
         if kind is None:
             message = (
-                f'"auto" can choose {_names(sorted(_CHOOSERS))}, not '
+                f'"auto" can choose {_names(sorted(_choosers()))}, not '
                 f'{self.genre!r} techniques'
             )
             raise ValueError(message)
@@ -707,6 +621,8 @@ class AutoEncoder(Chooser):
     """
 
     chooses: ClassVar[str] = 'encoder'
+    step_names: ClassVar[frozenset[str]] = frozenset({
+        'encode', 'encoder', 'encoders', 'encoding'})
 
     def apply(
         self,
@@ -734,7 +650,7 @@ class AutoEncoder(Chooser):
 
         """
         found = profile(item)
-        rows = _real_rows(item)
+        rows = item.real_train_rows
         counts = {
             column: int(item.data.loc[rows, column].nunique())
             for column in item.categoricals}
@@ -820,6 +736,9 @@ class AutoEvaluator(Chooser):
     """
 
     chooses: ClassVar[str] = 'evaluator'
+    step_names: ClassVar[frozenset[str]] = frozenset({
+        'assess', 'critic', 'critique', 'evaluate', 'evaluation', 'evaluator',
+        'evaluators'})
 
     def apply(
         self,
@@ -883,6 +802,8 @@ class AutoImputer(Chooser):
     """
 
     chooses: ClassVar[str] = 'imputer'
+    step_names: ClassVar[frozenset[str]] = frozenset({
+        'fill', 'impute', 'imputer', 'imputers', 'imputation'})
 
     def apply(
         self,
@@ -913,7 +834,7 @@ class AutoImputer(Chooser):
                 index = pd.Index(['none']))
             self._record(item, table, found, [])
             return item
-        shares = item.data.loc[_real_rows(item), missing].isna().mean()
+        shares = item.data.loc[item.real_train_rows, missing].isna().mean()
         kinds = {column: base._kind_of(item.data[column]) for column in missing}
         numeric = [c for c in missing if kinds[c] == 'numerics']
         most = float(shares[numeric].max()) if numeric else 0.0
@@ -923,7 +844,7 @@ class AutoImputer(Chooser):
         explained: dict[str, str] = {}
         for name in names:
             reason = _screen_imputer(
-                name, len(item.numerics), len(_real_rows(item)), most)
+                name, len(item.numerics), len(item.real_train_rows), most)
             if reason is None:
                 imputer = cast('type[transformers.Imputer]', _borrow(name))
                 fills = imputer.kinds
@@ -943,6 +864,7 @@ class AutoImputer(Chooser):
             warnings.warn(
                 f'{self.name!r} could not fill {left}: none of {names} fills '
                 f'them',
+                category = base.AmosWarning,
                 stacklevel = 2)
         table = pd.DataFrame(
             {'chosen': [name in filled for name in explained],
@@ -1000,6 +922,9 @@ class AutoModel(Chooser):
     """
 
     chooses: ClassVar[str] = 'model'
+    step_names: ClassVar[frozenset[str]] = frozenset({
+        'estimate', 'estimator', 'fit', 'learn', 'model', 'modeler', 'modeling',
+        'models', 'predict'})
 
     def apply(
         self,
@@ -1043,7 +968,7 @@ class AutoModel(Chooser):
             raise ValueError(message)
         found = profile(item)
         names = (
-            [n for n, t in _MODELS.items() if found.task in t.tasks]
+            [n for n in _MODELS if found.task in _tasks_of(n)]
             if choices is None else camina.listify(choices))
         reasons = {name: _screen_model(name, found) for name in names}
         suited = [name for name, reason in reasons.items() if reason is None]
@@ -1081,6 +1006,7 @@ class AutoModel(Chooser):
                     warnings.warn(
                         f'{self.name!r} left out {name!r}, which could not be '
                         f'fitted: {error}',
+                        category = base.AmosWarning,
                         stacklevel = 2)
                     continue
                 table.loc[name, ['score', 'standard_error']] = scores[name]
@@ -1127,6 +1053,9 @@ class AutoPlot(Chooser):
     """
 
     chooses: ClassVar[str] = 'plot'
+    step_names: ClassVar[frozenset[str]] = frozenset({
+        'artist', 'chart', 'charts', 'draw', 'figure', 'figures', 'graph',
+        'plot', 'plots', 'plotting', 'visualize'})
 
     def apply(
         self,
@@ -1188,6 +1117,8 @@ class AutoSampler(Chooser):
     """
 
     chooses: ClassVar[str] = 'sampler'
+    step_names: ClassVar[frozenset[str]] = frozenset({
+        'balance', 'resample', 'sample', 'sampler', 'samplers', 'sampling'})
 
     def apply(
         self,
@@ -1251,14 +1182,6 @@ class AutoSampler(Chooser):
 
 # The chooser for each genre, which an `Auto` technique applies, in the order
 # they are usually applied.
-_CHOOSERS: dict[str, type[Chooser]] = {
-    'imputer': AutoImputer,
-    'encoder': AutoEncoder,
-    'sampler': AutoSampler,
-    'model': AutoModel,
-    'evaluator': AutoEvaluator,
-    'plot': AutoPlot}
-
 
 """ Private Functions """
 
@@ -1309,11 +1232,30 @@ def _chooser_names() -> str:
     """Returns the names of the choosers, as a list in words.
 
     Returns:
-        The name of the chooser of each genre, such as "auto_model", in the
-            order of `_CHOOSERS`.
+        The name of the chooser of each genre, such as "auto_model".
 
     """
-    return _names([f'auto_{genre}' for genre in _CHOOSERS])
+    return _names([str(kind().name) for kind in _choosers().values()])
+
+
+def _choosers() -> dict[str, type[Chooser]]:
+    """Returns the choosers, by the genre that each chooses.
+
+    A subclass of `Chooser` that sets `chooses` (in `amos` or in a package
+    built on it) is found, so that "auto" can stand in for it.
+
+    Returns:
+        Each chooser class, by its `chooses`.
+
+    """
+    found: dict[str, type[Chooser]] = {}
+    waiting = list(Chooser.__subclasses__())
+    while waiting:
+        kind = waiting.pop(0)
+        waiting.extend(kind.__subclasses__())
+        if kind.chooses and not inspect.isabstract(kind):
+            found.setdefault(kind.chooses, kind)
+    return found
 
 
 def _complexity(name: str) -> int:
@@ -1323,8 +1265,7 @@ def _complexity(name: str) -> int:
         name: name of a model.
 
     Returns:
-        Its complexity in `_MODELS` or `_OTHER_MODELS`, or 3 for a model that
-            is in neither.
+        Its complexity in its `traits`, or 3 for a model without them.
 
     """
     traits = _traits_of(name)
@@ -1453,7 +1394,7 @@ def _evaluators(
             and why (or why not).
 
     """
-    model = _model_name(item)
+    model = item.model_name
     fitted = plots._unwrapped(item) if item.model is not None else None
     classify = found.task == 'classify'
     coefficients = _has_coefficients(item)
@@ -1465,10 +1406,10 @@ def _evaluators(
     shuffled = not tabulated and hasattr(item.model, '__sklearn_tags__')
     importances = (
         hasattr(fitted, 'feature_importances_') or hasattr(fitted, 'coef_'))
-    trees = model in _TREES and _importable('shap')
+    trees = model in _TREES and utilities.importable('shap')
     fair = (
         classify and found.classes == 2 and bool(item.groups)  # noqa: PLR2004
-        and _importable('fairlearn'))
+        and utilities.importable('fairlearn'))
     return [
         ('scorecard', True, 'compares the models on every metric'),
         ('classification_report', classify,
@@ -1532,14 +1473,15 @@ def _genre_of(name: str) -> str:
         name: name of the step or worker.
 
     Raises:
-        ValueError: if the name is not one of the names in `_STEPS`.
+        ValueError: if the name is not one of the `step_names` of a chooser.
 
     Returns:
-        "sampler", "model", or "plot".
+        The genre that the chooser with `name` in its `step_names` chooses
+            (such as "sampler", "model", or "plot").
 
     """
-    for genre, names in _STEPS.items():
-        if name in names:
+    for genre, kind in _choosers().items():
+        if name in kind.step_names:
             return genre
     message = (
         f'"auto" cannot tell which techniques to choose for {name!r}: name '
@@ -1597,26 +1539,6 @@ def _imputer_suits(
     if name == 'mode_impute':
         return f'fills {features} with the most common value of each'
     return f'fills {features}'
-
-
-@functools.cache
-def _importable(package: str) -> bool:
-    """Returns whether `package` can be imported.
-
-    Args:
-        package: name of the package.
-
-    Returns:
-        Whether importing it succeeds.
-
-    """
-    try:
-        importlib.import_module(package)
-    # Some optional packages are installed but fail when they are imported
-    # (such as xgboost without OpenMP).
-    except Exception:  # noqa: BLE001
-        return False
-    return True
 
 
 def _is_binary(column: pd.Series) -> bool:
@@ -1706,7 +1628,7 @@ def _overlap(item: base.Dataset) -> float | None:
             missing values.
 
     """
-    rows = _real_rows(item)
+    rows = item.real_train_rows
     if len(rows) > _PROFILE_ROWS:
         generator = np.random.default_rng(item.seed)
         rows = pd.Index(generator.choice(
@@ -1817,7 +1739,7 @@ def _model_plots(
             why (or why not).
 
     """
-    model = _model_name(item)
+    model = item.model_name
     fitted = plots._unwrapped(item) if item.model is not None else None
     rows: list[tuple[str, bool, str]] = []
     if found.task == 'classify':
@@ -1855,7 +1777,7 @@ def _model_plots(
             ('residual_plot', True,
              ('shows whether the errors depend on the prediction (such as '
               'unequal variance or a missed curve)')),
-            ('qq_plot', normal and _importable('statsmodels'),
+            ('qq_plot', normal and utilities.importable('statsmodels'),
              f'{model} assumes normal errors, which a Q-Q plot checks'
              if normal else f'{model} does not assume normal errors'),
             ('influence_plot', influence,
@@ -1869,11 +1791,11 @@ def _model_plots(
     # Partial dependence is drawn for the most important features.
     nonlinear = (
         model in _NONLINEAR and hasattr(fitted, 'get_params') and importances)
-    trees = model in _TREES and _importable('shap')
+    trees = model in _TREES and utilities.importable('shap')
     searched = any(name.endswith('_search') for name in item.tables)
     fair = (
         found.task == 'classify' and bool(item.groups)
-        and _importable('fairlearn'))
+        and utilities.importable('fairlearn'))
     rows.extend([
         ('coefficient_plot', coefficients,
          'shows the coefficients and their confidence intervals'
@@ -1904,25 +1826,6 @@ def _model_plots(
          'compares the model across the groups' if fair
          else 'needs a classifier, groups, and fairlearn')])
     return rows
-
-
-def _model_name(item: base.Dataset) -> str | None:
-    """Returns the name of the last model applied to `item`.
-
-    Args:
-        item: the dataset.
-
-    Returns:
-        The name of the last technique in the history that is a model, or
-            `None` if there is none.
-
-    """
-    names = set(chrisjen.utilities._flatten_dict(
-        chrisjen.library.get_genre('model')))
-    for record in reversed(item.history):
-        if record.get('technique') in names:
-            return str(record['technique'])
-    return None
 
 
 def _model_specific_key_of(genre: str) -> str:
@@ -2037,7 +1940,9 @@ def _profile_counts(
         return
     means = np.full(len(labels), mean)
     found.dispersion = float(np.var(labels, ddof = 1) / mean)
-    if _importable('statsmodels') and len(labels) > design.shape[1] + 1:
+    if (
+        utilities.importable('statsmodels')
+        and len(labels) > design.shape[1] + 1):
         api = importlib.import_module('statsmodels.api')
         try:
             with warnings.catch_warnings():
@@ -2052,20 +1957,6 @@ def _profile_counts(
     expected = float(np.mean(np.exp(-means)))
     observed = float(np.mean(labels == 0))
     found.excess_zeros = observed - expected > _ZEROS
-
-
-def _real_rows(item: base.Dataset) -> pd.Index:
-    """Returns the training rows that a sampler did not make up.
-
-    Args:
-        item: the dataset.
-
-    Returns:
-        The index labels of the rows.
-
-    """
-    rows = item._train_rows()
-    return rows[~rows.isin(item.synthetic)]
 
 
 def _sampler_suits(name: str, found: Profile, overlap: float | None) -> str:
@@ -2121,7 +2012,7 @@ def _screen_encoder(name: str, kind: str, found: Profile) -> str | None:
         return 'only encodes dates'
     source = getattr(technique, 'contents', None)
     package = source.split('.')[0] if isinstance(source, str) else None
-    if package is not None and not _importable(package):
+    if package is not None and not utilities.importable(package):
         return f'needs {package}, which is not installed'
     if name in _SUPERVISED:
         classes = found.classes or 0
@@ -2194,13 +2085,12 @@ def _screen_model(name: str, found: Profile) -> str | None:
         return 'is not a model'
     task = found.task or ''
     tools = getattr(kind, 'tools', {})
-    traits = _traits_of(name) or _Traits(
-        tuple(tools) or _BOTH, 'sklearn', 3, missing = True,
-        categories = True)
-    if task not in traits.tasks or (tools and task not in tools):
+    traits = kind.traits or models.ModelTraits(
+        'sklearn', 3, missing = True, categories = True)
+    if task not in (tuple(tools) or _BOTH):
         return f'cannot {task}'
     reason = None
-    if not _importable(traits.package):
+    if not utilities.importable(traits.package):
         reason = f'needs {traits.package}, which is not installed'
     elif found.text:
         reason = 'cannot use text or dates (encode them first)'
@@ -2219,7 +2109,9 @@ def _screen_model(name: str, found: Profile) -> str | None:
     return reason
 
 
-def _screen_assumptions(traits: _Traits, found: Profile) -> str | None:
+def _screen_assumptions(
+    traits: models.ModelTraits,
+    found: Profile) -> str | None:
     """Returns which assumption of a model the data does not meet, if any.
 
     Args:
@@ -2361,7 +2253,7 @@ def _splits(item: base.Dataset, folds: int) -> int:
             training rows have fewer rows.
 
     """
-    rows = _real_rows(item)
+    rows = item.real_train_rows
     most = len(rows)
     if item.task == 'classify':
         counts = item.y.loc[rows].value_counts()
@@ -2410,18 +2302,37 @@ def _suits(name: str, found: Profile) -> str:
     return 'its needs and assumptions are met'
 
 
-def _traits_of(name: str) -> _Traits | None:
+def _tasks_of(name: str) -> tuple[str, ...]:
+    """Returns the tasks that a model can do.
+
+    Args:
+        name: name of a model.
+
+    Returns:
+        The keys of its `tools`, or both tasks for a model that wraps a tool
+            of its own.
+
+    """
+    kind = _borrow(name)
+    return tuple(getattr(kind, 'tools', {})) or _BOTH
+
+
+def _traits_of(name: str) -> models.ModelTraits | None:
     """Returns what a model needs from the data and assumes about it.
 
     Args:
         name: name of a model.
 
     Returns:
-        Its traits in `_MODELS` or `_OTHER_MODELS`, or `None` if it is in
-            neither.
+        Its `traits`, or `None` if it has none (or is not a model).
 
     """
-    return _MODELS.get(name) or _OTHER_MODELS.get(name)
+    try:
+        kind = _borrow(name)
+    except KeyError:
+        return None
+    traits: models.ModelTraits | None = getattr(kind, 'traits', None)
+    return traits
 
 
 def _unscaled(continuous: pd.DataFrame) -> bool:

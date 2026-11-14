@@ -46,6 +46,59 @@ All notable changes to this project will be documented in this file.
   settings file matches a class that is a number. `Statsmodel.levels_` now
   puts the reference first, and its table of coefficients has a row for
   each feature and class other than the reference.
+* Fixed the defaults that `options` documents as changeable: the test size
+  of splitters, the timeout of `download`, the threshold of
+  `auto_categorize`, the style and colors of plots, and the data and studies
+  folders of a `Clerk` are now read from `options` when they are used, so
+  setting `amos.options._DEFAULT_TEST_SIZE` (for example) takes effect.
+  Before, each was fixed when `amos` was imported.
+* `Project.apply` no longer changes a `Dataset` that it is given: its label,
+  task, seed, groups, and switches are filled in on a copy.
+* `Dataset.model_name` is the name of the technique that fitted the
+  dataset's model. Each model marks its entry in `history` with "role"
+  ("model"), which the choosers, the model-specific techniques, and the
+  regression table use to find it (each found it its own way before).
+* `Dataset` has the public `train_rows`, `test_rows`, and `real_train_rows`
+  (the training rows that a sampler did not make up) and `require_label()`,
+  in place of the private `_train_rows()`, `_test_rows()`, and
+  `_require_label()`.
+* **Breaking:** an `Inferer` writes `infer`, which returns an
+  `amos.Inference` (the table of estimates, the fitted estimator, and any
+  other tables and details to record), and `Inferer.apply` adds it to the
+  dataset as an `Evaluator` adds its table. A custom inferer that wrote
+  `apply` should write `infer` instead.
+* What each model needs from the data and assumes about it is its `traits`
+  (an `amos.models.ModelTraits`), which `auto_model` reads, rather than a
+  table in `auto`. A model's tasks are the keys of its `tools`.
+* Each chooser names the steps that "auto" stands in for it in
+  (`step_names`), and "auto" finds the choosers by their `chooses`, so a
+  package built on `amos` can add one.
+* `Scorecard.metric_names` (a class method) returns the metrics of a
+  scorecard, which validators use by default.
+* Warnings from `amos` have their own category, `amos.AmosWarning` (a
+  `UserWarning`), so they can be filtered apart from those of other
+  packages.
+* An `Experiment` and a validator take `n_jobs`, which applies that many
+  paths (or fits that many folds) at once, each in its own process. It is 1
+  by default, as before. `joblib` (which scikit-learn requires) is now a
+  dependency of its own.
+* The extras named in the message for a missing package, and the packages
+  whose versions `Project.export` records, are read from `amos`'s own
+  requirements, so they no longer drift from `pyproject.toml` (camina,
+  nagata, networkx, optuna-integration, and pyarrow were missing from the
+  record). `options._RECORDED_PACKAGES` is gone, and `options._EXTRAS` only
+  lists the packages that another package's extra installs.
+* `plots`, `evaluators`, `inferers`, and `models` are packages of smaller
+  private modules (such as `plots._shap`). Every name is imported from the
+  same place as before (such as `amos.plots.RocCurve`).
+* `amos` uses the helpers that `chrisjen` and `bobbie` now make public
+  (through `amos.utilities`, which falls back to their private names with
+  the released versions), rather than their private names.
+* Faster: `accepted_parameters` builds a default instance of each class
+  once (rather than at each fit), and the bookkeeping of a sampler's rows
+  is vectorized. Shared helpers replace copies in several modules, every
+  function's docstring has all of its sections, and CI runs the tests in
+  parallel with read-only permissions.
 
 ## 0.7.0
 
