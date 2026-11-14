@@ -12,7 +12,7 @@ from typing import Any
 
 import chrisjen
 
-from . import base, utilities
+from . import base
 
 
 @dataclasses.dataclass
@@ -42,7 +42,7 @@ class Findings(chrisjen.Report):
         result = project.result
         workflow = project.workflow
         paths = [] if workflow is None else [
-            utilities.label_path(path)
+            chrisjen.utilities.label_path(path)
             for path in workflow.walk()]
         lines = [
             f'project: {project.name}',

@@ -119,7 +119,7 @@ import dataclasses
 from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any
 
-from . import utilities
+import chrisjen
 
 # The workers that a pipeline fills in, in the order they are applied.
 _STAGES: tuple[str, ...] = ('analyst', 'critic', 'artist')
@@ -185,10 +185,10 @@ class Pipeline:
     @property
     def models(self) -> list[str]:
         """Returns the models that the pipeline fits or chooses among."""
-        names = utilities.listify_names(
+        names = chrisjen.utilities.listify_names(
             self.analyst.get('model_techniques'))
         if names == ['auto']:
-            return utilities.listify_names(
+            return chrisjen.utilities.listify_names(
                 self.parameters.get('auto_model', {}).get('choices'))
         return names
 
@@ -222,7 +222,7 @@ class Pipeline:
         parameters = {
             name: dict(copy.deepcopy(values))
             for name, values in self.parameters.items()}
-        names = utilities.listify_names(groups)
+        names = chrisjen.utilities.listify_names(groups)
         if (self.fixed_effects or self.grouped) and not names:
             use = (
                 'uses the groups as fixed effects' if self.fixed_effects
@@ -1208,7 +1208,7 @@ def _project_section(
             return key
     return next(
         (key for key in sections
-         if not utilities.is_special_setting(key)
+         if not chrisjen.options.is_special_setting(key)
          and key not in _STAGES
          and not key.endswith('_parameters')),
         None)
@@ -1292,7 +1292,7 @@ def _workers(idea: MutableMapping[str, Any], project: str) -> list[str]:
     section = dict(idea[project])
     for key, value in section.items():
         if key.removeprefix(f'{prefix}_') in _LISTS:
-            return utilities.listify_names(value)
+            return chrisjen.utilities.listify_names(value)
     section[f'{prefix}_workers'] = list(_STAGES)
     idea[project] = section
     return list(_STAGES)

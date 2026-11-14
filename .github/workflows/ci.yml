@@ -11,6 +11,8 @@ name: continuous integration
 # Allows this Action to be called by a push or pull request
 on: [push, pull_request]
 
+# Jobs can only read the repository unless they say otherwise: the jobs that
+# deploy the documentation and create releases can also write to it.
 permissions:
   contents: read
 
@@ -79,6 +81,9 @@ jobs:
 
   document_and_deploy:
     runs-on: ubuntu-latest
+    # `mkdocs gh-deploy` pushes the documentation to the "gh-pages" branch.
+    permissions:
+      contents: write
 
     steps:
     - name: checkout repository
@@ -107,6 +112,9 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [build_and_test, lint_and_format]
     runs-on: ubuntu-latest
+    # `gh release create` makes a tag and a release.
+    permissions:
+      contents: write
 
     steps:
     - name: checkout repository

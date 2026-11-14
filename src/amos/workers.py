@@ -168,7 +168,7 @@ class Experiment(chrisjen.Contest):
             joblib.delayed(_apply_path)(path, item, state, kwargs)
             for path in paths)
         for path, result in zip(paths, results, strict = True):
-            yield utilities.label_path(path), result
+            yield chrisjen.utilities.label_path(path), result
 
     def tabulate(self) -> pd.DataFrame:
         """Returns a table comparing every path of the most recent call.
@@ -204,7 +204,7 @@ class Experiment(chrisjen.Contest):
         criterion = getattr(self.criteria, 'name', None)
         branches = []
         for path in paths:
-            label = utilities.label_path(path)
+            label = chrisjen.utilities.label_path(path)
             outcome = self.outcomes.get(label)
             if outcome is None:
                 continue

@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* `amos` requires chrisjen 0.5.0 and bobbie 0.5.0, and calls their public
+  helpers (such as `chrisjen.utilities.listify_names` and
+  `bobbie.options.file_type`) directly. The wrappers of them in
+  `amos.utilities`, which fell back to their private names in earlier
+  versions, are gone.
+* Fixed the deployment of the documentation and the creation of releases,
+  which 0.8.0 broke by giving every job of the CI workflow read-only
+  permissions. The workflow is still read-only by default, and only the jobs
+  that deploy the documentation and create releases can write.
+
 ## 0.8.0
 
 * Fixed the defaults that `options` documents as changeable: the test size

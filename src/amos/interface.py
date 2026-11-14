@@ -14,6 +14,7 @@ import pathlib
 from collections.abc import Mapping, MutableMapping
 from typing import Any, cast
 
+import bobbie
 import chrisjen
 import nagata
 import numpy as np
@@ -369,9 +370,9 @@ class Project(chrisjen.Project):
             file_format = self.idea.get('files', {}).get(
                 'replication_format', options._REPLICATION_FORMAT)
         extension = str(file_format).lower().removeprefix('.')
-        kind = utilities.settings_file_type(extension)
+        kind = bobbie.options.file_type(extension)
         if kind is None:
-            known = ', '.join(utilities.settings_file_extensions())
+            known = ', '.join(bobbie.options.file_extensions())
             message = (
                 f'settings cannot be saved as {file_format!r}: the formats '
                 f'are {known}')
@@ -715,7 +716,7 @@ def _is_model(name: str, project: Project) -> bool:
 
     """
     try:
-        kind = project.library.borrow(utilities.class_names(name))
+        kind = project.library.borrow(chrisjen.workshop.class_names(name))
     except KeyError:
         return False
     return isinstance(kind, type) and issubclass(kind, models.Model)
@@ -741,7 +742,7 @@ def _keep_winning_path(
     name = str(worker.name)
     path = next(
         (p for p in worker.walk()
-         if utilities.label_path(p) == winner),
+         if chrisjen.utilities.label_path(p) == winner),
         None)
     if path is None:
         return []
@@ -799,7 +800,7 @@ def _model_specific_techniques(
         for setting, value in settings.items():
             nodes = [
                 chrisjen.workshop.build_node(technique, project)
-                for technique in utilities.listify_names(value)]
+                for technique in chrisjen.utilities.listify_names(value)]
             for node in nodes:
                 if isinstance(node, auto.Auto) and node.genre is None:
                     node.genre = base._MODEL_SPECIFIC_GENRES[setting]

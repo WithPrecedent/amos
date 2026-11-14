@@ -273,13 +273,13 @@ tests = [
 [package.metadata]
 requires-dist = [
     { name = "amos", extras = ["boosting", "causal", "encoders", "explain", "fairness", "mlxtend", "plots", "polars", "sampling", "settings", "statistics", "survival", "tables", "tuning", "uncertainty", "word"], marker = "extra == 'all'" },
-    { name = "bobbie", specifier = ">=0.4.0" },
-    { name = "bobbie", extras = ["toml", "yaml"], marker = "extra == 'settings'", specifier = ">=0.4.0" },
+    { name = "bobbie", specifier = ">=0.5.0" },
+    { name = "bobbie", extras = ["toml", "yaml"], marker = "extra == 'settings'", specifier = ">=0.5.0" },
     { name = "camina", specifier = ">=0.2.4" },
     { name = "catboost", marker = "extra == 'boosting'", specifier = ">=1.2" },
     { name = "category-encoders", marker = "extra == 'encoders'", specifier = ">=2.6" },
     { name = "causalml", marker = "python_full_version < '3.13' and extra == 'causal'", specifier = ">=0.17" },
-    { name = "chrisjen", specifier = ">=0.4.2" },
+    { name = "chrisjen", specifier = ">=0.5.0" },
     { name = "diptest", marker = "extra == 'statistics'", specifier = ">=0.10" },
     { name = "doubleml", marker = "extra == 'causal'", specifier = ">=0.11" },
     { name = "dowhy", marker = "python_full_version >= '3.13' and extra == 'causal'", specifier = ">=0.14" },
@@ -578,15 +578,15 @@ wheels = [
 
 [[package]]
 name = "bobbie"
-version = "0.4.0"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bunches" },
     { name = "wonka" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/69/96/216ff12c0fb666e54ea2d2080430a94d850af363004e158f75fbf482facf/bobbie-0.4.0.tar.gz", hash = "sha256:36fbbb50aaf72cfb12055de313b7a296e20a5f6e7a7312e6006bb88fe4608f22", size = 118974, upload-time = "2026-11-06T17:32:15.435Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/55/f45d3d037e661fbe697700ee27c38e1f6d1b2f2e8c1b4bdc4a0b55b45db1/bobbie-0.5.0.tar.gz", hash = "sha256:b35805585eb4af9b6023228f3a3a75c58805cc9544dcb63b113903def72c8dd5", size = 119405, upload-time = "2026-11-14T09:46:31.911Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/23/59/4f643ab67831003637b669341a43cbb30937df7d177acc8548934a762081/bobbie-0.4.0-py3-none-any.whl", hash = "sha256:b8baeed33ec4e4681184318f4f90ab7d826b6e910a69936c0371c5106dec73ee", size = 17919, upload-time = "2026-11-06T17:32:14.492Z" },
+    { url = "https://files.pythonhosted.org/packages/74/71/2e7e9f12864014f506a42c3211818dfc5fb39795ea2d4f04d85f738126e1/bobbie-0.5.0-py3-none-any.whl", hash = "sha256:5c419909487b686b4bb82e92d39451e1ddcc92551341e6300e60f46c83572557", size = 18185, upload-time = "2026-11-14T09:46:30.882Z" },
 ]
 
 [package.optional-dependencies]
@@ -994,7 +994,7 @@ wheels = [
 
 [[package]]
 name = "chrisjen"
-version = "0.4.2"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bobbie" },
@@ -1004,9 +1004,9 @@ dependencies = [
     { name = "nagata" },
     { name = "wonka" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/af/83/6627b3108ac1eb3d3a1ac21452c7677bb7cb1d069c0279f32021b2b32f63/chrisjen-0.4.2.tar.gz", hash = "sha256:82bceb0a8eb5e614682b188e04fdd3517c22a01ea324e1f66bb785367a4f61f6", size = 159596, upload-time = "2026-10-31T20:29:09.267Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0e/cc/1503e9a2b024021e1c34d064e04c5ae10992ddd4bfa8d24fe0a2ec3e6383/chrisjen-0.5.0.tar.gz", hash = "sha256:dc9cd99627aeb3bbcf0f9227c5e28178d19a1f5ba6c416f1f4787642c3fb697b", size = 160351, upload-time = "2026-11-14T09:45:40.952Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/63/56/d47439766daa21101011c49c2b53e701692a211657d6d9ceddacd31d282c/chrisjen-0.4.2-py3-none-any.whl", hash = "sha256:7aefa6a495ad67df8c8ef465b7888b6cbc3520474675d87b92d6853210d74df2", size = 33634, upload-time = "2026-10-31T20:29:08.311Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/24/4f38a639c94cfbe0a43bdcadad4049e969c5b588e5f87c02ab7fd4aadf84/chrisjen-0.5.0-py3-none-any.whl", hash = "sha256:62c3195ba41950bcecd6ab2cee447fc35964c4bce66e062e98d31ffeaf088831", size = 34105, upload-time = "2026-11-14T09:45:39.833Z" },
 ]
 
 [[package]]
