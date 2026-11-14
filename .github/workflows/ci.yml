@@ -41,7 +41,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: install uv
-      uses: astral-sh/setup-uv@v10.3.2
+      uses: astral-sh/setup-uv@v10.3.3
 
     # xgboost and lightgbm need OpenMP, which macOS does not include. The
     # README's study uses xgboost, so its example fails without it.
@@ -66,7 +66,7 @@ jobs:
       uses: actions/checkout@v7
 
     - name: install uv
-      uses: astral-sh/setup-uv@v10.3.2
+      uses: astral-sh/setup-uv@v10.3.3
 
     - name: install dependencies
       run: uv sync
@@ -85,7 +85,7 @@ jobs:
       uses: actions/checkout@v7
 
     - name: install uv
-      uses: astral-sh/setup-uv@v10.3.2
+      uses: astral-sh/setup-uv@v10.3.3
 
     - name: install dependencies
       run: uv sync
