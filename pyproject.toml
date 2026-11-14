@@ -39,6 +39,9 @@ dependencies = [
     "bobbie>=0.4.0",
     "camina>=0.2.4",
     "chrisjen>=0.4.2",
+    # Experiments and validators use joblib (which scikit-learn requires) to
+    # apply their paths and fit their folds at once.
+    "joblib>=1.3",
     "nagata>=0.2.1",
     "numpy>=1.26",
     "pandas>=3.0",

@@ -1,6 +1,7 @@
 """Base classes for amos.
 
 Contents:
+    AmosWarning: the category of the warnings that amos gives.
     Dataset: data and everything learned from it in a workflow.
     Branch: one branch of an experiment and its result.
     Operation: base class for amos techniques, which work on a `Dataset`.
@@ -12,6 +13,10 @@ Contents:
         raising their errors, in a workflow.
     using_model_specific_techniques: replaces the plots, evaluators, and
         inferers of a workflow with those that the dataset's model names.
+    WorkflowState: the settings that last while a workflow is applied.
+    workflow_state: returns those settings.
+    restored_workflow_state: applies techniques with those settings, as in
+        another process.
     _SKIPS_INCOMPATIBLE: whether the code that is running is in a workflow.
     _MODEL_SPECIFIC_GENRES: the settings of a model's parameters that name
         the techniques that replace those of a workflow, and the genre of
@@ -83,6 +88,23 @@ _OPERATION_DEPTH: contextvars.ContextVar[int] = contextvars.ContextVar(
 logger = logging.getLogger(__name__)
 
 
+class AmosWarning(UserWarning):
+    """A warning from amos about something that a user may want to change.
+
+    amos warns when it does something other than what was asked, so that the
+    results can still be made (such as fitting a model on the CPU when it
+    could not use the GPU, or leaving out a technique that a chooser could
+    not apply). Its warnings are this category, so they can be filtered
+    apart from those of the packages that amos uses:
+
+    ```py
+    import warnings
+    warnings.simplefilter("error", amos.AmosWarning)
+    ```
+
+    """
+
+
 class IncompatibleTechniqueError(ValueError):
     """Raised by a technique that does not suit the dataset's model.
 
@@ -117,6 +139,36 @@ def skipping_incompatible_techniques() -> Generator[None, None, None]:
 
 
 @contextlib.contextmanager
+def restored_workflow_state(
+    state: WorkflowState) -> Generator[None, None, None]:
+    """Applies techniques as the workflow that made `state` applies them.
+
+    A workflow's settings that last while it is applied (whether techniques
+    that do not suit the model are skipped, and which techniques the
+    models name) are kept in context variables, which another process (or
+    thread) does not share. An `Experiment` that applies its paths at once
+    restores them in each.
+
+    Args:
+        state: the settings, from `workflow_state`.
+
+    Yields:
+        None: control, to the code in the context.
+
+    """
+    tokens = (
+        _SKIPS_INCOMPATIBLE.set(state.skips_incompatible),
+        _MODEL_SPECIFIC_TECHNIQUES.set(state.model_specific_techniques),
+        _OPERATION_DEPTH.set(state.operation_depth))
+    try:
+        yield
+    finally:
+        _OPERATION_DEPTH.reset(tokens[2])
+        _MODEL_SPECIFIC_TECHNIQUES.reset(tokens[1])
+        _SKIPS_INCOMPATIBLE.reset(tokens[0])
+
+
+@contextlib.contextmanager
 def using_model_specific_techniques(
     techniques: _TechniquesByModel) -> Generator[None, None, None]:
     """Replaces a workflow's techniques with those that its model names.
@@ -144,6 +196,41 @@ def using_model_specific_techniques(
         yield
     finally:
         _MODEL_SPECIFIC_TECHNIQUES.reset(token)
+
+
+def workflow_state() -> WorkflowState:
+    """Returns the settings that last while a workflow is applied.
+
+    Returns:
+        Whether techniques that do not suit the model are skipped, which
+            techniques the models name, and how many operations are being
+            applied, one inside another (see `restored_workflow_state`).
+
+    """
+    return WorkflowState(
+        skips_incompatible = _SKIPS_INCOMPATIBLE.get(),
+        model_specific_techniques = _MODEL_SPECIFIC_TECHNIQUES.get(),
+        operation_depth = _OPERATION_DEPTH.get())
+
+
+@dataclasses.dataclass(frozen = True)
+class WorkflowState:
+    """The settings that last while a workflow is applied.
+
+    Args:
+        skips_incompatible: whether a technique that does not suit the
+            model is skipped (see `skipping_incompatible_techniques`).
+        model_specific_techniques: the techniques that replace those of the
+            workflow, by the name of the model and then by the setting (see
+            `using_model_specific_techniques`).
+        operation_depth: how many operations are being applied, one inside
+            another.
+
+    """
+
+    skips_incompatible: bool
+    model_specific_techniques: _TechniquesByModel
+    operation_depth: int
 
 
 # `eq` is `False` so that comparing datasets does not compare their data
@@ -263,6 +350,12 @@ class Dataset:
 
         The switches are `use_gpu`, `visualize_explorers`, and
         `visualize_critics`.
+
+        Raises:
+            KeyError: if a group is not a column of the data.
+            TypeError: if a switch is not true or false.
+            ValueError: if the label is a group, or `task` is not
+                "classify" or "regress".
 
         """
         if not isinstance(self.data, pd.DataFrame):
@@ -439,9 +532,63 @@ class Dataset:
         return self.test is not None
 
     @property
+    def model_name(self) -> str | None:
+        """Returns the name of the technique that fitted the dataset's model.
+
+        Returns:
+            The name of the last model in `history` (the last entry that a
+                `Model` recorded, with "role" set to "model"), or `None` if
+                no model has been fitted.
+
+        """
+        for entry in reversed(self.history):
+            if entry.get('role') == 'model':
+                return str(entry.get('technique'))
+        return None
+
+    @property
     def numerics(self) -> list[str]:
         """Returns the names of the features that are numbers (not booleans)."""
         return self._kind('numerics')
+
+    @property
+    def real_train_rows(self) -> pd.Index:
+        """Returns the training rows that are real observations.
+
+        Returns:
+            The index labels of the training rows (or of every row, if the
+                data has not been split) that a sampler did not make up (see
+                `synthetic`).
+
+        """
+        rows = self.train_rows
+        return rows[~rows.isin(self.synthetic)]
+
+    @property
+    def test_rows(self) -> pd.Index:
+        """Returns the index labels of the test rows.
+
+        Raises:
+            ValueError: if the data has not been split.
+
+        Returns:
+            The test rows.
+
+        """
+        if self.test is None:
+            message = 'the data has not been split: apply a splitter first'
+            raise ValueError(message)
+        return self.test
+
+    @property
+    def train_rows(self) -> pd.Index:
+        """Returns the index labels of the training rows.
+
+        Returns:
+            The training rows, or every row if the data has not been split.
+
+        """
+        return self.data.index if self.train is None else self.train
 
     @property
     def x(self) -> pd.DataFrame:
@@ -451,28 +598,28 @@ class Dataset:
     @property
     def x_test(self) -> pd.DataFrame:
         """Returns the features of the test rows."""
-        return self.data.loc[self._test_rows(), self.features]
+        return self.data.loc[self.test_rows, self.features]
 
     @property
     def x_train(self) -> pd.DataFrame:
         """Returns the features of the training rows."""
-        return self.data.loc[self._train_rows(), self.features]
+        return self.data.loc[self.train_rows, self.features]
 
     @property
     def y(self) -> pd.Series:
         """Returns the label of every row."""
-        return self.data[self._require_label()]
+        return self.data[self.require_label()]
 
     @property
     def y_test(self) -> pd.Series:
         """Returns the label of the test rows."""
-        labels: pd.Series = self.y.loc[self._test_rows()]
+        labels: pd.Series = self.y.loc[self.test_rows]
         return labels
 
     @property
     def y_train(self) -> pd.Series:
         """Returns the label of the training rows."""
-        labels: pd.Series = self.y.loc[self._train_rows()]
+        labels: pd.Series = self.y.loc[self.train_rows]
         return labels
 
     """ Public Methods """
@@ -546,6 +693,32 @@ class Dataset:
             self.test = self.test[self.test.isin(data.index)]
         self.synthetic = self.synthetic[self.synthetic.isin(data.index)]
 
+    def require_label(self) -> str:
+        """Returns `label`, checking that it is a column of the data.
+
+        Raises:
+            ValueError: if there is no label, or if it is pending (not yet a
+                column of the data).
+
+        Returns:
+            The name of the label column.
+
+        """
+        if self.label is None:
+            message = (
+                'the dataset has no label: pass one when it is created or set '
+                '"label" in the "general" section of the settings'
+            )
+            raise ValueError(message)
+        if self.label not in self.data.columns:
+            message = (
+                f'the label {self.label!r} is not a column of the data: make '
+                f'it (with a technique such as "derive_columns") before it is '
+                f'used'
+            )
+            raise ValueError(message)
+        return self.label
+
     def resample(
         self,
         x: pd.DataFrame,
@@ -569,12 +742,12 @@ class Dataset:
                 which case no new row has groups and every new row is real.
 
         """
-        label = self._require_label()
-        made_up = self._train_rows().isin(self.synthetic)
+        label = self.require_label()
+        made_up = self.train_rows.isin(self.synthetic)
         rows = x.copy()
         rows[label] = np.asarray(y)
         if self.groups:
-            training = self.data.loc[self._train_rows(), self.groups]
+            training = self.data.loc[self.train_rows, self.groups]
             positions = np.full(len(rows), -1) if origins is None else (
                 np.asarray(origins))
             copied = positions >= 0
@@ -585,7 +758,7 @@ class Dataset:
                 rows[group] = values
         rows.index = self._new_labels(len(rows))
         rows = rows[self.data.columns]
-        test = self.data.loc[self._test_rows()] if self.is_split else None
+        test = self.data.loc[self.test_rows] if self.is_split else None
         self.data = pd.concat([rows, test]) if test is not None else rows
         self.train = rows.index
         self.synthetic = rows.index[_made_up(origins, made_up, len(rows))]
@@ -661,8 +834,8 @@ class Dataset:
         boolean while it holds integers.
 
         Args:
-            kind: "booleans", "numerics", or "categoricals". Dates and times
-                are not in any kind.
+            kind: "booleans", "numerics", "categoricals", or "dates" (for
+                dates, times, and periods).
 
         Returns:
             Names of the features of that kind, in order.
@@ -696,56 +869,6 @@ class Dataset:
             return pd.RangeIndex(start, start + count)
         return pd.Index([f'resampled_{i}' for i in range(count)])
 
-    def _require_label(self) -> str:
-        """Returns `label`.
-
-        Raises:
-            ValueError: if there is no label, or if it is pending (not yet a
-                column of the data).
-
-        Returns:
-            The name of the label column.
-
-        """
-        if self.label is None:
-            message = (
-                'the dataset has no label: pass one when it is created or set '
-                '"label" in the "general" section of the settings'
-            )
-            raise ValueError(message)
-        if self.label not in self.data.columns:
-            message = (
-                f'the label {self.label!r} is not a column of the data: make '
-                f'it (with a technique such as "derive_columns") before it is '
-                f'used'
-            )
-            raise ValueError(message)
-        return self.label
-
-    def _test_rows(self) -> pd.Index:
-        """Returns the index labels of the test rows.
-
-        Raises:
-            ValueError: if the data has not been split.
-
-        Returns:
-            The test rows.
-
-        """
-        if self.test is None:
-            message = 'the data has not been split: apply a splitter first'
-            raise ValueError(message)
-        return self.test
-
-    def _train_rows(self) -> pd.Index:
-        """Returns the index labels of the training rows.
-
-        Returns:
-            The training rows, or every row if the data has not been split.
-
-        """
-        return self.data.index if self.train is None else self.train
-
     """ Dunder Methods """
 
     def __repr__(self) -> str:
@@ -765,8 +888,8 @@ class Dataset:
         if self.use_gpu:
             parts.append('use_gpu=True')
         if self.is_split:
-            parts.append(f'train={len(self._train_rows())}')
-            parts.append(f'test={len(self._test_rows())}')
+            parts.append(f'train={len(self.train_rows)}')
+            parts.append(f'test={len(self.test_rows)}')
         if self.model is not None:
             parts.append(f'model={type(self.model).__name__}')
         return f'Dataset({", ".join(parts)})'
@@ -1216,15 +1339,14 @@ def _model_and_replaced(
         setting: "plots", "evaluators", or "inferers".
 
     Returns:
-        The name of the last model in `history` (the last entry with a
-            "search", which only models record), or `None` if there is
-            none, and whether a technique was replaced by the techniques of
-            that model's `setting` since it was fitted.
+        The name of the dataset's model (see `Dataset.model_name`), or
+            `None` if there is none, and whether a technique was replaced by
+            the techniques of that model's `setting` since it was fitted.
 
     """
     replaced = False
     for entry in reversed(item.history):
-        if 'search' in entry:
+        if entry.get('role') == 'model':
             return str(entry.get('technique')), replaced
         if entry.get('model_specific') == setting:
             replaced = True
@@ -1252,13 +1374,14 @@ def _made_up(
     """
     if origins is None:
         return np.zeros(count, dtype = bool)
-    flags = np.ones(count, dtype = bool)
-    seen: set[int] = set()
-    for position, origin in enumerate(np.asarray(origins)):
-        if origin >= 0 and not made_up[origin] and origin not in seen:
-            seen.add(int(origin))
-            flags[position] = False
-    return flags
+    positions = np.asarray(origins, dtype = int)
+    copied = positions >= 0
+    # A copy of a real row is real (if it is the first copy of that row).
+    real = np.zeros(count, dtype = bool)
+    real[copied] = ~np.asarray(made_up, dtype = bool)[positions[copied]]
+    first = np.zeros(count, dtype = bool)
+    first[np.unique(positions, return_index = True)[1]] = True
+    return ~(real & first)
 
 
 def _validate_use_gpu(value: Any) -> bool:

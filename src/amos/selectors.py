@@ -79,8 +79,7 @@ from . import base, models, transformers, utilities
 # Name of the section of the settings that lists the features of each group.
 # It is not a worker, so it is one of `chrisjen`'s special sections.
 _SECTION: str = 'feature_groups'
-if _SECTION not in chrisjen.options._SPECIAL_SETTINGS:
-    chrisjen.options._SPECIAL_SETTINGS.append(_SECTION)
+utilities.add_special_setting(_SECTION)
 # Name in the feature groups of the features that every group keeps. It is
 # not a group, so it is not a technique.
 _ALWAYS: str = 'always_use'

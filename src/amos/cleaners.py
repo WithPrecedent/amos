@@ -49,7 +49,7 @@ class Cleaner(base.Operation, abc.ABC):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
+            an empty `str`, which uses the snake case name of the class.
         contents: not used by most cleaners. Defaults to `None`.
         parameters: keyword arguments for `clean`. Defaults to an empty
             `dict`.

@@ -11,14 +11,17 @@ Contents:
 
 from __future__ import annotations
 
+import copy
 import dataclasses
+import importlib
 import weakref
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
 import chrisjen
 import pandas as pd
 
-from . import base, metrics
+from . import base, metrics, utilities
 
 
 @dataclasses.dataclass
@@ -49,6 +52,13 @@ class Experiment(chrisjen.Contest):
     at once. The comparison table and the branches are the same, but only
     the winner's branch has its whole `dataset`.
 
+    If `n_jobs` is more than 1 (in the worker's section of the settings),
+    that many paths are applied at once, each in its own process, and the
+    results are compared in the order of the paths, as they are one at a
+    time. Each process holds a copy of the dataset and of what its path
+    learns, so memory grows with `n_jobs`. A path that fits its model on a
+    GPU shares the GPU with the others.
+
     Args:
         name: name used to refer to the worker in a workflow.
         contents: the graph of nodes. Defaults to an empty `dict`.
@@ -58,6 +68,8 @@ class Experiment(chrisjen.Contest):
             better. Defaults to `None`.
         conserve_memory: whether to keep only the winner's whole dataset in
             `results`. Defaults to `False`.
+        n_jobs: how many paths to apply at once (-1 for one for each
+            processor). Defaults to 1, which applies one path at a time.
 
     Attributes:
         results: the result of each path in the most recent call, by the
@@ -81,6 +93,7 @@ class Experiment(chrisjen.Contest):
         default_factory = dict)
     skipped: dict[str, list[dict[str, Any]]] = dataclasses.field(
         default_factory = dict)
+    n_jobs: int | None = 1
     # How many entries of `history` the item had before any path was tried.
     _inherited: int = dataclasses.field(
         default = 0, init = False, repr = False)
@@ -119,6 +132,44 @@ class Experiment(chrisjen.Contest):
                 **details)
         return best
 
+    def each_path(
+        self,
+        item: Any,
+        **kwargs: Any) -> Iterator[tuple[str, Any]]:
+        """Applies each path to its own copy of `item`.
+
+        With `n_jobs` of 1, this is `chrisjen`'s `each_path`. Otherwise, the
+        paths are applied in other processes, at most `n_jobs` at once, and
+        their results are given back in the order of the paths.
+
+        Args:
+            item: data or object to change. It is not changed itself.
+            **kwargs: keyword arguments passed to the nodes.
+
+        Raises:
+            ValueError: if there are no paths.
+
+        Yields:
+            tuple[str, Any]: the label of each path and its result.
+
+        """
+        if self.n_jobs == 1:
+            yield from super().each_path(item, **kwargs)
+            return
+        paths = self.walk()
+        if not paths:
+            message = f'{self.name!r} has no paths to compare'
+            raise ValueError(message)
+        joblib = importlib.import_module('joblib')
+        state = base.workflow_state()
+        parallel = joblib.Parallel(
+            n_jobs = self.n_jobs, return_as = 'generator')
+        results = parallel(
+            joblib.delayed(_apply_path)(path, item, state, kwargs)
+            for path in paths)
+        for path, result in zip(paths, results, strict = True):
+            yield utilities.label_path(path), result
+
     def tabulate(self) -> pd.DataFrame:
         """Returns a table comparing every path of the most recent call.
 
@@ -153,7 +204,7 @@ class Experiment(chrisjen.Contest):
         criterion = getattr(self.criteria, 'name', None)
         branches = []
         for path in paths:
-            label = ' > '.join(str(getattr(n, 'name', n)) for n in path)
+            label = utilities.label_path(path)
             outcome = self.outcomes.get(label)
             if outcome is None:
                 continue
@@ -199,6 +250,33 @@ class Experiment(chrisjen.Contest):
 
 
 """ Private Functions """
+
+
+def _apply_path(
+    path: Sequence[Any],
+    item: Any,
+    state: base.WorkflowState,
+    kwargs: Mapping[str, Any]) -> Any:
+    """Applies copies of the nodes of a path to a copy of `item`.
+
+    This runs in another process (or thread), so it first restores the
+    settings of the workflow that the experiment is in.
+
+    Args:
+        path: the nodes of the path.
+        item: data or object to change. It is not changed itself.
+        state: the settings of the workflow (see `base.workflow_state`).
+        kwargs: keyword arguments passed to the nodes.
+
+    Returns:
+        The result of the last node.
+
+    """
+    result = copy.deepcopy(item)
+    with base.restored_workflow_state(state):
+        for node in path:
+            result = copy.deepcopy(node).apply(result, **kwargs)
+    return result
 
 
 def _outcome(item: base.Dataset) -> base.Dataset:
@@ -253,8 +331,9 @@ def _step_names(paths: list[list[Any]]) -> dict[int, str]:
             continue
         name = None
         for node in nodes:
-            if isinstance(node, chrisjen.Step) and node.contents is not None:
-                name = str(node.name).removeprefix(f'{node.contents.name}_')
+            parts = utilities.technique_and_step(node)
+            if parts is not None:
+                name = parts[1]
                 break
             if isinstance(node, base.Operation):
                 name = chrisjen.library.classify(type(node))
@@ -276,6 +355,5 @@ def _technique_of(node: Any) -> str:
         The name of the technique that a step wraps, or the node's name.
 
     """
-    if isinstance(node, chrisjen.Step) and node.contents is not None:
-        return str(node.contents.name)
-    return str(node.name)
+    parts = utilities.technique_and_step(node)
+    return str(node.name) if parts is None else parts[0]

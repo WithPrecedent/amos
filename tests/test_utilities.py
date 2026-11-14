@@ -74,6 +74,51 @@ def test_import_tool_names_the_extra_for_a_missing_package(
         utilities.import_tool('another_missing_package.Tool')
 
 
+def test_the_extras_come_from_the_requirements() -> None:
+    assert utilities._extra_of('imblearn') == 'sampling'
+    assert utilities._extra_of('statsmodels') == 'statistics'
+    assert utilities._extra_of('docx') == 'word'
+    assert utilities._extra_of('yaml') == 'settings'
+    assert utilities._extra_of('numpy') is None
+    packages = utilities.environment()['packages']
+    assert {'amos', 'camina', 'nagata', 'scikit-learn'} <= set(packages)
+
+
+def test_the_helpers_of_chrisjen_and_bobbie() -> None:
+    assert utilities.listify_names('a, b,') == ['a', 'b']
+    assert utilities.class_names('xgboost2') == ['xgboost2', 'xgboost']
+    assert utilities.flatten_dict({'a': {'b': 1}}) == {'b': 1}
+    assert utilities.label_path(['split', 'model']) == 'split > model'
+    assert utilities.is_special_setting('general')
+    assert utilities.is_special_setting('feature_groups')
+    assert utilities.settings_file_type('.JSON') == 'json'
+    assert utilities.settings_file_type('csv') is None
+    assert 'yaml' in utilities.settings_file_extensions()
+    assert utilities.importable('json')
+    assert not utilities.importable('not_a_real_package')
+
+
+def test_accepted_parameters_keeps_the_names_of_a_class(
+    monkeypatch: pytest.MonkeyPatch) -> None:
+
+    class AnyKeyword:
+        """A tool that takes any keyword and reports its parameters."""
+
+        built = 0
+
+        def __init__(self, **kwargs: object) -> None:
+            type(self).built += 1
+
+        def get_params(self) -> dict[str, object]:
+            return {'depth': 3}
+
+    utilities._default_parameter_names.cache_clear()
+    for _ in range(3):
+        assert utilities.accepted_parameters(
+            AnyKeyword, {'depth': 2, 'other': 1}) == {'depth': 2}
+    assert AnyKeyword.built == 1
+
+
 def test_parameters_of() -> None:
     scaler = sklearn.preprocessing.MinMaxScaler(clip = True)
     assert utilities.parameters_of(scaler)['clip'] is True

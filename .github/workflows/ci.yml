@@ -12,8 +12,7 @@ name: continuous integration
 on: [push, pull_request]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 env:
   DISABLE_MKDOCS_2_WARNING: "true"
@@ -57,7 +56,7 @@ jobs:
       run: uv run pre-commit run -a --show-diff-on-failure
 
     - name: run tests
-      run: uv run pytest tests
+      run: uv run pytest -n auto tests
 
   lint_and_format:
     runs-on: ubuntu-latest

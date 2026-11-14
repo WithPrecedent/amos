@@ -2,12 +2,21 @@
 
 Contents:
     accepted_parameters: limits parameters to those that a tool accepts.
+    add_special_setting: adds a section of settings that is not a worker's.
+    class_names: returns the names of the classes that a node can be built
+        with.
     describe_tool: returns a name for a tool that can be stored in a record.
     environment: describes the software used to run a project.
     feature_names: returns the columns of the data that a model was fitted
         to.
+    flatten_dict: returns the values of a nested `dict` in one level.
     gpus: describes the NVIDIA GPUs that models can be fitted on.
     import_tool: imports a tool from its import path, with a helpful error.
+    importable: returns whether a package can be imported.
+    is_special_setting: returns whether a section of settings is not a
+        worker's.
+    label_path: returns the label of a path through a worker.
+    listify_names: returns a `list` of names from a setting.
     parameters_of: returns the parameters of a built tool.
     preserved_logging: restores the root logger after code that changes it.
     quote_bare_values: puts quotes around the words in an expression that are
@@ -15,6 +24,10 @@ Contents:
     search_space: divides parameters into fixed values and values to search.
     select_columns: returns the names of columns, checking that they are in
         the data.
+    settings_file_extensions: returns the extensions of settings files.
+    settings_file_type: returns the type of a settings file.
+    technique_and_step: returns the technique that a step wraps and the
+        step's name.
 
 """
 
@@ -33,7 +46,11 @@ import sys
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+import bobbie
+import chrisjen
+import chrisjen.options
 import chrisjen.utilities
+import chrisjen.workshop
 
 from . import options
 
@@ -56,6 +73,11 @@ _SEARCHES: frozenset[str] = frozenset({'grid', 'optuna', 'random'})
 _BARE_WORD: re.Pattern[str] = re.compile(
     r"'(?:[^'\\]|\\.)*'|" + r'"(?:[^"\\]|\\.)*"|`[^`]*`'
     r'|(?<![\w.@])(?P<word>[A-Za-z_]\w*)\b(?!\s*[(.])(?!\s*=(?!=))')
+# The name of the package at the start of a requirement (such as
+# "scikit-learn>=1.5") and the extra in its marker (such as
+# "; extra == 'sampling'").
+_REQUIREMENT_NAME: re.Pattern[str] = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*')
+_REQUIREMENT_EXTRA: re.Pattern[str] = re.compile(r"extra == '([^']+)'")
 # A column (a word or text in backticks) and "==" or "!=" at the end of text.
 _COMPARED_COLUMN: re.Pattern[str] = re.compile(
     r'(?P<column>`[^`]*`|[A-Za-z_]\w*)\s*(?:==|!=)\s*$')
@@ -71,7 +93,8 @@ def accepted_parameters(
     parameters it accepts. Some tools, such as the models in `xgboost`, accept
     any keyword (`**kwargs`). For those, the names returned by the
     `get_params` method of a default instance (the scikit-learn convention)
-    are used instead, if there is one.
+    are used instead, if there is one. The names of a class are found once
+    and kept, since building a default instance can be slow.
 
     Args:
         tool: callable (usually a class) to examine.
@@ -88,14 +111,48 @@ def accepted_parameters(
     takes_any = any(
         p.kind is inspect.Parameter.VAR_KEYWORD for p in signature.values())
     if takes_any and hasattr(tool, 'get_params'):
-        try:
-            names = set(tool().get_params())
-        except Exception:  # noqa: BLE001
+        names = (
+            _default_parameter_names(tool) if isinstance(tool, type)
+            else _built_parameter_names(tool))
+        if names is None:
             # A tool that cannot be built without arguments falls back to its
             # signature, which accepts everything.
             return dict(parameters)
         return {k: v for k, v in parameters.items() if k in names}
     return chrisjen.utilities.accepted_arguments(tool, parameters)
+
+
+def add_special_setting(name: str) -> None:
+    """Adds a section of settings that `chrisjen` does not build as a worker.
+
+    Args:
+        name: name of the section (such as "feature_groups").
+
+    """
+    # chrisjen 0.4.2 and earlier have no `add_special_setting`.
+    adder = getattr(chrisjen.options, 'add_special_setting', None)
+    if adder is not None:
+        adder(name)
+    elif name not in chrisjen.options._SPECIAL_SETTINGS:
+        chrisjen.options._SPECIAL_SETTINGS.append(name)
+
+
+def class_names(name: str) -> str | list[str]:
+    """Returns the names of the classes that a node can be built with.
+
+    A name that ends in a number (such as "xgboost2") can be built with the
+    class named without it, as `chrisjen` builds it.
+
+    Args:
+        name: name of a node in the settings.
+
+    Returns:
+        `name`, or `name` and `name` without its number.
+
+    """
+    builder: Callable[[str], str | list[str]] = _newer_or_older(
+        chrisjen.workshop, 'class_names')
+    return builder(name)
 
 
 def describe_tool(tool: Any) -> str | None:
@@ -129,13 +186,13 @@ def environment(*, gpu: bool = False) -> dict[str, Any]:
             (see `gpus`). Defaults to `False`.
 
     Returns:
-        A `dict` with the Python version, the platform, and the version of each
-            installed package in `options._RECORDED_PACKAGES`, and, if `gpu`
-            is `True`, "gpus".
+        A `dict` with the Python version, the platform, and the version of
+            amos and of each installed package that it requires (including
+            those of its extras), and, if `gpu` is `True`, "gpus".
 
     """
     packages = {}
-    for package in options._RECORDED_PACKAGES:
+    for package in ('amos', *dict.fromkeys(n for n, _ in _requirements())):
         try:
             packages[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
@@ -179,6 +236,21 @@ def feature_names(model: Any, columns: Iterable[Any]) -> list[Any] | None:
     return [
         name if name in known else renamed.get(str(name), name)
         for name in names]
+
+
+def flatten_dict(item: Mapping[str, Any]) -> dict[str, Any]:
+    """Returns the values of a nested `dict` that are not `dict`s, in one level.
+
+    Args:
+        item: nested `dict` to flatten, such as a genre of the library.
+
+    Returns:
+        The keys and values at every level whose values are not `dict`s.
+
+    """
+    flattener: Callable[[Any], dict[str, Any]] = _newer_or_older(
+        chrisjen.utilities, 'flatten_dict')
+    return flattener(item)
 
 
 @functools.cache
@@ -254,7 +326,7 @@ def import_tool(tool: str | Callable[..., Any]) -> Any:
         return chrisjen.utilities.import_object(tool)
     except ImportError as error:
         package = tool.split('.')[0].split(':')[0]
-        extra = options._EXTRAS.get(package)
+        extra = _extra_of(package)
         if extra is None:
             raise
         message = (
@@ -262,6 +334,74 @@ def import_tool(tool: str | Callable[..., Any]) -> Any:
             f'"pip install amos[{extra}]" (or "pip install amos[all]")'
         )
         raise ImportError(message) from error
+
+
+def importable(package: str) -> bool:
+    """Returns whether `package` can be imported.
+
+    Args:
+        package: name of the package.
+
+    Returns:
+        Whether importing it succeeds. Some optional packages are installed
+            but fail when they are imported (such as xgboost without
+            OpenMP), so any error means that it cannot be.
+
+    """
+    try:
+        importlib.import_module(package)
+    except Exception:  # noqa: BLE001
+        return False
+    return True
+
+
+def is_special_setting(name: str) -> bool:
+    """Returns whether a section of settings is not a worker's.
+
+    Args:
+        name: name of the section.
+
+    Returns:
+        Whether `chrisjen` treats the section as special (such as "general",
+            "files", or a section added with `add_special_setting`).
+
+    """
+    # chrisjen 0.4.2 and earlier have no `is_special_setting`.
+    checker = getattr(chrisjen.options, 'is_special_setting', None)
+    if checker is not None:
+        return bool(checker(name))
+    return name in chrisjen.options._SPECIAL_SETTINGS
+
+
+def label_path(path: Sequence[Any]) -> str:
+    """Returns the label of a path: the names of its nodes, joined by " > ".
+
+    Args:
+        path: nodes in a path through a worker.
+
+    Returns:
+        The label, as `chrisjen` labels the results of each path.
+
+    """
+    labeler: Callable[[Sequence[Any]], str] = _newer_or_older(
+        chrisjen.utilities, 'label_path')
+    return labeler(path)
+
+
+def listify_names(item: Any) -> list[str]:
+    """Returns a `list` of names from a setting.
+
+    Args:
+        item: a `str` of names separated by commas, a sequence of names, or
+            `None`.
+
+    Returns:
+        The names, with whitespace removed and empty names dropped.
+
+    """
+    listifier: Callable[[Any], list[str]] = _newer_or_older(
+        chrisjen.utilities, 'listify_names')
+    return listifier(item)
 
 
 def parameters_of(tool: Any) -> dict[str, Any]:
@@ -449,7 +589,144 @@ def select_columns(
     return names
 
 
+
+def settings_file_extensions() -> list[str]:
+    """Returns the extensions of the settings files that `bobbie` supports.
+
+    Returns:
+        The extensions, without a leading ".".
+
+    """
+    # bobbie 0.4.0 and earlier have no `file_extensions`.
+    lister = getattr(bobbie.options, 'file_extensions', None)
+    if lister is not None:
+        return list(lister())
+    return list(bobbie.options._FILE_EXTENSIONS)
+
+
+def settings_file_type(extension: str) -> str | None:
+    """Returns the type of a settings file that `bobbie` reads and writes.
+
+    Args:
+        extension: the file's extension, with or without a leading ".", in
+            any case.
+
+    Returns:
+        The file type (such as "json" or "yaml"), or `None` if `bobbie` does
+            not support the extension.
+
+    """
+    # bobbie 0.4.0 and earlier have no `file_type`.
+    finder = getattr(bobbie.options, 'file_type', None)
+    if finder is not None:
+        found = finder(extension)
+        return None if found is None else str(found)
+    extensions: Mapping[str, str] = bobbie.options._FILE_EXTENSIONS
+    return extensions.get(extension.lower().removeprefix('.'))
+
+
+def technique_and_step(node: Any) -> tuple[str, str] | None:
+    """Returns the technique that a step wraps and the step's own name.
+
+    `chrisjen` names a step that wraps a technique "{technique}_{step}"
+    (such as "logit_model").
+
+    Args:
+        node: a node in a workflow.
+
+    Returns:
+        The name of the technique and of the step (such as "logit" and
+            "model"), or `None` if `node` is not a step that wraps a node.
+
+    """
+    contents = getattr(node, 'contents', None)
+    if not isinstance(node, chrisjen.Step) or contents is None:
+        return None
+    technique = str(contents.name)
+    return technique, str(node.name).removeprefix(f'{technique}_')
+
 """ Private Functions """
+
+
+def _extra_of(package: str) -> str | None:
+    """Returns the optional `amos` extra that installs a package.
+
+    Args:
+        package: the name that the package is imported by (such as
+            "imblearn").
+
+    Returns:
+        The extra (such as "sampling"), or `None` if no extra installs it.
+            `options._EXTRAS` is checked first, and then the extras in
+            amos's requirements (other than "all").
+
+    """
+    if package in options._EXTRAS:
+        return options._EXTRAS[package]
+    for name, extra in _requirements():
+        imported = options._IMPORT_NAMES.get(name, name.replace('-', '_'))
+        if extra not in {None, 'all'} and imported == package:
+            return extra
+    return None
+
+
+@functools.cache
+def _requirements() -> tuple[tuple[str, str | None], ...]:
+    """Returns the packages that amos requires, and the extra of each.
+
+    Returns:
+        The name of each package in amos's requirements (as installed, such
+            as "scikit-learn"), in order, with the extra that installs it,
+            or `None` for one that is always installed. Empty if amos's
+            metadata cannot be found (as when it is not installed).
+
+    """
+    try:
+        lines = importlib.metadata.requires('amos') or []
+    except importlib.metadata.PackageNotFoundError:
+        return ()
+    found = []
+    for line in lines:
+        name = _REQUIREMENT_NAME.match(line)
+        extra = _REQUIREMENT_EXTRA.search(line)
+        if name is not None:
+            found.append((
+                name.group(0).lower(),
+                None if extra is None else extra.group(1)))
+    return tuple(found)
+
+
+def _built_parameter_names(tool: Callable[..., Any]) -> frozenset[str] | None:
+    """Returns the names of the parameters of a default instance of `tool`.
+
+    Args:
+        tool: a callable with a `get_params` method (the scikit-learn
+            convention).
+
+    Returns:
+        The names that `get_params` returns for `tool()`, or `None` if `tool`
+            cannot be built without arguments.
+
+    """
+    try:
+        return frozenset(tool().get_params())
+    except Exception:  # noqa: BLE001
+        return None
+
+
+@functools.cache
+def _default_parameter_names(tool: type) -> frozenset[str] | None:
+    """Returns the names of the parameters of a class, finding them once.
+
+    Args:
+        tool: a class with a `get_params` method.
+
+    Returns:
+        The names (see `_built_parameter_names`), or `None` if the class
+            cannot be built without arguments.
+
+    """
+    return _built_parameter_names(tool)
 
 
 def _cuda_driver() -> Any:
@@ -536,3 +813,22 @@ def _is_range(value: list[Any]) -> bool:
     """
     return len(value) == 2 and all(  # noqa: PLR2004
         isinstance(v, int | float) and not isinstance(v, bool) for v in value)
+
+
+def _newer_or_older(module: Any, name: str) -> Any:
+    """Returns a helper of `chrisjen` by its public name or its older one.
+
+    `chrisjen` made some helpers public after 0.4.2 (such as
+    `utilities.listify_names`, which was `_listify_names`). This finds
+    either, so that amos works with both.
+
+    Args:
+        module: the module of `chrisjen` that has the helper.
+        name: the public name of the helper.
+
+    Returns:
+        The helper.
+
+    """
+    found = getattr(module, name, None)
+    return found if found is not None else getattr(module, f'_{name}')

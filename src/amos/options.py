@@ -16,14 +16,15 @@ Contents:
         `None` to find it.
     _DEFAULT_TEST_SIZE: share of the rows that a splitter puts in the test set.
     _DOWNLOAD_TIMEOUT: seconds that `download` waits for a server to answer.
-    _EXTRAS: optional `amos` extras that install each optional package.
+    _EXTRAS: optional `amos` extras that install the packages that amos's
+        requirements do not name.
     _FIGURE_DPI: dots per inch of the figures that `Project.export` saves.
+    _IMPORT_NAMES: the names that required packages are imported by, if
+        they differ from the packages' names.
     _FILE_SETTINGS: values that loaders use in place of some of the shared
         settings of a `nagata` clerk.
     _PLOT_COLORS: the color cycle of figures.
     _PLOT_STYLE: the style of figures.
-    _RECORDED_PACKAGES: packages whose versions are recorded by
-        `Project.export`.
     _REPLICATION_FORMAT: format of the settings file of the winning paths
         that `Project.export` saves.
     _REPLICATION_SUFFIX: added to the name of a project to name the settings
@@ -65,42 +66,19 @@ _STUDIES_FOLDER: str = 'studies'
 _DEFAULT_TEST_SIZE: float = 0.25
 # Seconds that `download` waits for a server to answer before giving up.
 _DOWNLOAD_TIMEOUT: float = 60
-# The optional `amos` extra that installs each optional package. Used to give
-# a helpful message when a technique's package is missing.
-_EXTRAS: dict[str, str] = {
-    'catboost': 'boosting',
-    'category_encoders': 'encoders',
-    'causalml': 'causal',
-    'diptest': 'statistics',
-    'docx': 'word',
-    'doubleml': 'causal',
-    'dowhy': 'causal',
-    'dtreeviz': 'explain',
-    'eli5': 'explain',
-    'fairlearn': 'fairness',
-    'great_tables': 'tables',
-    'imblearn': 'sampling',
-    'interpret': 'explain',
-    'lightgbm': 'boosting',
-    'mapie': 'uncertainty',
-    'matplotlib': 'plots',
-    'mlxtend': 'mlxtend',
-    'networkx': 'causal',
-    'optuna': 'tuning',
-    'optuna_integration': 'tuning',
-    'polars': 'polars',
-    'pyfixest': 'statistics',
-    'rdrobust': 'causal',
-    'scienceplots': 'plots',
-    'seaborn': 'plots',
-    'shap': 'explain',
-    'skrub': 'encoders',
-    'statsmodels': 'statistics',
-    'tabpfn': 'tabpfn',
-    'tigramite': 'causal',
-    'tomli_w': 'settings',
-    'xgboost': 'boosting',
-    'yaml': 'settings'}
+# The optional `amos` extra that installs each package that amos's own
+# requirements do not name, because another package's extra installs it (as
+# `bobbie[toml,yaml]` installs the writers of toml and yaml settings files).
+# The extras of the other packages are read from amos's requirements (see
+# `utilities.import_tool`).
+_EXTRAS: dict[str, str] = {'tomli_w': 'settings', 'yaml': 'settings'}
+# The name that each package that amos requires is imported by, if it is not
+# its name with "_" in place of "-" (such as "sklearn" for "scikit-learn").
+_IMPORT_NAMES: dict[str, str] = {
+    'imbalanced-learn': 'imblearn',
+    'interpret-core': 'interpret',
+    'python-docx': 'docx',
+    'scikit-learn': 'sklearn'}
 # Dots per inch of the figures that `Project.export` saves. Figures in the
 # default style are one column of a journal wide (3.3 inches), so they need
 # more dots than the 100 that `matplotlib` uses to be sharp in print.
@@ -134,41 +112,3 @@ _REPLICATION_SUFFIX: str = '_replication'
 # written out in full, so that the ticks of small SHAP values are not
 # written as whole numbers with a power of 10 beside the axis.
 _SCIENTIFIC_LIMIT: int = 6
-# Packages whose versions are written to "environment.json" by
-# `Project.export`, if they are installed.
-_RECORDED_PACKAGES: tuple[str, ...] = (
-    'amos',
-    'bobbie',
-    'chrisjen',
-    'numpy',
-    'pandas',
-    'scikit-learn',
-    'scipy',
-    'catboost',
-    'category-encoders',
-    'causalml',
-    'doubleml',
-    'dowhy',
-    'dtreeviz',
-    'eli5',
-    'fairlearn',
-    'great-tables',
-    'imbalanced-learn',
-    'interpret-core',
-    'lightgbm',
-    'mapie',
-    'matplotlib',
-    'mlxtend',
-    'optuna',
-    'polars',
-    'pyfixest',
-    'python-docx',
-    'rdrobust',
-    'scienceplots',
-    'seaborn',
-    'shap',
-    'skrub',
-    'statsmodels',
-    'tabpfn',
-    'tigramite',
-    'xgboost')

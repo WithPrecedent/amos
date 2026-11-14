@@ -115,7 +115,7 @@ class Describer(base.Operation, base.Visualizer, abc.ABC):
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
-            `None`, in which case it is the snake case name of the class.
+            an empty `str`, which uses the snake case name of the class.
         contents: not used by most describers. Defaults to `None`.
         parameters: keyword arguments for `describe`. Defaults to an empty
             `dict`.
@@ -1727,8 +1727,9 @@ def _numbers(values: pd.Series | np.ndarray) -> np.ndarray | None:
     column = values if isinstance(values, pd.Series) else pd.Series(values)
     if base._kind_of(column) not in ('booleans', 'numerics'):
         return None
-    numbers = column.dropna().to_numpy(dtype = float)
-    return numbers[np.isfinite(numbers)]
+    numbers: np.ndarray = column.dropna().to_numpy(dtype = float)
+    finite: np.ndarray = numbers[np.isfinite(numbers)]
+    return finite
 
 
 def _passes(
@@ -1921,4 +1922,5 @@ class _Mixture:
             The density of each value.
 
         """
-        return np.exp(self.logpdf(x))
+        density: np.ndarray = np.exp(self.logpdf(x))
+        return density
