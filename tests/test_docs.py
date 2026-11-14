@@ -135,3 +135,24 @@ def test_the_catalog_is_up_to_date() -> None:
     assert text[text.index(script.FIRST):] == script.tables(), (
         'docs/catalog.md is out of date: run '
         '"uv run python docs/scripts/technique_catalog.py"')
+
+
+def test_the_pipeline_chart_draws_every_pipeline() -> None:
+    """Checks that the pipeline chart draws each pipeline in a family."""
+    path = ROOT / 'docs' / 'scripts' / 'pipeline_chart.py'
+    spec = importlib.util.spec_from_file_location('pipeline_chart', path)
+    assert spec is not None
+    assert spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    text = script.chart()
+    missing = [
+        name for name in amos.pipelines.PIPELINES
+        if f'<span class="pc-name">{name}</span>' not in text]
+    assert missing == [], f'missing from the pipeline chart: {missing}'
+    homeless = [
+        pipeline.name for pipeline in amos.pipelines._MODEL_PIPELINES
+        if script.family_of(pipeline) is None]
+    assert homeless == [], (
+        f'pipelines in no family of docs/scripts/pipeline_chart.py: '
+        f'{homeless}')

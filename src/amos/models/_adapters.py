@@ -13,7 +13,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, cast
 
 import camina
 import numpy as np
@@ -297,7 +297,8 @@ class Statsmodel:
         exog = self._exog(x)
         if self.kind in _INDEPENDENT:
             self.dropped_ = _collinear(exog)
-            exog = exog.drop(columns = self.dropped_)
+            if self.dropped_:
+                exog = exog.drop(columns = self.dropped_)
         self.results = self._estimate(self._endog(y), exog, x)
         return self
 
@@ -489,7 +490,10 @@ class Statsmodel:
                     endog, exog, distr = self.distribution).fit(
                         method = 'bfgs', disp = 0)
         # The discrete models of statsmodels are fitted by maximum
-        # likelihood, which prints its progress unless `disp` is 0.
+        # likelihood, which prints its progress unless `disp` is 0. `fit` has
+        # already left out their collinear features, so they do not check the
+        # rank of the features again (with a QR decomposition of a copy of
+        # every row).
         model = {
             'generalized_poisson': api.GeneralizedPoisson,
             'logit': api.Logit,
@@ -498,7 +502,7 @@ class Statsmodel:
             'poisson': api.Poisson,
             'probit': api.Probit,
             'zero_inflated_poisson': api.ZeroInflatedPoisson}[self.kind](
-                endog, exog)
+                endog, exog, check_rank = False)
         try:
             return model.fit(disp = 0)
         except np.linalg.LinAlgError:
@@ -510,19 +514,43 @@ class Statsmodel:
     def _exog(self, x: pd.DataFrame) -> pd.DataFrame:
         """Returns the features as floats, with a constant if one is added.
 
+        statsmodels needs one array of numbers, but the features can be of
+        several types (such as small integers, nullable integers, and
+        floats), so each is made a float, and a missing value a NaN. The
+        floats are made in one array, by columns (as LAPACK uses them), which
+        the returned frame and statsmodels share rather than copy, since a
+        copy of every row of the features can be several gigabytes.
+
         Args:
             x: features, and any other columns, which are left out.
+
+        Raises:
+            ValueError: if a constant is added and a feature is named "const".
 
         Returns:
             The exogenous variables for statsmodels, without the features in
                 `dropped_`.
 
         """
-        exog = x[list(self.feature_names_in_)].astype(float)
-        exog.columns = [str(c) for c in exog.columns]
+        sources = {str(c): c for c in self.feature_names_in_}
+        names = list(sources)
         if self.constant and self.kind != 'ordinal_regression':
-            exog.insert(0, 'const', 1.0)
-        return exog.drop(columns = self.dropped_)
+            if 'const' in sources:
+                message = (
+                    'a feature is named "const", which is the name of the '
+                    'constant that the model adds')
+                raise ValueError(message)
+            names.insert(0, 'const')
+        names = [n for n in names if n not in self.dropped_]
+        values = np.empty((len(x), len(names)), order = 'F')
+        for position, name in enumerate(names):
+            if name in sources:
+                values[:, position] = x[sources[name]].to_numpy(
+                    dtype = float, na_value = np.nan)
+            else:
+                values[:, position] = 1.0
+        return pd.DataFrame(
+            values, index = x.index, columns = names, copy = False)
 
     def _mean(self, x: pd.DataFrame) -> np.ndarray:
         """Returns the model's prediction of the mean of the label.
@@ -1119,16 +1147,23 @@ def _by_class(frame: pd.DataFrame, labels: Sequence[str]) -> pd.Series:
     return pd.Series(values, index = names)
 
 
-def _collinear(exog: pd.DataFrame) -> list[str]:
+def _collinear(exog: pd.DataFrame, rows: int = 250000) -> list[str]:
     """Returns the columns that are combinations of the columns before them.
 
-    The rank of the columns is found by singular values, which do not depend
-    on rounding the way that inverting a matrix does, so the same columns are
-    found on every computer. Each column is scaled to a length of 1 first, so
-    that the scales of the columns do not matter.
+    Each column is scaled to a length of 1 first, so that the scales of the
+    columns do not matter. The columns are then factored by one QR
+    decomposition, whose triangular factor holds how far each column is from
+    the columns before it on its diagonal. A column is collinear if that is
+    no more than the tolerance that NumPy's `matrix_rank` uses for all of the
+    columns (from their singular values, which do not depend on rounding the
+    way that inverting a matrix does), so the same columns are found on every
+    computer. The factor is made a block of rows at a time (the factor so far
+    and the next block are factored together), so that, unlike a singular
+    value decomposition of each set of columns, it never copies every row.
 
     Args:
         exog: the exogenous variables, including any constant.
+        rows: the number of rows in each block. Defaults to 250,000.
 
     Returns:
         The names of the collinear columns (none if there are missing values,
@@ -1136,18 +1171,29 @@ def _collinear(exog: pd.DataFrame) -> list[str]:
 
     """
     values = exog.to_numpy(dtype = float)
-    if np.isnan(values).any():
-        return []
-    lengths = np.linalg.norm(values, axis = 0)
-    values = values / np.where(lengths > 0, lengths, 1.0)
-    kept: list[int] = []
-    collinear: list[str] = []
-    for position, name in enumerate(exog.columns):
-        if np.linalg.matrix_rank(values[:, [*kept, position]]) > len(kept):
-            kept.append(position)
-        else:
-            collinear.append(str(name))
-    return collinear
+    count, width = values.shape
+    squares = np.zeros(width)
+    for start in range(0, count, rows):
+        block = values[start:start + rows]
+        if np.isnan(block).any():
+            return []
+        squares += np.einsum('ij,ij->j', block, block)
+    lengths = np.sqrt(squares)
+    lengths[lengths == 0] = 1.0
+    factor = np.zeros((0, width))
+    for start in range(0, count, rows):
+        block = values[start:start + rows] / lengths
+        # With mode "r", NumPy returns only the factor, not a `QRResult`.
+        factor = cast(
+            'np.ndarray', np.linalg.qr(np.vstack([factor, block]), mode = 'r'))
+    distances = np.zeros(width)
+    diagonal = np.abs(np.diagonal(factor))
+    distances[:len(diagonal)] = diagonal
+    singular = np.linalg.svd(factor, compute_uv = False)
+    largest = singular.max() if singular.size else 0.0
+    tolerance = largest * max(count, width) * np.finfo(float).eps
+    pairs = zip(exog.columns, distances, strict = True)
+    return [str(name) for name, distance in pairs if distance <= tolerance]
 
 
 def _statsmodels_class(module: Any, name: str) -> type:

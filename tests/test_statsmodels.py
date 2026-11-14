@@ -288,3 +288,76 @@ def test_collinear_features_are_left_out(
     assert len(dropped) == 2
     table = multiclass.tables['mnlogit_coefficients']
     assert table.loc[f'{dropped[0]} (2)'].isna().all()
+
+
+def _collinear_by_singular_values(exog: pd.DataFrame) -> list[str]:
+    """Returns the collinear columns by a singular value decomposition of each.
+
+    This is how `_collinear` once found them, which it must still agree with.
+
+    Args:
+        exog: the exogenous variables, including any constant.
+
+    Returns:
+        The names of the collinear columns.
+
+    """
+    values = exog.to_numpy(dtype = float)
+    lengths = np.linalg.norm(values, axis = 0)
+    values = values / np.where(lengths > 0, lengths, 1.0)
+    kept: list[int] = []
+    collinear: list[str] = []
+    for position, name in enumerate(exog.columns):
+        if np.linalg.matrix_rank(values[:, [*kept, position]]) > len(kept):
+            kept.append(position)
+        else:
+            collinear.append(str(name))
+    return collinear
+
+
+def test_collinear_columns_are_found_in_blocks_of_rows() -> None:
+    rng = np.random.default_rng(SEED)
+    exog = pd.DataFrame(rng.normal(size = (3000, 4)), columns = list('abcd'))
+    exog['difference'] = exog['a'] - exog['b']
+    exog['zeros'] = 0.0
+    exog['dummy'] = (rng.random(3000) < 0.3).astype(float)
+    exog['other'] = 1 - exog['dummy']
+    exog['scaled'] = exog['c'] * 1e6
+    exog['near'] = exog['d'] + 1e-3 * rng.normal(size = 3000)
+    exog.insert(0, 'const', 1.0)
+    expected = ['difference', 'zeros', 'other', 'scaled']
+    assert _collinear_by_singular_values(exog) == expected
+    # However many rows are in each block, even fewer than the columns.
+    for rows in (5, 700, 250000):
+        assert models._collinear(exog, rows = rows) == expected
+    exog.loc[5, 'a'] = np.nan
+    assert models._collinear(exog) == []
+
+
+def test_exog_makes_one_array_of_floats() -> None:
+    rng = np.random.default_rng(SEED)
+    x = pd.DataFrame({
+        'flag': (rng.random(200) < 0.5).astype('int8'),
+        'count': pd.array(rng.integers(0, 9, 200), dtype = 'Int64'),
+        'small': rng.normal(size = 200).astype('float32'),
+        'yes': rng.random(200) < 0.5})
+    x.loc[3, 'count'] = pd.NA
+    adapter = models.Statsmodel(kind = 'logit')
+    adapter.feature_names_in_ = np.asarray(x.columns)
+    adapter.dropped_ = []
+    exog = adapter._exog(x)
+    assert list(exog.columns) == ['const', 'flag', 'count', 'small', 'yes']
+    assert (exog.dtypes == float).all()
+    assert np.isnan(exog.loc[3, 'count'])
+    pd.testing.assert_frame_equal(
+        exog.drop(columns = 'const'), x.astype('float64'))
+    # The frame shares its one array, by columns, rather than copying it.
+    values = exog.to_numpy()
+    assert values.flags['F_CONTIGUOUS']
+    assert np.shares_memory(values, exog.to_numpy())
+    adapter.dropped_ = ['small']
+    assert list(adapter._exog(x).columns) == ['const', 'flag', 'count', 'yes']
+    named = x.rename(columns = {'flag': 'const'})
+    adapter.feature_names_in_ = np.asarray(named.columns)
+    with pytest.raises(ValueError, match = 'named "const"'):
+        adapter._exog(named)

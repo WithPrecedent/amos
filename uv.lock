@@ -40,7 +40,7 @@ wheels = [
 
 [[package]]
 name = "amos"
-version = "0.7.0"
+version = "0.7.2"
 source = { editable = "." }
 dependencies = [
     { name = "bobbie" },
@@ -62,6 +62,7 @@ all = [
     { name = "catboost" },
     { name = "category-encoders" },
     { name = "causalml", marker = "python_full_version < '3.13'" },
+    { name = "diptest" },
     { name = "doubleml" },
     { name = "dowhy", marker = "python_full_version >= '3.13'" },
     { name = "dtreeviz" },
@@ -143,6 +144,7 @@ settings = [
     { name = "bobbie", extra = ["toml", "yaml"] },
 ]
 statistics = [
+    { name = "diptest" },
     { name = "pyfixest" },
     { name = "statsmodels" },
 ]
@@ -172,6 +174,7 @@ dev = [
     { name = "category-encoders" },
     { name = "causalml", marker = "python_full_version < '3.13'" },
     { name = "coverage" },
+    { name = "diptest" },
     { name = "doubleml" },
     { name = "dowhy", marker = "python_full_version >= '3.13'" },
     { name = "dtreeviz" },
@@ -229,6 +232,7 @@ tests = [
     { name = "category-encoders" },
     { name = "causalml", marker = "python_full_version < '3.13'" },
     { name = "coverage" },
+    { name = "diptest" },
     { name = "doubleml" },
     { name = "dowhy", marker = "python_full_version >= '3.13'" },
     { name = "dtreeviz" },
@@ -276,6 +280,7 @@ requires-dist = [
     { name = "category-encoders", marker = "extra == 'encoders'", specifier = ">=2.6" },
     { name = "causalml", marker = "python_full_version < '3.13' and extra == 'causal'", specifier = ">=0.17" },
     { name = "chrisjen", specifier = ">=0.4.2" },
+    { name = "diptest", marker = "extra == 'statistics'", specifier = ">=0.10" },
     { name = "doubleml", marker = "extra == 'causal'", specifier = ">=0.11" },
     { name = "dowhy", marker = "python_full_version >= '3.13' and extra == 'causal'", specifier = ">=0.14" },
     { name = "dtreeviz", marker = "extra == 'explain'", specifier = ">=2.2" },
@@ -302,7 +307,7 @@ requires-dist = [
     { name = "rdrobust", marker = "extra == 'causal'", specifier = ">=2.1" },
     { name = "scienceplots", marker = "extra == 'plots'", specifier = ">=2.1" },
     { name = "scikit-learn", specifier = ">=1.5" },
-    { name = "scipy", specifier = ">=1.10" },
+    { name = "scipy", specifier = ">=1.17" },
     { name = "seaborn", marker = "extra == 'plots'", specifier = ">=0.13" },
     { name = "shap", marker = "extra == 'explain'", specifier = ">=0.45" },
     { name = "skrub", marker = "extra == 'encoders'", specifier = ">=0.5" },
@@ -320,6 +325,7 @@ dev = [
     { name = "category-encoders", specifier = ">=2.6" },
     { name = "causalml", marker = "python_full_version < '3.13'", specifier = ">=0.17" },
     { name = "coverage" },
+    { name = "diptest", specifier = ">=0.10" },
     { name = "doubleml", specifier = ">=0.11" },
     { name = "dowhy", marker = "python_full_version >= '3.13'", specifier = ">=0.14" },
     { name = "dtreeviz", specifier = ">=2.2" },
@@ -373,6 +379,7 @@ tests = [
     { name = "category-encoders", specifier = ">=2.6" },
     { name = "causalml", marker = "python_full_version < '3.13'", specifier = ">=0.17" },
     { name = "coverage" },
+    { name = "diptest", specifier = ">=0.10" },
     { name = "doubleml", specifier = ">=0.11" },
     { name = "dowhy", marker = "python_full_version >= '3.13'", specifier = ">=0.14" },
     { name = "dtreeviz", specifier = ">=2.2" },
@@ -1559,6 +1566,46 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/81/e1/56027a71e31b02ddc53c7d65b01e68edf64dea2932122fe7746a516f75d5/dill-0.4.1.tar.gz", hash = "sha256:423092df4182177d4d8ba8290c8a5b640c66ab35ec7da59ccfa00f6fa3eea5fa", size = 187315, upload-time = "2026-01-19T02:36:56.85Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1e/77/dc8c558f7593132cf8fefec57c4f60c83b16941c574ac5f619abb3ae7933/dill-0.4.1-py3-none-any.whl", hash = "sha256:1e1ce33e978ae97fcfcff5638477032b801c46c7c65cf717f95fbc2248f79a9d", size = 120019, upload-time = "2026-01-19T02:36:55.663Z" },
+]
+
+[[package]]
+name = "diptest"
+version = "0.12.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/17/ea/ce9f60b50d03c25509d244db0eaefa049a16aa7954f0e13f3b6740afe130/diptest-0.12.0.tar.gz", hash = "sha256:ade99868da603b674521718ed38e53aee2eb5d9bf47b03930eb149169cb973cd", size = 89047, upload-time = "2026-10-18T19:18:52.514Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/72/9686d5fcd88054b2d366ad300909e4554e7d086f4ff7ebf98c031e91bd04/diptest-0.12.0-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:91ebd42c1d3b61b2e35289a6588cee07e8b6a368e44bffe514276f03a4c387ba", size = 383724, upload-time = "2026-10-18T19:18:02.444Z" },
+    { url = "https://files.pythonhosted.org/packages/79/7d/187a05d5d9149614385ddf115d68137d9c6b7c5f122ca74258bf0ed03d86/diptest-0.12.0-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:62c7011ef7ac6d546768c703a4d0861b9bb9276c540e03cfdf068f709177910b", size = 421172, upload-time = "2026-10-18T19:18:04.141Z" },
+    { url = "https://files.pythonhosted.org/packages/58/f4/0c35f5c8af15d166f3c5c3f1b2909a576737c97f4f7bbf59c63c37ebb755/diptest-0.12.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:0d62a9aa534aca3f22c2067f1ae459cb6455f7f78d7793f433c3b120df79bd5b", size = 241745, upload-time = "2026-10-18T19:18:05.964Z" },
+    { url = "https://files.pythonhosted.org/packages/08/3a/544e442b5efd06ec572451c9c420b8ef4e1593cec90e4e6d9adbbae46975/diptest-0.12.0-cp311-cp311-win_amd64.whl", hash = "sha256:4e6cb1466f1eaf9bfc4e4bc8d379c2ff180708d6f650dfce1c0d13815057498b", size = 420077, upload-time = "2026-10-18T19:18:07.36Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/56/abf79b4029ba09b238e1301b6bc4dc8f33a91865ae39567fd09d30428c53/diptest-0.12.0-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:493e7c8c61086cd2fcd3df0654eef8aa56d75cca206bb71f6e9a7b22c8af5c4b", size = 384575, upload-time = "2026-10-18T19:18:08.753Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/6a/9361ce5e1da1beec03d1c899a0e07c15a6aebb26b807bf646823c5394821/diptest-0.12.0-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:14ae6dff90c74fb04aa1c3e492f5356ff6709f735afaf5e2a0ed754057f33b3f", size = 422781, upload-time = "2026-10-18T19:18:10.231Z" },
+    { url = "https://files.pythonhosted.org/packages/16/b6/05e7d38d37e5538ae6bc4cc03ce86b5b74cd5bde0cdcde1931cf03d99ec3/diptest-0.12.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:67c454dd69ab7e3cd95d48bc2d5db54e13b3f2a937822a255a21c1a8538f8f68", size = 242929, upload-time = "2026-10-18T19:18:11.82Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/76/1cc6d65b536da3b1576f48523c418e134b4b50a509f8598eaf0a663128c3/diptest-0.12.0-cp312-cp312-win_amd64.whl", hash = "sha256:92563ec70d1388b7490c0861339ebf317b14fe1b78d65cafe329640e36917454", size = 422774, upload-time = "2026-10-18T19:18:13.242Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/8f/72fe70c1190b15083dfb5def794f5c40387628b2157e2adaba899e0f59e8/diptest-0.12.0-cp313-cp313-macosx_13_0_arm64.whl", hash = "sha256:4f73b92cd8e171100a2b763ca4cd7f50242aa48557beae0bd50f30caa0b3e809", size = 384605, upload-time = "2026-10-18T19:18:15.265Z" },
+    { url = "https://files.pythonhosted.org/packages/45/29/6c84812e1b52187fa5f4341648d154ec8e8bee71a42a7629154cef9a400c/diptest-0.12.0-cp313-cp313-macosx_13_0_x86_64.whl", hash = "sha256:3a59a85139dea2a97e2fe6a937fc04114cf71804122b0398184456dbc5e6e8ed", size = 422846, upload-time = "2026-10-18T19:18:16.743Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/83/1325e85dd662b7d135131e89c0eea7e909dc69fa84269c27b129f09049a2/diptest-0.12.0-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:be9e8b63aecc84213958e75df2aa3b2dac8aa63f256a7383053126c27b9e8180", size = 242869, upload-time = "2026-10-18T19:18:18.398Z" },
+    { url = "https://files.pythonhosted.org/packages/11/c3/bc13d20e142c82d8647faf1dc67dbe738742d28722b3cb3cf8edec14eb46/diptest-0.12.0-cp313-cp313-win_amd64.whl", hash = "sha256:b585496306c4a34a527520d045d45234b86c2914450e73128a7fd6d2b88530c5", size = 422815, upload-time = "2026-10-18T19:18:20.094Z" },
+    { url = "https://files.pythonhosted.org/packages/54/3f/2f6f515013a5eecc2e9349324d9216369e2fbae1f820f9c8f82e00d14c00/diptest-0.12.0-cp314-cp314-macosx_13_0_arm64.whl", hash = "sha256:9f704075be78896abdb564aebad1fa50e957aff4c043f8c71a35b8af8091646c", size = 384664, upload-time = "2026-10-18T19:18:21.663Z" },
+    { url = "https://files.pythonhosted.org/packages/c2/ef/f412f9ec314939da4e77a73942509c88dc115fe96b56442f967abcc6aad7/diptest-0.12.0-cp314-cp314-macosx_13_0_x86_64.whl", hash = "sha256:70f565bcca7d86930607ba13ee8f2ba1635de36c9c3d047e25ffbef89f04f708", size = 422938, upload-time = "2026-10-18T19:18:23.133Z" },
+    { url = "https://files.pythonhosted.org/packages/64/89/7054cf560d30c783c619ef9501ede2cf8e2e26a16f562f4426b58940e0b1/diptest-0.12.0-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:152b50793939afee0e55f7341410c788ce15f2105898b383563ccd89826889f4", size = 243063, upload-time = "2026-10-18T19:18:24.593Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/c7/6052eb3a00797a9f39ddd5b670c8184128ccabd60bd02f28aeeb11292581/diptest-0.12.0-cp314-cp314-win_amd64.whl", hash = "sha256:1c9d30ba561e0b51530e2c373fcf8bb3b625a821ee5d5c6f96dd081f0f939394", size = 434907, upload-time = "2026-10-18T19:18:26.105Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/a4/7cb426d5d3ab40cad54de6ffadeed2d4ba31593d227a01db611a41a58c2a/diptest-0.12.0-cp314-cp314t-macosx_13_0_arm64.whl", hash = "sha256:9113b2f4e9bd164fbadc5b673f362bc5f23ca304287e3525a1055f02e850732e", size = 389372, upload-time = "2026-10-18T19:18:27.557Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/3d/d1938ff69800e68303ea81873cfcecd199d66613827d71da535b47f62ff5/diptest-0.12.0-cp314-cp314t-macosx_13_0_x86_64.whl", hash = "sha256:f0567ad9f4ad4198489e2b1720ccb7b83a243a9be32f851beb1d9f1f1f52f691", size = 426845, upload-time = "2026-10-18T19:18:29.11Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/fd/f6bb167c09e430afedfa6095e517ebfc8abdf72affbe5efb8032a3cf8b96/diptest-0.12.0-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:2093bf2b1bf92a36cd7a8a1225016021224288a64eb6f543ccf2ee08d3ad4715", size = 244163, upload-time = "2026-10-18T19:18:30.879Z" },
+    { url = "https://files.pythonhosted.org/packages/76/7b/020fd10be2204ff78e8eb5480f56fc05a706868cf28aa37622f8f83770cf/diptest-0.12.0-cp314-cp314t-win_amd64.whl", hash = "sha256:23ad9295f3b3aeca31f0eb019b728f4c46248dd9a5f8649802dd806547b0e51b", size = 439136, upload-time = "2026-10-18T19:18:32.312Z" },
+    { url = "https://files.pythonhosted.org/packages/55/9d/52efb3cd8dede7418b229a1cab827bee5bce2a8080aea5ba73b1d1345713/diptest-0.12.0-cp315-cp315-macosx_13_0_arm64.whl", hash = "sha256:a309d1ed1cf8c409fe1bd3297f76df6e0b4b6adc25489bc60df717f061ba115f", size = 384668, upload-time = "2026-10-18T19:18:34.05Z" },
+    { url = "https://files.pythonhosted.org/packages/07/55/b6919d6a267e80b59453f63622ca2a2d084b10774df0f78afbef38e3ae09/diptest-0.12.0-cp315-cp315-macosx_13_0_x86_64.whl", hash = "sha256:1b55b2eed1f5167e19b0713fc6d7bbe4f3c4e5a178c1207f2e4d2a441a21cc48", size = 422946, upload-time = "2026-10-18T19:18:35.721Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/5d/393ae196d81172d8a9c0befe198452819140fde5ae19c8031dbdc2e2f4a5/diptest-0.12.0-cp315-cp315-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d569d50e2aa3d67816248bd89036a9d5e6bc1889ff85279f7ef41501840af35e", size = 243061, upload-time = "2026-10-18T19:18:37.126Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/77/c353d95910082ff4168d722814baccdc81ce37f23e3e2960ab8e17cbdbe8/diptest-0.12.0-cp315-cp315-win_amd64.whl", hash = "sha256:189bec7a90714bd6754243146973350bbccc508032d7cbf045cdbfca00e77451", size = 434904, upload-time = "2026-10-18T19:18:38.678Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/08/d00e6263ec9e136e6f0a0ed5b2ee3d7df978331c6c755178bce743de8616/diptest-0.12.0-cp315-cp315t-macosx_13_0_arm64.whl", hash = "sha256:dafcdac32633ca697793cdde82158b48e6dc5b3ca2c04b7cb1d7033505761900", size = 389334, upload-time = "2026-10-18T19:18:40.115Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/be/14473029b2c48d9df0a6dccd31a13c441676d08dd4abb8e13de39176657c/diptest-0.12.0-cp315-cp315t-macosx_13_0_x86_64.whl", hash = "sha256:ba8792497d5f55740ec4d45a47311a45789243dc096dbcb7aefd2f37943eeba3", size = 426754, upload-time = "2026-10-18T19:18:41.674Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/ba/bf189891ec7aa4885b487538f3d6517fa936c919401baa00117bdf3c71e0/diptest-0.12.0-cp315-cp315t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:29c33aaceec5678b03ce0abb831bd4e8d88aef3accb205147a40f01dd0476f25", size = 244355, upload-time = "2026-10-18T19:18:43.105Z" },
+    { url = "https://files.pythonhosted.org/packages/94/89/6fb79538942703bcd77b42cb4c8845e12dbb37de60bebba7d3ef77be7c28/diptest-0.12.0-cp315-cp315t-win_amd64.whl", hash = "sha256:c525512068d17675339b003ae19219b7b41becb7dda09d7cc6d80c40c76a84f1", size = 439111, upload-time = "2026-10-18T19:18:44.519Z" },
 ]
 
 [[package]]

@@ -98,6 +98,7 @@ __all__: list[str] = [
 ]
 
 from ._adapters import FixedEffects, ProportionalHazards, Statsmodel
+from ._adapters import _collinear as _collinear
 from ._base import LabelCoded, Model, ModelTraits, search_folds
 from ._techniques import (
     GEE,

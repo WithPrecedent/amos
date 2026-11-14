@@ -6,46 +6,6 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-* Every model has a named pipeline of its own for each task that it can do,
-  such as `random_forest_classification`, `random_forest_regression`,
-  `ols_regression`, or `quantile_inference` (`fixest` has the panel
-  pipelines). Each prepares the data as its model needs: features are
-  scaled only for models that need it (standardized for penalized linear
-  models, support vector machines, nearest neighbors, and neural networks,
-  and made more normal for naive Bayes), missing values are left for the
-  models that handle them, categories are encoded against a reference level
-  for models with an intercept and no penalty, rare classes are weighted by
-  the models that can weigh them and resampled for the others (but not for
-  models for inference), models that overfit without tuning search for
-  their best settings, nearest neighbors keep the 20 features most related
-  to the label, and a neural network stops early. The critic and artist
-  choose among the evaluators and plots that explain the model's family
-  best, such as SHAP values for trees, the diagnostics of a model's
-  assumptions for models for inference, a learning curve for a neural
-  network, and survival curves for a Cox model. The technique catalog lists
-  every pipeline with its steps.
-* `Pipeline` has `grouped`, for a model that needs the dataset's groups
-  (`gee`, `mixedlm`, and `binomial_bayes_mixedglm`), and `required` and
-  `shared_with`, for parameters that the settings must give (such as the
-  "event" of `cox`, which `survival_curves` is also given). `Pipeline.models`
-  returns the models that a pipeline fits or chooses among.
-* A model's parameters section (such as "xgboost_parameters") can name the
-  "plots", "evaluators", and "inferers" to use when it is the dataset's
-  model, such as the winner of a contest. In a project, they replace the
-  techniques of those genres (and `auto_plot`, `auto_evaluator`, or an
-  `auto` that chooses them) that the workflow applies after the model is
-  fitted, so the critic and artist can suit whichever model won. A model
-  that names none keeps the workflow's. Each replaced technique records the
-  "model" and the techniques it was "replaced_by" in `history`, and the
-  settings are not passed to the model as parameters. The new
-  `Project.model_specific_techniques` holds them, built by `draft`, and
-  `base.using_model_specific_techniques` applies them.
-* `mnlogit` takes "reference", the class that its coefficients compare the
-  other classes with (the first class, sorted, by default). A class matches
-  if it equals "reference" or has the same text, so a reference read from a
-  settings file matches a class that is a number. `Statsmodel.levels_` now
-  puts the reference first, and its table of coefficients has a row for
-  each feature and class other than the reference.
 * Fixed the defaults that `options` documents as changeable: the test size
   of splitters, the timeout of `download`, the threshold of
   `auto_categorize`, the style and colors of plots, and the data and studies
@@ -99,6 +59,104 @@ All notable changes to this project will be documented in this file.
   is vectorized. Shared helpers replace copies in several modules, every
   function's docstring has all of its sections, and CI runs the tests in
   parallel with read-only permissions.
+
+## 0.7.2
+
+* Explorers that test the distribution of each column (every column, unless
+  "columns" names some), with the usual test of each at a significance
+  level of "alpha" (0.05 by default): `is_normal` (Shapiro-Wilk, or
+  D'Agostino and Pearson's test beyond 5,000 values), `is_log_normal` (the
+  same test of the logarithms), `is_left_skewed` and `is_right_skewed`
+  (D'Agostino's test of skew), `is_poisson` and `is_binomial` (chi-square),
+  `is_uniform` (chi-square for whole numbers, Kolmogorov-Smirnov
+  otherwise), `is_exponential` (Anderson-Darling), `is_student` and
+  `is_beta` (Kolmogorov-Smirnov against the fit by maximum likelihood),
+  `is_bernoulli` (every value is 0 or 1), and `is_bimodal` (Hartigan's dip
+  test, with tied whole numbers spread evenly first). Each makes a table
+  with a boolean for each column, which is false for a column that is not
+  numeric or boolean or has fewer than 8 values. A binomial distribution's
+  number of trials is "trials", or by default the number that makes the
+  values most likely.
+* `distributions` names the distribution of each column: the one with the
+  lowest AIC that passes its test (or "none"), the "closest" one by AIC
+  whether or not it passes, and the direction of the "skew". Continuous
+  distributions are compared with discrete ones on whole numbers by the
+  probability within half of each value, and a bimodal distribution (a
+  mixture of two normal distributions) is considered only when the dip test
+  finds more than one peak.
+* The `distribution_fits` plot draws each numeric column's histogram (or
+  bars, for whole numbers) with the counts that a fitted distribution
+  expects, which the new explorers draw with `visualize`.
+* `describers` has the functions that they use: `fits_distribution`,
+  `fit_distribution`, `best_distribution`, and `is_skewed`. Student's t
+  distribution is fitted with the gradient of its likelihood, which takes
+  about a second for a million values, rather than SciPy's own `fit`.
+* The "statistics" extra installs diptest, for `is_bimodal`
+  (`distributions` leaves out a bimodal distribution, with a warning, if it
+  is not installed). SciPy 1.17 or later is required, for the p-values of
+  the Anderson-Darling test.
+* A "Pipeline Chart" page in the user guide, after the technique catalog,
+  shows the steps of every named pipeline side by side: the techniques of
+  each step of the analyst, critic, and artist of the pipelines for studies,
+  and the steps, search, validator, and extra plots of the pipeline of each
+  model, grouped by the model's family (with buttons that show the
+  pipelines of one task). `docs/scripts/pipeline_chart.py` draws it from
+  `PIPELINES` when the documentation is built, so it is never out of date.
+
+## 0.7.1
+
+* The statsmodels models need far less memory and time for millions of
+  rows. `Statsmodel` makes its features floats in one array (by columns),
+  which statsmodels shares rather than copies, instead of copying every row
+  as it makes them floats, adds the constant, and leaves out collinear
+  features. It finds the collinear features from one QR decomposition made
+  a block of rows at a time, instead of a singular value decomposition of
+  every row for each feature (the same features, by the same tolerance),
+  and the discrete models (such as `logit_sm`, `mnlogit`, and `poisson`)
+  no longer check the rank of the features again. A multinomial logit of a
+  million rows and 76 features is fitted in about a quarter of the time,
+  with about two thirds of the memory. A feature named "const" now raises
+  an error in a model with a constant, rather than pandas' error.
+* Every model has a named pipeline of its own for each task that it can do,
+  such as `random_forest_classification`, `random_forest_regression`,
+  `ols_regression`, or `quantile_inference` (`fixest` has the panel
+  pipelines). Each prepares the data as its model needs: features are
+  scaled only for models that need it (standardized for penalized linear
+  models, support vector machines, nearest neighbors, and neural networks,
+  and made more normal for naive Bayes), missing values are left for the
+  models that handle them, categories are encoded against a reference level
+  for models with an intercept and no penalty, rare classes are weighted by
+  the models that can weigh them and resampled for the others (but not for
+  models for inference), models that overfit without tuning search for
+  their best settings, nearest neighbors keep the 20 features most related
+  to the label, and a neural network stops early. The critic and artist
+  choose among the evaluators and plots that explain the model's family
+  best, such as SHAP values for trees, the diagnostics of a model's
+  assumptions for models for inference, a learning curve for a neural
+  network, and survival curves for a Cox model. The technique catalog lists
+  every pipeline with its steps.
+* `Pipeline` has `grouped`, for a model that needs the dataset's groups
+  (`gee`, `mixedlm`, and `binomial_bayes_mixedglm`), and `required` and
+  `shared_with`, for parameters that the settings must give (such as the
+  "event" of `cox`, which `survival_curves` is also given). `Pipeline.models`
+  returns the models that a pipeline fits or chooses among.
+* A model's parameters section (such as "xgboost_parameters") can name the
+  "plots", "evaluators", and "inferers" to use when it is the dataset's
+  model, such as the winner of a contest. In a project, they replace the
+  techniques of those genres (and `auto_plot`, `auto_evaluator`, or an
+  `auto` that chooses them) that the workflow applies after the model is
+  fitted, so the critic and artist can suit whichever model won. A model
+  that names none keeps the workflow's. Each replaced technique records the
+  "model" and the techniques it was "replaced_by" in `history`, and the
+  settings are not passed to the model as parameters. The new
+  `Project.model_specific_techniques` holds them, built by `draft`, and
+  `base.using_model_specific_techniques` applies them.
+* `mnlogit` takes "reference", the class that its coefficients compare the
+  other classes with (the first class, sorted, by default). A class matches
+  if it equals "reference" or has the same text, so a reference read from a
+  settings file matches a class that is a number. `Statsmodel.levels_` now
+  puts the reference first, and its table of coefficients has a row for
+  each feature and class other than the reference.
 
 ## 0.7.0
 

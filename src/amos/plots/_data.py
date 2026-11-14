@@ -6,6 +6,8 @@ Contents:
     BoxPlots: each numeric feature as a box, split by class.
     CorrelationHeatmap: the correlations between numeric columns.
     CountPlots: the count of each value of each categorical feature.
+    DistributionFits: each column's histogram with a fitted distribution laid
+        over it.
     DistributionPlots: the distribution of every column.
     FrequencyPlots: the share of the rows with each value of each column.
     Histograms: the distribution of each numeric feature.
@@ -22,7 +24,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 import numpy as np
@@ -30,6 +32,10 @@ import pandas as pd
 
 from .. import base, describers, utilities
 from ._base import Plot, _figure_legend, _grid, _match_ranges, _table
+
+# Most distinct whole numbers that a `distribution_fits` draws as a bar each
+# (rather than as a histogram).
+_DISCRETE_BARS: int = 50
 
 
 @dataclasses.dataclass
@@ -241,6 +247,101 @@ class CountPlots(Plot):
             axes.set_ylabel('')
         if grid:
             _figure_legend(figure, grid[0], by)
+
+
+@dataclasses.dataclass
+class DistributionFits(Plot):
+    """Each column's histogram with a fitted distribution laid over it.
+
+    Each numeric or boolean column (or each of `columns`) is a panel: bars
+    of the count of each value (for whole numbers with few values) or a
+    histogram, and a line of the counts that the distribution named for the
+    column (fitted by `describers.fit_distribution`) expects. The panel's
+    title names the distribution. The "is_" explorers and `distributions`
+    draw their tables with it.
+
+    Wraps:
+        - [`matplotlib.axes.Axes.hist`](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.hist.html)
+          from matplotlib.
+        - [`scipy.stats`](https://docs.scipy.org/doc/scipy/reference/stats.html)
+          from SciPy, for the fitted distributions.
+
+    """
+
+    # Wider than most plots, so that the numbers of each panel fit.
+    size: ClassVar[tuple[float, float]] = (9.6, 6.4)
+    starts_at_zero: ClassVar[str] = 'y'
+    shared_axes: ClassVar[str] = 'y'
+
+    def draw(
+        self,
+        item: base.Dataset,
+        figure: Any,
+        *,
+        columns: Sequence[str] | None = None,
+        families: str | Mapping[str, str | None] | None = 'normal',
+        trials: int | None = None,
+        bins: int = 20,
+        limit: int = 16,
+        **kwargs: Any) -> None:
+        """Draws each column with its fitted distribution.
+
+        Args:
+            item: the dataset to draw.
+            figure: the figure to draw on.
+            columns: columns to draw. Those that are not numeric or boolean
+                (or have no values) are left out. Defaults to `None`, which
+                draws every numeric and boolean column of the data.
+            families: the distribution to fit to every column (one of
+                `describers.Family`), the distribution of each column by its
+                name, or `None` to draw no fit. A column without a
+                distribution, or whose values do not suit it, is drawn
+                without one. Defaults to "normal".
+            trials: the number of trials of a binomial distribution.
+                Defaults to `None`, which fits it too.
+            bins: number of bins in each histogram. Defaults to 20.
+            limit: most columns to draw. Defaults to 16.
+            **kwargs: not used.
+
+        Raises:
+            ValueError: if none of the columns is numeric or boolean.
+
+        """
+        ticker = importlib.import_module('matplotlib.ticker')
+        drawn: dict[str, np.ndarray] = {}
+        for column in item.data.columns if columns is None else columns:
+            values = describers._numbers(item.data[column])
+            if values is not None and values.size > 0:
+                drawn[column] = values
+        if not drawn:
+            message = 'there are no numeric or boolean columns to draw'
+            raise ValueError(message)
+        shown = list(drawn)[:limit]
+        for axes, column in zip(
+            _grid(figure, len(shown)), shown, strict = True):
+            family = (
+                families.get(column) if isinstance(families, Mapping)
+                else families)
+            values = drawn[column]
+            title = str(column)
+            whole = describers._is_whole(values)
+            distinct = np.unique(values)
+            if whole and distinct.size <= _DISCRETE_BARS:
+                points, counts = np.unique(values, return_counts = True)
+                axes.bar(points, counts, width = 0.8)
+                width = 1.0
+            else:
+                _, edges, _ = axes.hist(values, bins = bins)
+                width = float(edges[1] - edges[0])
+            if family is not None and describers._suits(
+                values, family, trials):
+                fitted = describers.fit_distribution(
+                    values, family, trials = trials, seed = item.seed)
+                _draw_fit(axes, fitted, values, whole, width)
+                title = f'{column} ({family.replace("_", "-")})'
+            axes.xaxis.set_major_locator(
+                ticker.MaxNLocator(nbins = 4, integer = whole))
+            axes.set_title(title, fontsize = 'small')
 
 
 @dataclasses.dataclass
@@ -724,6 +825,37 @@ def _at_risk(table: Any, axes: Any, curves: dict[str, Any]) -> None:
     table.tick_params(left = False)
     for spine in table.spines.values():
         spine.set_visible(False)
+
+
+def _draw_fit(
+    axes: Any,
+    fitted: Any,
+    values: np.ndarray,
+    whole: bool,
+    width: float) -> None:
+    """Draws the counts that a fitted distribution expects of `values`.
+
+    Args:
+        axes: the axes of the histogram (or bars) of the values.
+        fitted: the fitted distribution (see `describers.fit_distribution`).
+        values: the values, without missing ones.
+        whole: whether every value is a whole number.
+        width: the width of each bar of the histogram (1 for bars of whole
+            numbers).
+
+    """
+    low, high = float(values.min()), float(values.max())
+    if hasattr(fitted, 'pmf'):
+        points = np.arange(math.floor(low), math.ceil(high) + 1)
+        # A histogram's bars can hold several whole numbers each.
+        expected = fitted.pmf(points) * values.size * width
+        axes.plot(points, expected, color = 'C1', marker = 'o', markersize = 2)
+        return
+    grid = np.linspace(
+        low - 0.5 if whole else low, high + 0.5 if whole else high, 200)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        density = np.nan_to_num(fitted.pdf(grid), posinf = 0.0)
+    axes.plot(grid, density * values.size * width, color = 'C1')
 
 
 def _split(

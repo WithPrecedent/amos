@@ -37,6 +37,8 @@ Contents:
     DecisionRegions: the class predicted across two features
         (classification).
     DetCurve: the detection error tradeoff curve (classification).
+    DistributionFits: each column's histogram with a fitted distribution
+        laid over it.
     DistributionPlots: the distribution of every column.
     EstimatesPlot: every model's estimates in a regression table.
     FairnessPlot: the model's fairness metrics for each group.
@@ -100,6 +102,7 @@ __all__: list[str] = [
     'CountPlots',
     'DecisionRegions',
     'DetCurve',
+    'DistributionFits',
     'DistributionPlots',
     'EstimatesPlot',
     'FairnessPlot',
@@ -156,6 +159,7 @@ from ._data import (
     BoxPlots,
     CorrelationHeatmap,
     CountPlots,
+    DistributionFits,
     DistributionPlots,
     FrequencyPlots,
     Histograms,
