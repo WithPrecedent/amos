@@ -277,3 +277,106 @@ def test_export_latex_and_html(
     paths = project.scorecard.export(tmp_path, formats = ['tex', 'html'])
     assert paths['tex'].read_text(encoding = 'utf-8').startswith(r'\begin')
     assert paths['html'].is_file()
+
+
+def _grouped(groups: int) -> amos.Dataset:
+    """Returns a fitted binary classifier with a "case" column of groups.
+
+    Args:
+        groups: how many distinct cases there are.
+
+    Returns:
+        The dataset, split and fitted by a logistic regression, with "case"
+            as its groups.
+
+    """
+    data = make_numeric()
+    data['case'] = [f'case_{i % groups}' for i in range(len(data))]
+    dataset = amos.Dataset(
+        data, label = 'target', seed = SEED, groups = ['case'])
+    amos.splitters.Stratified().apply(dataset)
+    return amos.models.Logit().apply(dataset)
+
+
+def _without_fairlearn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Makes importing fairlearn fail, as if it were not installed.
+
+    Args:
+        monkeypatch: the test's monkeypatch.
+
+    """
+    # A `None` in `sys.modules` makes importing that module fail.
+    monkeypatch.setitem(sys.modules, 'fairlearn', None)
+    monkeypatch.setitem(sys.modules, 'fairlearn.metrics', None)
+
+
+def test_default_metrics_that_cannot_be_imported_are_left_out(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture) -> None:
+    dataset = _grouped(groups = 2)
+    _without_fairlearn(monkeypatch)
+    with caplog.at_level('WARNING', logger = 'amos'):
+        table = Scorecard.create(dataset).table
+    assert 'demographic_parity' not in table.columns
+    assert 'equalized_odds' not in table.columns
+    assert 'accuracy' in table.columns
+    messages = ' '.join(record.getMessage() for record in caplog.records)
+    assert "leaves out 'demographic_parity'" in messages
+    assert "leaves out 'equalized_odds'" in messages
+    assert 'amos[fairness]' in messages
+
+
+def test_validators_leave_out_default_metrics_that_cannot_be_imported(
+    monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset = _grouped(groups = 2)
+    _without_fairlearn(monkeypatch)
+    names = Scorecard.metric_names(dataset)
+    assert names == list(Scorecard.defaults['classify'])
+
+
+def test_named_metrics_that_cannot_be_imported_raise(
+    monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset = _grouped(groups = 2)
+    _without_fairlearn(monkeypatch)
+    with pytest.raises(ImportError, match = r'amos\[fairness\]'):
+        Scorecard.create(
+            dataset, metrics = ['accuracy', 'demographic_parity'])
+
+
+def test_project_export_finishes_without_fairlearn(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch) -> None:
+    os.chdir(tmp_path)
+    data = make_numeric()
+    data['court'] = [f'court_{i % 3}' for i in range(len(data))]
+    settings = _settings()
+    settings['general']['groups'] = 'court'
+    _without_fairlearn(monkeypatch)
+    project = amos.Project.create(settings, item = data, id = 'run')
+    folder = project.export()
+    table = pd.read_csv(folder / 'scorecard.csv')
+    assert 'roc_auc' in table.columns
+    assert 'demographic_parity' not in table.columns
+
+
+@pytest.mark.parametrize(
+    ('groups', 'compared'),
+    [(2, True), (Scorecard.fairness_limit, True),
+     (Scorecard.fairness_limit + 1, False), (150, False)])
+def test_fairness_metrics_are_added_only_for_few_groups(
+    groups: int,
+    compared: bool) -> None:
+    requires('fairlearn')
+    dataset = _grouped(groups = groups)
+    names = Scorecard.metric_names(dataset)
+    assert all(
+        (name in names) == compared for name in Scorecard.fairness)
+
+
+def test_fairness_metrics_can_be_named_for_many_groups() -> None:
+    requires('fairlearn')
+    dataset = _grouped(groups = 150)
+    table = Scorecard.create(
+        dataset, metrics = ['accuracy', 'demographic_parity']).table
+    assert list(table.columns[-2:]) == ['accuracy', 'demographic_parity']
+    assert table.loc[0, 'demographic_parity'] >= 0

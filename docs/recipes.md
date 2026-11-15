@@ -248,7 +248,8 @@ of its coefficients).
 
 Name the columns that identify groups in the "groups" setting of the
 "general" section. They are kept out of the features, and the `scorecard`
-adds fairness metrics for every branch when the label has two classes. The
+adds fairness metrics for every branch when the label has two classes and
+the first group has at most 20 values (with fairlearn installed). The
 `fairness` table compares the final model across the groups:
 
 ```python

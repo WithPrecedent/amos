@@ -1306,7 +1306,10 @@ models do not use them. Then:
   and false positive rates of each group, with the largest difference and
   smallest ratio between groups.
 * The `scorecard` adds `demographic_parity` and `equalized_odds` for every
-  branch.
+  branch if the first group has at most 20 values
+  (`Scorecard.fairness_limit`) and fairlearn is installed. A group with more
+  values (such as the case of each row) is not compared unless the fairness
+  metrics are named in the scorecard's "metrics".
 * `fixest` can use groups as fixed effects and clusters, and `group_split`
   keeps each row of the dataset's first group in the same set.
 
