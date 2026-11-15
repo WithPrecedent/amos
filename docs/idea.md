@@ -358,7 +358,8 @@ and models do not use them. They are used by:
   `equal_opportunity`, and their "_ratio" versions), which compare the
   model's predictions across the first group,
 * `fairness`, which makes a table of how the model does for each group,
-* the `scorecard`, which adds fairness metrics for every branch,
+* the `scorecard`, which adds fairness metrics for every branch (if the
+  first group has at most 20 values),
 * `fixest`, which can use them as fixed effects and clusters, and
 * `group_split`, which keeps the rows of each value of the first group in
   the same set.

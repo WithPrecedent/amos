@@ -16,7 +16,7 @@ from typing import Any, ClassVar
 import chrisjen
 import pandas as pd
 
-from .. import base
+from .. import base, utilities
 from .. import metrics as metrics_
 from ._base import Evaluator, _Published
 
@@ -38,9 +38,20 @@ class Scorecard(_Published, Evaluator):
     (`to_markdown`), a LaTeX table (`to_latex`), an HTML table (`to_html`,
     which needs great_tables), a Word document (`to_word`, which needs
     python-docx), or an image (`to_image`, which needs matplotlib), or in
-    several at once (`export`). If the dataset has groups and a label of two
-    classes, fairness metrics are included. Make one from a dataset or an
-    applied project with `create`, or use `Project.scorecard`.
+    several at once (`export`). Make one from a dataset or an applied project
+    with `create`, or use `Project.scorecard`.
+
+    Unless "metrics" are chosen, a scorecard has the `defaults` for the task.
+    It also has the `fairness` metrics if the label has two classes and the
+    dataset's first `groups` column (the one that fairness metrics compare)
+    has at most `fairness_limit` distinct values, such as race or court.
+    Groups with more values (such as the case of each row, which keeps a
+    case's rows together when they are split or clustered) are not compared:
+    a gap between hundreds of thousands of groups says nothing about
+    fairness. Name the fairness metrics in "metrics" to compare them anyway.
+    A default metric whose optional package is not installed (such as
+    fairlearn, for fairness metrics) is left out with a logged warning, but a
+    metric named in "metrics" raises an `ImportError` instead.
 
     Wraps:
         - [`great_tables.GT`](https://posit-dev.github.io/great-tables/reference/GT.html)
@@ -92,6 +103,9 @@ class Scorecard(_Published, Evaluator):
     fairness: ClassVar[tuple[str, ...]] = (
         'demographic_parity',
         'equalized_odds')
+    # The most distinct values that the first column of groups can have for
+    # the fairness metrics to be in a scorecard by default.
+    fairness_limit: ClassVar[int] = 20
     # Genres of the techniques that are listed as steps of a dataset that did
     # not come from an experiment.
     step_genres: ClassVar[tuple[str, ...]] = (
@@ -160,21 +174,22 @@ class Scorecard(_Published, Evaluator):
                 tuple.
             metrics: names of metrics chosen by the user. Defaults to `None`,
                 which uses `defaults` for the task (and `fairness`, for a
-                binary classifier with groups).
+                binary classifier whose first groups column has at most
+                `fairness_limit` values).
 
         Returns:
             `metrics`, or `defaults` for the task with the experiment's
-                criterion first (if it is a metric).
+                criterion first (if it is a metric). A default metric whose
+                optional package cannot be imported is left out with a
+                logged warning.
 
         """
         if metrics:
             return list(metrics)
         names = list(cls.defaults.get(item.task or 'classify', ()))
-        if (
-            item.groups
-            and item.task == 'classify'
-            and len(item.classes) == 2):  # noqa: PLR2004
+        if cls._compares_groups(item):
             names.extend(cls.fairness)
+        names = cls._importable(names)
         criterion = branches[0].criterion if branches else None
         kind = chrisjen.library.all.get(criterion) if criterion else None
         if (
@@ -205,8 +220,8 @@ class Scorecard(_Published, Evaluator):
             metrics: names of the metrics to use. Defaults to `None`, which
                 uses `defaults` for the task (with the experiment's criterion
                 first, and the `fairness` metrics after them if the dataset
-                has groups and two classes). Other metrics that the branches
-                computed are added after them.
+                has few groups and two classes; see `metric_names`). Other
+                metrics that the branches computed are added after them.
             **kwargs: not used.
 
         Returns:
@@ -266,14 +281,64 @@ class Scorecard(_Published, Evaluator):
 
         Returns:
             The dataset, with the scorecard in `tables` and the final model's
-                scores in `metrics`.
+                scores in `metrics`. A default metric whose optional package
+                cannot be imported is left out.
 
         """
-        names = list(metrics or self.defaults.get(item.task or 'classify', ()))
+        defaults = self.defaults.get(item.task or 'classify', ())
+        names = list(metrics) if metrics else self._importable(defaults)
         item.metrics.update(self._measure(item, names))
         return super().apply(item, metrics = metrics, **kwargs)
 
     """ Private Methods """
+
+    @classmethod
+    def _compares_groups(cls, item: base.Dataset) -> bool:
+        """Returns whether a scorecard of `item` has fairness metrics.
+
+        Args:
+            item: the dataset with a fitted model.
+
+        Returns:
+            Whether `item` is a binary classification whose first groups
+                column (the one that fairness metrics compare) has at most
+                `fairness_limit` distinct values.
+
+        """
+        if (
+            not item.groups
+            or item.task != 'classify'
+            or len(item.classes) != 2):  # noqa: PLR2004
+            return False
+        values = item.data[item.groups[0]].nunique()
+        return bool(values <= cls.fairness_limit)
+
+    @classmethod
+    def _importable(cls, names: Sequence[str]) -> list[str]:
+        """Returns the metrics in `names` whose scoring functions import.
+
+        Args:
+            names: names of default metrics in the library.
+
+        Returns:
+            The names, without the metrics whose scoring functions (such as
+                fairlearn's, for fairness metrics) cannot be imported. A
+                warning is logged for each one that is left out.
+
+        """
+        found = []
+        for name in names:
+            metric = chrisjen.library.borrow(name, genre = 'metric')()
+            contents = getattr(metric, 'contents', None)
+            if isinstance(contents, str):
+                try:
+                    utilities.import_tool(contents)
+                except ImportError as error:
+                    base.logger.warning(
+                        f'the scorecard leaves out {name!r}: {error}')
+                    continue
+            found.append(name)
+        return found
 
     def _history_steps(self, item: base.Dataset) -> dict[str, str]:
         """Returns the techniques that made a dataset, by their genres.

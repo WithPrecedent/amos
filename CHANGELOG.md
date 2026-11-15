@@ -15,6 +15,16 @@ All notable changes to this project will be documented in this file.
   which 0.8.0 broke by giving every job of the CI workflow read-only
   permissions. The workflow is still read-only by default, and only the jobs
   that deploy the documentation and create releases can write.
+* A scorecard (and a validator's default metrics) leaves out, with a logged
+  warning, any default metric whose optional package is not installed, so
+  `Project.export` no longer fails at the scorecard after saving every table
+  and figure when fairlearn is missing. A metric named in "metrics" still
+  raises an `ImportError` if it cannot be imported.
+* A scorecard adds the fairness metrics by default only if the dataset's
+  first `groups` column has at most `Scorecard.fairness_limit` (20)
+  distinct values, such as race or court. Groups that keep a case's rows
+  together (with thousands of values) are no longer compared. Name the
+  fairness metrics in "metrics" to compare more groups.
 
 ## 0.8.0
 
