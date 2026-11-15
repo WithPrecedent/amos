@@ -23,6 +23,9 @@ jobs:
 
   build_and_test:
     runs-on: ${{ matrix.os }}
+    # Every job finishes in about 10 minutes. A test that deadlocks (as some
+    # have on macOS) would otherwise hold the runner for GitHub's 6 hours.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

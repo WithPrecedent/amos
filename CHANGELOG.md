@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+* A test that runs for more than 10 minutes now fails (with pytest-timeout,
+  a new development dependency) and prints the stack of every thread, and a
+  CI test job stops after 30 minutes. Some macOS jobs had deadlocked near the
+  end of the tests and held their runner for GitHub's limit of 6 hours.
 * `amos` requires chrisjen 0.5.0 and bobbie 0.5.0, and calls their public
   helpers (such as `chrisjen.utilities.listify_names` and
   `bobbie.options.file_type`) directly. The wrappers of them in
