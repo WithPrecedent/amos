@@ -1,0 +1,1527 @@
+"""Base classes for amos.
+
+Contents:
+    AmosWarning: the category of the warnings that amos gives.
+    Dataset: data and everything learned from it in a workflow.
+    Branch: one branch of an experiment and its result.
+    Operation: base class for amos techniques, which work on a `Dataset`.
+    Visualizer: mixin for explorers and critics, which can draw a figure of
+        what they found.
+    IncompatibleTechniqueError: raised by a technique that does not suit the
+        dataset's model.
+    skipping_incompatible_techniques: skips those techniques, rather than
+        raising their errors, in a workflow.
+    using_model_specific_techniques: replaces the plots, evaluators, and
+        inferers of a workflow with those that the dataset's model names.
+    WorkflowState: the settings that last while a workflow is applied.
+    workflow_state: returns those settings.
+    restored_workflow_state: applies techniques with those settings, as in
+        another process.
+    _SKIPS_INCOMPATIBLE: whether the code that is running is in a workflow.
+    _MODEL_SPECIFIC_GENRES: the settings of a model's parameters that name
+        the techniques that replace those of a workflow, and the genre of
+        the techniques that each replaces.
+    _TechniquesByModel: the type of the techniques that replace those of a
+        workflow, by the name of the model and the setting.
+    _MODEL_SPECIFIC_TECHNIQUES: the techniques that replace those of a
+        workflow, by the name of the model and the setting.
+    _OPERATION_DEPTH: how many operations are being applied, one inside
+        another.
+
+"""
+
+from __future__ import annotations
+
+import abc
+import contextlib
+import contextvars
+import copy
+import dataclasses
+import logging
+import pathlib
+import weakref
+from collections.abc import (
+    Callable,
+    Generator,
+    Iterable,
+    Mapping,
+    MutableMapping,
+    Sequence,
+)
+from typing import Any, ClassVar, TypeAlias
+
+import camina
+import chrisjen
+import numpy as np
+import pandas as pd
+
+from . import options, utilities
+
+# Parameters of a technique, as `chrisjen` stores them (keyword arguments, so
+# their keys are `str`).
+GenericDict: TypeAlias = MutableMapping[str, Any]
+# Tasks that a `Dataset` can have.
+_TASKS: tuple[str, ...] = ('classify', 'regress')
+
+# Whether a technique that does not suit the model is skipped.
+_SKIPS_INCOMPATIBLE: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    'skips_incompatible', default = False)
+# The settings of a model's parameters that name the techniques that replace
+# those of a workflow when it is the dataset's model, and the genre of the
+# techniques that each replaces.
+_MODEL_SPECIFIC_GENRES: dict[str, str] = {
+    'plots': 'plot', 'evaluators': 'evaluator', 'inferers': 'inferer'}
+# The techniques (built nodes) that replace those of a workflow, by the name
+# of the model and then by the setting (a key of `_MODEL_SPECIFIC_GENRES`).
+_TechniquesByModel: TypeAlias = Mapping[str, Mapping[str, Sequence[Any]]]
+# The techniques that replace those of the workflow that is being applied.
+# The default is never changed (a new mapping is set instead).
+_MODEL_SPECIFIC_TECHNIQUES: contextvars.ContextVar[_TechniquesByModel] = (
+    contextvars.ContextVar(
+        'model_specific_techniques', default = {}))  # noqa: B039
+# How many operations are being applied, one inside another. Only an
+# operation that a workflow applies itself (not one that another operation
+# applies, such as a plot that `auto_plot` chose) is replaced.
+_OPERATION_DEPTH: contextvars.ContextVar[int] = contextvars.ContextVar(
+    'operation_depth', default = 0)
+
+logger = logging.getLogger(__name__)
+
+
+class AmosWarning(UserWarning):
+    """A warning from amos about something that a user may want to change.
+
+    amos warns when it does something other than what was asked, so that the
+    results can still be made (such as fitting a model on the CPU when it
+    could not use the GPU, or leaving out a technique that a chooser could
+    not apply). Its warnings are this category, so they can be filtered
+    apart from those of the packages that amos uses:
+
+    ```py
+    import warnings
+    warnings.simplefilter("error", amos.AmosWarning)
+    ```
+
+    """
+
+
+class IncompatibleTechniqueError(ValueError):
+    """Raised by a technique that does not suit the dataset's model.
+
+    In a workflow, the technique is skipped and the skip is recorded in the
+    dataset's `history` (see `skipping_incompatible_techniques`), so one that
+    an experiment applies after every path does not end the run when a path's
+    model cannot use it. Otherwise, as when `apply` is called directly, the
+    error is raised. An error in how a technique was used (such as a parameter
+    that is wrong, or a model that has not been applied yet) should not be
+    this error.
+
+    """
+
+
+@contextlib.contextmanager
+def skipping_incompatible_techniques() -> Generator[None, None, None]:
+    """Skips techniques that do not suit the model, rather than raising.
+
+    A `Project` and an `Experiment` apply their workflows in this context.
+    Inside it, a technique that raises an `IncompatibleTechniqueError` is
+    skipped, and the skip is recorded in the dataset's `history`.
+
+    Yields:
+        None: control, to the code in the context.
+
+    """
+    token = _SKIPS_INCOMPATIBLE.set(True)
+    try:
+        yield
+    finally:
+        _SKIPS_INCOMPATIBLE.reset(token)
+
+
+@contextlib.contextmanager
+def restored_workflow_state(
+    state: WorkflowState) -> Generator[None, None, None]:
+    """Applies techniques as the workflow that made `state` applies them.
+
+    A workflow's settings that last while it is applied (whether techniques
+    that do not suit the model are skipped, and which techniques the
+    models name) are kept in context variables, which another process (or
+    thread) does not share. An `Experiment` that applies its paths at once
+    restores them in each.
+
+    Args:
+        state: the settings, from `workflow_state`.
+
+    Yields:
+        None: control, to the code in the context.
+
+    """
+    tokens = (
+        _SKIPS_INCOMPATIBLE.set(state.skips_incompatible),
+        _MODEL_SPECIFIC_TECHNIQUES.set(state.model_specific_techniques),
+        _OPERATION_DEPTH.set(state.operation_depth))
+    try:
+        yield
+    finally:
+        _OPERATION_DEPTH.reset(tokens[2])
+        _MODEL_SPECIFIC_TECHNIQUES.reset(tokens[1])
+        _SKIPS_INCOMPATIBLE.reset(tokens[0])
+
+
+@contextlib.contextmanager
+def using_model_specific_techniques(
+    techniques: _TechniquesByModel) -> Generator[None, None, None]:
+    """Replaces a workflow's techniques with those that its model names.
+
+    A `Project` applies its workflow in this context, with the techniques
+    named by the "plots", "evaluators", and "inferers" settings of each
+    model's parameters. Inside it, when the dataset's model (the last model
+    in its `history`) names techniques for a genre, the first technique of
+    that genre that the workflow applies after the model was fitted applies
+    them instead of itself, and every later one is left out. Each records in
+    `history` the techniques that replaced it.
+
+    Args:
+        techniques: the techniques (built nodes) that replace those of the
+            workflow, by the name of the model and then by the setting
+            ("plots", "evaluators", or "inferers").
+
+    Yields:
+        None: control, to the code in the context.
+
+    """
+    token = _MODEL_SPECIFIC_TECHNIQUES.set(techniques)
+    try:
+        yield
+    finally:
+        _MODEL_SPECIFIC_TECHNIQUES.reset(token)
+
+
+def workflow_state() -> WorkflowState:
+    """Returns the settings that last while a workflow is applied.
+
+    Returns:
+        Whether techniques that do not suit the model are skipped, which
+            techniques the models name, and how many operations are being
+            applied, one inside another (see `restored_workflow_state`).
+
+    """
+    return WorkflowState(
+        skips_incompatible = _SKIPS_INCOMPATIBLE.get(),
+        model_specific_techniques = _MODEL_SPECIFIC_TECHNIQUES.get(),
+        operation_depth = _OPERATION_DEPTH.get())
+
+
+@dataclasses.dataclass(frozen = True)
+class WorkflowState:
+    """The settings that last while a workflow is applied.
+
+    Args:
+        skips_incompatible: whether a technique that does not suit the
+            model is skipped (see `skipping_incompatible_techniques`).
+        model_specific_techniques: the techniques that replace those of the
+            workflow, by the name of the model and then by the setting (see
+            `using_model_specific_techniques`).
+        operation_depth: how many operations are being applied, one inside
+            another.
+
+    """
+
+    skips_incompatible: bool
+    model_specific_techniques: _TechniquesByModel
+    operation_depth: int
+
+
+# `eq` is `False` so that comparing datasets does not compare their data
+# frames, which `pandas` does not allow.
+@dataclasses.dataclass(eq = False)
+class Dataset:
+    """Data and everything learned from it in a workflow.
+
+    A `Dataset` is the item that an `amos` workflow works on. It holds the
+    data in a single `pandas.DataFrame`, the name of the column that models
+    predict (the `label`), and the rows in the training and test sets. As a
+    workflow runs, each technique adds what it learns: the fitted `model`, its
+    `predictions`, `metrics`, `tables`, `figures`, and a record of every step
+    in `history`.
+
+    The data stays in one `DataFrame` even after it is split. Transformers
+    learn from the training rows and then change every row, so nothing is
+    learned from the test rows, and every row keeps its original label in the
+    index.
+
+    Args:
+        data: the data, with one row per observation and one column per
+            variable. Defaults to an empty `DataFrame`.
+        label: name of the column with the outcome (the dependent variable)
+            that models predict. Defaults to `None`.
+        task: "classify" or "regress". Defaults to `None`, in which case it is
+            inferred from `label` (see `infer_task`).
+        seed: seed for every random process, which makes a workflow
+            reproducible. It is passed as `random_state` to every tool that
+            accepts one. Defaults to `None`.
+        groups: names of columns that identify groups of rows (such as race,
+            school, or region). They stay in the data but are not features, so
+            transformers and models do not use them directly. Fairness metrics
+            compare predictions across them, `fixest` can use them as fixed
+            effects or clusters, and `group_split` can keep each group in one
+            set. Defaults to an empty `list`.
+        use_gpu: whether models that can be fitted on a GPU (such as
+            `xgboost`) use one, if an NVIDIA GPU is found. If it is `False`,
+            every model is fitted on the CPU. Defaults to `False`.
+        train: index labels of the rows in the training set. Defaults to
+            `None`, which means that every row is used for training.
+        test: index labels of the rows in the test set. Defaults to `None`,
+            which means that the data has not been split.
+        synthetic: index labels of the training rows that a sampler made up
+            (synthetic rows and extra copies of a row), which are not real
+            observations. Validators do not score a model on them, and
+            inferers leave them out. Defaults to an empty `Index`.
+        model: the fitted model. Defaults to `None`.
+        predictions: the model's predictions for the test rows (or for every
+            row, if the data has not been split). Defaults to `None`.
+        probabilities: the model's predicted probability of each class (one
+            column for each class) for the same rows as `predictions`.
+            Defaults to `None`.
+        metrics: scores of the model, by the name of each metric. Defaults to
+            an empty `dict`.
+        tables: tables that describe the data or the model, by name. Defaults
+            to an empty `dict`.
+        figures: `matplotlib` figures, by name. Defaults to an empty `dict`.
+        fitted: tools that were fitted to the data (such as a scaler), by the
+            name of the technique that fitted them. Defaults to an empty
+            `dict`.
+        history: a record of each technique that was applied, in order, with
+            the tool and parameters it used. Defaults to an empty `list`.
+        branches: the branches of the most recent `experiment` that the
+            dataset came from, with the result of each. A `scorecard`
+            compares them. Defaults to an empty `list`.
+        kinds: the kind ("booleans", "categoricals", or "numerics") that
+            `set_kinds` gave each column it changed. A column of 0s and 1s
+            given the kind "booleans" (a dummy) is one of the `booleans`
+            while it holds integers, though its type is a number. Other
+            columns' kinds are found from their types. Defaults to an empty
+            `dict`.
+        visualize_explorers: whether every explorer (describer) draws a
+            figure of its table, whatever its own `visualize` argument (see
+            `Visualizer`). Defaults to `None`, which leaves it to each
+            explorer's argument (which is `False` unless it is passed).
+        visualize_critics: whether every critic (evaluator or inferer) draws
+            a figure of its table, whatever its own `visualize` argument.
+            Defaults to `None`, which leaves it to each critic's argument
+            (which is `False` unless it is passed).
+
+    A label that is not yet a column of the data is pending: the dataset keeps
+    its name, and its task is inferred once a technique (such as
+    `derive_columns`) makes the column. Anything that needs the label before
+    then raises an error.
+
+    """
+
+    data: pd.DataFrame = dataclasses.field(default_factory = pd.DataFrame)
+    label: str | None = None
+    task: str | None = None
+    seed: int | None = None
+    groups: list[str] = dataclasses.field(default_factory = list)
+    use_gpu: bool = False
+    train: pd.Index | None = None
+    test: pd.Index | None = None
+    synthetic: pd.Index = dataclasses.field(
+        default_factory = lambda: pd.Index([]))
+    model: Any = None
+    predictions: pd.Series | None = None
+    probabilities: pd.DataFrame | None = None
+    metrics: dict[str, Any] = dataclasses.field(default_factory = dict)
+    tables: dict[str, pd.DataFrame] = dataclasses.field(default_factory = dict)
+    figures: dict[str, Any] = dataclasses.field(default_factory = dict)
+    fitted: dict[str, Any] = dataclasses.field(default_factory = dict)
+    history: list[dict[str, Any]] = dataclasses.field(default_factory = list)
+    branches: list[Branch] = dataclasses.field(
+        default_factory = list, repr = False)
+    kinds: dict[str, str] = dataclasses.field(default_factory = dict)
+    visualize_explorers: bool | None = None
+    visualize_critics: bool | None = None
+
+    """ Initialization Methods """
+
+    def __post_init__(self) -> None:
+        """Validates `data`, `label`, `groups`, the switches, and `task`.
+
+        The switches are `use_gpu`, `visualize_explorers`, and
+        `visualize_critics`.
+
+        Raises:
+            KeyError: if a group is not a column of the data.
+            TypeError: if a switch is not true or false.
+            ValueError: if the label is a group, or `task` is not
+                "classify" or "regress".
+
+        """
+        if not isinstance(self.data, pd.DataFrame):
+            self.data = pd.DataFrame(self.data)
+        self.groups = _validate_groups(self.groups, self.data, self.label)
+        self.use_gpu = _validate_use_gpu(self.use_gpu)
+        self.visualize_explorers = _validate_switch(
+            self.visualize_explorers, 'visualize_explorers')
+        self.visualize_critics = _validate_switch(
+            self.visualize_critics, 'visualize_critics')
+        if self.task is None and self.has_label:
+            self.task = self.infer_task()
+        elif self.task is not None and self.task not in _TASKS:
+            message = f'task must be one of {_TASKS}, not {self.task!r}'
+            raise ValueError(message)
+
+    """ Class Methods """
+
+    @classmethod
+    def create(
+        cls,
+        item: Any,
+        *,
+        label: str | None = None,
+        task: str | None = None,
+        seed: int | None = None,
+        groups: Sequence[str] | str | None = None,
+        use_gpu: bool | None = None,
+        visualize_explorers: bool | None = None,
+        visualize_critics: bool | None = None) -> Dataset:
+        """Returns a `Dataset` made from `item`.
+
+        Args:
+            item: a `Dataset`, a `pandas.DataFrame` or `Series`, a Polars
+                `DataFrame` or `LazyFrame`, a `numpy` array, a `dict` of
+                columns, the path to a data file in any format that `nagata`
+                knows (see `loaders.LoadFile`), or an object with a `frame`
+                attribute (such as a scikit-learn dataset loaded with
+                `as_frame = True`).
+            label: name of the label column. Defaults to `None`. If `item` has
+                a `target` (as a scikit-learn dataset does), its name is used.
+            task: "classify" or "regress". Defaults to `None`, in which case
+                it is inferred from the label.
+            seed: seed for every random process. Defaults to `None`.
+            groups: names of the columns that identify groups of rows.
+                Defaults to `None`.
+            use_gpu: whether models that can be fitted on a GPU use one.
+                Defaults to `None`, which is `False` for a new `Dataset`.
+            visualize_explorers: whether every explorer draws a figure of
+                its table. Defaults to `None`, which leaves it to each
+                explorer's `visualize` argument.
+            visualize_critics: whether every critic draws a figure of its
+                table. Defaults to `None`, which leaves it to each critic's
+                `visualize` argument.
+
+        Raises:
+            FileNotFoundError: if `item` is a path and there is no file there.
+            TypeError: if `item` cannot be made into a `Dataset`.
+            ValueError: if `item` is a path to a file whose format is not
+                known.
+
+        Returns:
+            A `Dataset`. If `item` is already a `Dataset`, it is returned
+                with any of `label`, `task`, `seed`, and `groups` that it
+                lacks, and with `use_gpu`, `visualize_explorers`, and
+                `visualize_critics` if they are passed.
+
+        """
+        if isinstance(item, Dataset):
+            if item.label is None and label is not None:
+                item.label = label
+                item.task = task or (
+                    item.infer_task() if item.has_label else None)
+            if item.task is None and task is not None:
+                item.task = task
+            if item.seed is None:
+                item.seed = seed
+            if not item.groups and groups:
+                item.groups = _validate_groups(groups, item.data, item.label)
+            if use_gpu is not None:
+                item.use_gpu = _validate_use_gpu(use_gpu)
+            if visualize_explorers is not None:
+                item.visualize_explorers = _validate_switch(
+                    visualize_explorers, 'visualize_explorers')
+            if visualize_critics is not None:
+                item.visualize_critics = _validate_switch(
+                    visualize_critics, 'visualize_critics')
+            return item
+        if isinstance(item, str | pathlib.Path):
+            # `loaders` imports this module, so it is imported here. The file
+            # is read as `load_file` reads it, with a clerk for the current
+            # folder.
+            from ..wrangler import loaders  # noqa: PLC0415
+            item = loaders.LoadFile().read(item)
+        if type(item).__module__.startswith('polars'):
+            # Polars is optional, so its frames are recognized by their module.
+            # A `LazyFrame` is collected first.
+            frame = item.collect() if hasattr(item, 'collect') else item
+            data = frame.to_pandas()
+        elif isinstance(item, pd.DataFrame):
+            data = item
+        elif isinstance(item, pd.Series):
+            data = item.to_frame()
+        # A scikit-learn dataset is a `dict`, so it is checked before other
+        # mappings.
+        elif isinstance(getattr(item, 'frame', None), pd.DataFrame):
+            data = item.frame
+            target = getattr(item, 'target', None)
+            if label is None and isinstance(target, pd.Series):
+                label = str(target.name)
+        elif isinstance(item, np.ndarray | Mapping):
+            data = pd.DataFrame(item)
+        else:
+            message = f'a Dataset cannot be made from {type(item).__name__}'
+            raise TypeError(message)
+        return cls(
+            data = data,
+            label = label,
+            task = task,
+            seed = seed,
+            groups = camina.listify(groups),
+            use_gpu = _validate_use_gpu(use_gpu),
+            visualize_explorers = visualize_explorers,
+            visualize_critics = visualize_critics)
+
+    """ Properties """
+
+    @property
+    def booleans(self) -> list[str]:
+        """Returns the names of the features that are booleans."""
+        return self._kind('booleans')
+
+    @property
+    def categoricals(self) -> list[str]:
+        """Returns the names of the features that are categories or text."""
+        return self._kind('categoricals')
+
+    @property
+    def classes(self) -> list[Any]:
+        """Returns the classes of the label, sorted if they can be.
+
+        For a binary label, the last class is the "positive" one that metrics
+        such as `precision` and `roc_auc` are about (`1` or `True`, for
+        example).
+
+        """
+        # `tolist` turns `numpy` scalars into Python values.
+        values = list(self.y.dropna().unique().tolist())
+        try:
+            return sorted(values)
+        except TypeError:
+            return values
+
+    @property
+    def dates(self) -> list[str]:
+        """Returns the names of the features that are dates or times."""
+        return self._kind('dates')
+
+    @property
+    def features(self) -> list[str]:
+        """Returns the names of every column except the label and groups."""
+        return [
+            c for c in self.data.columns
+            if c != self.label and c not in self.groups]
+
+    @property
+    def has_label(self) -> bool:
+        """Returns whether there is a label that is a column of the data."""
+        return self.label is not None and self.label in self.data.columns
+
+    @property
+    def is_split(self) -> bool:
+        """Returns whether the data has been split into training and test."""
+        return self.test is not None
+
+    @property
+    def model_name(self) -> str | None:
+        """Returns the name of the technique that fitted the dataset's model.
+
+        Returns:
+            The name of the last model in `history` (the last entry that a
+                `Model` recorded, with "role" set to "model"), or `None` if
+                no model has been fitted.
+
+        """
+        for entry in reversed(self.history):
+            if entry.get('role') == 'model':
+                return str(entry.get('technique'))
+        return None
+
+    @property
+    def numerics(self) -> list[str]:
+        """Returns the names of the features that are numbers (not booleans)."""
+        return self._kind('numerics')
+
+    @property
+    def real_train_rows(self) -> pd.Index:
+        """Returns the training rows that are real observations.
+
+        Returns:
+            The index labels of the training rows (or of every row, if the
+                data has not been split) that a sampler did not make up (see
+                `synthetic`).
+
+        """
+        rows = self.train_rows
+        return rows[~rows.isin(self.synthetic)]
+
+    @property
+    def test_rows(self) -> pd.Index:
+        """Returns the index labels of the test rows.
+
+        Raises:
+            ValueError: if the data has not been split.
+
+        Returns:
+            The test rows.
+
+        """
+        if self.test is None:
+            message = 'the data has not been split: apply a splitter first'
+            raise ValueError(message)
+        return self.test
+
+    @property
+    def train_rows(self) -> pd.Index:
+        """Returns the index labels of the training rows.
+
+        Returns:
+            The training rows, or every row if the data has not been split.
+
+        """
+        return self.data.index if self.train is None else self.train
+
+    @property
+    def x(self) -> pd.DataFrame:
+        """Returns the features of every row."""
+        return self.data[self.features]
+
+    @property
+    def x_test(self) -> pd.DataFrame:
+        """Returns the features of the test rows."""
+        return self.data.loc[self.test_rows, self.features]
+
+    @property
+    def x_train(self) -> pd.DataFrame:
+        """Returns the features of the training rows."""
+        return self.data.loc[self.train_rows, self.features]
+
+    @property
+    def y(self) -> pd.Series:
+        """Returns the label of every row."""
+        return self.data[self.require_label()]
+
+    @property
+    def y_test(self) -> pd.Series:
+        """Returns the label of the test rows."""
+        labels: pd.Series = self.y.loc[self.test_rows]
+        return labels
+
+    @property
+    def y_train(self) -> pd.Series:
+        """Returns the label of the training rows."""
+        labels: pd.Series = self.y.loc[self.train_rows]
+        return labels
+
+    """ Public Methods """
+
+    def infer_task(self) -> str:
+        """Returns the task implied by the type of the label.
+
+        A label that is boolean, categorical, or text is classified. So is an
+        integer label with `options._CLASSIFY_THRESHOLD` unique values or
+        fewer (such as 0 and 1), or a label of whole numbers stored as floats
+        with only two unique values. Any other label is regressed. Pass `task`
+        to override this.
+
+        Returns:
+            "classify" or "regress".
+
+        """
+        label = self.y
+        unique = label.nunique(dropna = True)
+        if not pd.api.types.is_numeric_dtype(label.dtype):
+            return 'classify'
+        if pd.api.types.is_bool_dtype(label.dtype):
+            return 'classify'
+        if pd.api.types.is_integer_dtype(label.dtype):
+            if unique <= options._CLASSIFY_THRESHOLD:
+                return 'classify'
+            return 'regress'
+        values = label.dropna()
+        if unique <= 2 and bool((values == values.round()).all()):  # noqa: PLR2004
+            return 'classify'
+        return 'regress'
+
+    def record(self, technique: str, **details: Any) -> None:
+        """Adds an entry to `history`.
+
+        Args:
+            technique: name of the technique that was applied.
+            **details: anything else to record, such as the tool and its
+                parameters.
+
+        """
+        self.history.append({'technique': technique, **details})
+
+    def replace(self, data: pd.DataFrame) -> None:
+        """Replaces `data`, keeping `train` and `test` to the rows that remain.
+
+        If the label was pending and `data` has it, the task is inferred from
+        it (unless it was set).
+
+        Args:
+            data: the new data.
+
+        Raises:
+            KeyError: if the label was a column of the data and is not a
+                column of `data`, or if a group is not a column of `data`.
+
+        """
+        if self.has_label and self.label not in data.columns:
+            message = f'the label {self.label!r} is not a column of the data'
+            raise KeyError(message)
+        missing = [g for g in self.groups if g not in data.columns]
+        if missing:
+            message = f'the groups {missing} are not columns of the data'
+            raise KeyError(message)
+        self.data = data
+        if self.task is None and self.has_label:
+            self.task = self.infer_task()
+        if self.train is not None:
+            self.train = self.train[self.train.isin(data.index)]
+        if self.test is not None:
+            self.test = self.test[self.test.isin(data.index)]
+        self.synthetic = self.synthetic[self.synthetic.isin(data.index)]
+
+    def require_label(self) -> str:
+        """Returns `label`, checking that it is a column of the data.
+
+        Raises:
+            ValueError: if there is no label, or if it is pending (not yet a
+                column of the data).
+
+        Returns:
+            The name of the label column.
+
+        """
+        if self.label is None:
+            message = (
+                'the dataset has no label: pass one when it is created or set '
+                '"label" in the "general" section of the settings'
+            )
+            raise ValueError(message)
+        if self.label not in self.data.columns:
+            message = (
+                f'the label {self.label!r} is not a column of the data: make '
+                f'it (with a technique such as "derive_columns") before it is '
+                f'used'
+            )
+            raise ValueError(message)
+        return self.label
+
+    def resample(
+        self,
+        x: pd.DataFrame,
+        y: Sequence[Any],
+        origins: Sequence[int] | np.ndarray | None = None) -> None:
+        """Replaces the training rows with `x` and `y`.
+
+        Samplers add or remove training rows. The test rows (and their index
+        labels) are not changed. The new training rows are given new index
+        labels: integers after the largest current label if the index is made
+        of integers, and otherwise "resampled_0", "resampled_1", and so on.
+        The first copy of each real row is real. Synthetic rows and any other
+        copies are added to `synthetic`.
+
+        Args:
+            x: features of the new training rows.
+            y: labels of the new training rows.
+            origins: for each new row, the position (in the training rows) of
+                the row it copies, which gives it that row's groups, or -1 for
+                a synthetic row, which has no groups. Defaults to `None`, in
+                which case no new row has groups and every new row is real.
+
+        """
+        label = self.require_label()
+        made_up = self.train_rows.isin(self.synthetic)
+        rows = x.copy()
+        rows[label] = np.asarray(y)
+        if self.groups:
+            training = self.data.loc[self.train_rows, self.groups]
+            positions = np.full(len(rows), -1) if origins is None else (
+                np.asarray(origins))
+            copied = positions >= 0
+            for group in self.groups:
+                values = pd.Series(
+                    pd.NA, index = rows.index, dtype = training[group].dtype)
+                values[copied] = training[group].to_numpy()[positions[copied]]
+                rows[group] = values
+        rows.index = self._new_labels(len(rows))
+        rows = rows[self.data.columns]
+        test = self.data.loc[self.test_rows] if self.is_split else None
+        self.data = pd.concat([rows, test]) if test is not None else rows
+        self.train = rows.index
+        self.synthetic = rows.index[_made_up(origins, made_up, len(rows))]
+
+    def split(self, train: Iterable[Any], test: Iterable[Any]) -> None:
+        """Sets the training and test rows.
+
+        Args:
+            train: index labels of the training rows.
+            test: index labels of the test rows.
+
+        Raises:
+            ValueError: if a row is in both sets or a label is not in the data.
+
+        """
+        training, testing = pd.Index(train), pd.Index(test)
+        if len(training.intersection(testing)) > 0:
+            message = 'a row cannot be in both the training and test sets'
+            raise ValueError(message)
+        missing = training.append(testing).difference(self.data.index)
+        if len(missing) > 0:
+            message = f'{len(missing)} rows to split are not in the data'
+            raise ValueError(message)
+        self.train, self.test = training, testing
+
+    def update_features(
+        self,
+        columns: Sequence[str],
+        values: pd.DataFrame) -> None:
+        """Replaces the feature `columns` with `values`.
+
+        Transformers use this to swap the columns they were given for the
+        columns they produce, which may have different names or a different
+        number of columns (one-hot encoding, for example). The new columns
+        take the place of the first column they replace, so the order of the
+        other columns does not change.
+
+        Args:
+            columns: names of the columns to remove.
+            values: the new columns, with the same index as `data`.
+
+        Raises:
+            ValueError: if `values` has a different index from `data`, or if a
+                new column has the same name as a column that is kept.
+
+        """
+        if not values.index.equals(self.data.index):
+            message = 'the new columns must have the same index as the data'
+            raise ValueError(message)
+        removed = set(columns)
+        kept = [c for c in self.data.columns if c not in removed]
+        clashes = [c for c in values.columns if c in kept]
+        if clashes:
+            message = (
+                f'the new columns {clashes} have the same names as columns '
+                f'that are kept'
+            )
+            raise ValueError(message)
+        place = min(
+            (i for i, c in enumerate(self.data.columns) if c in removed),
+            default = len(self.data.columns))
+        before = [c for c in self.data.columns[:place] if c not in removed]
+        after = [c for c in self.data.columns[place:] if c not in removed]
+        self.data = pd.concat(
+            [self.data[before], values, self.data[after]], axis = 1)
+
+    """ Private Methods """
+
+    def _kind(self, kind: str) -> list[str]:
+        """Returns the names of the features of one kind.
+
+        A dummy (a column that `set_kinds` gave the kind "booleans") is a
+        boolean while it holds integers.
+
+        Args:
+            kind: "booleans", "numerics", "categoricals", or "dates" (for
+                dates, times, and periods).
+
+        Returns:
+            Names of the features of that kind, in order.
+
+        """
+        names = []
+        for column in self.features:
+            values = self.data[column]
+            found = _kind_of(values)
+            if (
+                self.kinds.get(column) == 'booleans'
+                and pd.api.types.is_integer_dtype(values.dtype)):
+                found = 'booleans'
+            if found == kind:
+                names.append(column)
+        return names
+
+    def _new_labels(self, count: int) -> pd.Index:
+        """Returns `count` index labels that are not used by the test rows.
+
+        Args:
+            count: number of labels.
+
+        Returns:
+            New index labels.
+
+        """
+        index = self.data.index
+        if len(index) == 0 or pd.api.types.is_integer_dtype(index.dtype):
+            start = int(index.max()) + 1 if len(index) > 0 else 0
+            return pd.RangeIndex(start, start + count)
+        return pd.Index([f'resampled_{i}' for i in range(count)])
+
+    """ Dunder Methods """
+
+    def __repr__(self) -> str:
+        """Returns a short description of the dataset.
+
+        Returns:
+            The size of the data, its label, and how it has been split.
+
+        """
+        rows, columns = self.data.shape
+        parts = [f'rows={rows}', f'columns={columns}']
+        if self.label is not None:
+            parts.append(f'label={self.label!r}')
+            parts.append(f'task={self.task!r}')
+        if self.groups:
+            parts.append(f'groups={self.groups!r}')
+        if self.use_gpu:
+            parts.append('use_gpu=True')
+        if self.is_split:
+            parts.append(f'train={len(self.train_rows)}')
+            parts.append(f'test={len(self.test_rows)}')
+        if self.model is not None:
+            parts.append(f'model={type(self.model).__name__}')
+        return f'Dataset({", ".join(parts)})'
+
+
+@dataclasses.dataclass
+class Branch:
+    """One branch of an experiment: a combination of techniques and its result.
+
+    An `experiment` tries every combination of one technique from each step.
+    Each combination is a branch. The winning dataset keeps a `Branch` for
+    every one of them, so that a `scorecard` can compare them after the
+    experiment.
+
+    A branch also refers to the whole dataset that it made (with its fitted
+    model and features), which the experiment keeps in its `results`, so that
+    a `regression_table` can estimate the effects of each branch's model. The
+    reference is weak: it does not keep the dataset in memory, and copies and
+    pickles of the branch do not have it. An experiment that conserves memory
+    keeps only the winner's dataset, so the other branches have none.
+
+    Args:
+        label: the names of the nodes in the branch, joined by " > ".
+        steps: the technique used at each step, by the name of the step.
+        result: the outcome of the branch: a `Dataset` with only the label
+            column, and the branch's predictions, probabilities, and metrics.
+        score: the branch's score from the experiment's criteria. Higher is
+            better. Defaults to `None`.
+        criterion: the name of the experiment's criteria. Defaults to `None`.
+        source: a weak reference to the whole dataset that the branch made.
+            Defaults to `None`.
+
+    """
+
+    label: str
+    steps: dict[str, str]
+    result: Dataset
+    score: float | None = None
+    criterion: str | None = None
+    source: weakref.ReferenceType[Dataset] | None = dataclasses.field(
+        default = None, repr = False, compare = False)
+
+    """ Properties """
+
+    @property
+    def dataset(self) -> Dataset | None:
+        """Returns the whole dataset that the branch made.
+
+        Returns:
+            The dataset, with its fitted model and features, or `None` if it
+                is no longer in memory (or the branch is a copy).
+
+        """
+        return None if self.source is None else self.source()
+
+    """ Dunder Methods """
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Returns the state of the branch, without `source`.
+
+        A weak reference cannot be pickled, and a copy of a branch should not
+        refer to a dataset that the copy of the experiment did not make.
+
+        Returns:
+            The fields of the branch, with `source` set to `None`.
+
+        """
+        return {**self.__dict__, 'source': None}
+
+
+@dataclasses.dataclass
+class Operation(chrisjen.Technique, abc.ABC):
+    """Base class for every amos technique: one step that changes a `Dataset`.
+
+    A technique takes a dataset, does one thing to it (loads data, cleans a
+    column, fits a model, draws a figure, and so on), and returns it. The
+    dataset is changed in place, and the technique adds an entry to its
+    `history`. Calling a technique on something that is not yet a `Dataset`
+    (such as a `pandas.DataFrame`) makes it into one first.
+
+    Every subclass is registered in the `chrisjen.library` under its name in
+    snake case (`CleanBooleans` is "clean_booleans"), which is the name that
+    settings use for it.
+
+    A technique that does not suit the dataset's model raises an
+    `IncompatibleTechniqueError` before it changes anything. In a workflow,
+    the technique is then skipped rather than ending the run: a warning is
+    logged, and its entry in `history` has "skipped" (`True`) and the "reason"
+    (see `skipping_incompatible_techniques`). A direct call to `apply` raises
+    the error.
+
+    Techniques are grouped into kinds, called genres, each with an abstract
+    base class: `Loader`, `Parser`, `Cleaner`, `Munger`, `Merger`, `Shaper`,
+    `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`,
+    `Evaluator`, `Inferer`, and `Plot`. To add a technique, subclass the
+    genre that fits and write the method it requires, or set `contents` to
+    the tool to wrap. To add a new genre, subclass `Operation` and write
+    `apply`. (Metrics are not techniques: see `amos.metrics.Metric`.)
+
+    In a project, a plot, evaluator, or inferer can be replaced by the
+    techniques that the dataset's model names in its parameters (see
+    `using_model_specific_techniques`).
+
+    Args:
+        name: name used to refer to the technique in a workflow. Defaults to
+            an empty `str`, in which case it is the snake case name of the
+            class.
+        contents: the tool that the technique wraps: a callable, or the import
+            path of one. A path is only imported when the technique is used.
+            Defaults to `None`.
+        parameters: keyword arguments for the tool. Defaults to an empty
+            `dict`.
+
+    """
+
+    # An empty name is replaced with the snake case name of the class when the
+    # technique is created (by `holden.Labeled`), so the name is never `None`.
+    name: str = ''
+    # The setting of a model's parameters ("plots", "evaluators", or
+    # "inferers") whose techniques replace this one when that model is the
+    # dataset's model, or an empty `str` if none does.
+    model_specific_setting: ClassVar[str] = ''
+
+    """ Public Methods """
+
+    @abc.abstractmethod
+    def apply(self, item: Dataset, **kwargs: Any) -> Dataset:
+        """Applies the operation to `item`.
+
+        Args:
+            item: the dataset to work on. A caller can pass anything that
+                `Dataset.create` accepts.
+            **kwargs: parameters for the operation, which take precedence
+                over `parameters`.
+
+        Returns:
+            The changed dataset.
+
+        """
+
+    """ Private Methods """
+
+    def _call_apply(
+        self,
+        method: Callable[..., Any],
+        item: Any,
+        /,
+        **kwargs: Any) -> Dataset:
+        """Calls `method`, the `apply` of this technique's class.
+
+        `chrisjen` sends every call to `apply` here, except one made from a
+        subclass through `super()`.
+
+        Args:
+            method: the `apply` method, before it was wrapped.
+            item: a `Dataset` or anything that `Dataset.create` accepts.
+            **kwargs: keyword arguments for `method` that take precedence over
+                `parameters`.
+
+        Raises:
+            IncompatibleTechniqueError: if `method` raised it outside of a
+                workflow.
+
+        Returns:
+            The changed `Dataset`, or, in a workflow, the `Dataset` with a
+                record that the technique was skipped, if `method` raised an
+                `IncompatibleTechniqueError`. If the dataset's model names
+                techniques that replace this one, the `Dataset` changed by
+                them (see `_replace_with_model_specific`).
+
+        """
+        dataset = Dataset.create(item)
+        replaced = self._replace_with_model_specific(dataset)
+        if replaced is not None:
+            return replaced
+        count = len(dataset.history)
+        token = _OPERATION_DEPTH.set(_OPERATION_DEPTH.get() + 1)
+        try:
+            result: Dataset = method(
+                self, dataset, **{**self._keywords(), **kwargs})
+        except IncompatibleTechniqueError as error:
+            if not _SKIPS_INCOMPATIBLE.get():
+                raise
+            logger.warning(f'{self.name!r} was skipped: {error}')
+            dataset.record(self.name, skipped = True, reason = str(error))
+            return dataset
+        finally:
+            _OPERATION_DEPTH.reset(token)
+        # Records the operation if `apply` did not record it in more detail.
+        if len(result.history) == count:
+            result.record(self.name, tool = utilities.describe_tool(
+                self.contents))
+        return result
+
+    def _make_tool(
+        self,
+        item: Dataset,
+        parameters: Mapping[str, Any],
+        tool: str | Callable[..., Any] | None = None,
+        known: Mapping[str, Any] | None = None) -> Any:
+        """Returns the wrapped tool, built with the parameters it accepts.
+
+        Parameters are first passed to `_prepare`, which subclasses use to add
+        defaults that depend on the data. If the dataset has a `seed` and the
+        tool accepts a `random_state` that was not set, the seed is used.
+
+        Args:
+            item: the dataset the tool will be used on.
+            parameters: parameters for the tool. Only those it accepts are
+                passed to it.
+            tool: the tool (a class or other callable, or its import path).
+                Defaults to `None`, in which case `contents` is used.
+            known: parameters that the tool is known to accept, such as those
+                that choose its device, which are passed to it unless
+                `parameters` sets them. Unlike `parameters`, they are passed
+                even if the tool only accepts them through `**kwargs` (as
+                lightgbm's models do). Defaults to `None`.
+
+        Raises:
+            NotImplementedError: if there is no tool.
+
+        Returns:
+            The built tool.
+
+        """
+        source = self.contents if tool is None else tool
+        if source is None:
+            message = (
+                f'technique {self.name!r} has no tool: pass a callable or '
+                f'import path as contents or override apply'
+            )
+            raise NotImplementedError(message)
+        built = utilities.import_tool(source)
+        parameters = self._prepare(item, dict(parameters))
+        accepted = utilities.accepted_parameters(built, parameters)
+        if (
+            item.seed is not None
+            and 'random_state' not in accepted
+            and utilities.accepted_parameters(built, {'random_state': None})):
+            accepted['random_state'] = item.seed
+        return built(**{**(known or {}), **accepted})
+
+    def _keywords(self) -> dict[str, Any]:
+        """Returns `parameters` as keyword arguments.
+
+        Returns:
+            A copy of `parameters` with `str` keys.
+
+        """
+        return {str(k): v for k, v in self.parameters.items()}
+
+    def _model_specific_key(self) -> str:
+        """Returns the setting of a model's parameters that can replace this.
+
+        Subclasses whose genre depends on the instance (such as the choosers)
+        override this.
+
+        Returns:
+            "plots", "evaluators", or "inferers", or an empty `str` if no
+                model's techniques replace this one.
+
+        """
+        return self.model_specific_setting
+
+    def _namify(self) -> str:
+        """Returns the snake case name of the class.
+
+        `holden` calls this to name an instance that was created without a
+        name (such as the criteria built for a contest).
+
+        Returns:
+            The default name of the technique.
+
+        """
+        return str(camina.snakify(type(self).__name__))
+
+    def _replace_with_model_specific(self, item: Dataset) -> Dataset | None:
+        """Applies the techniques that the dataset's model names for this one.
+
+        This is done only in `using_model_specific_techniques`, and only for
+        an operation that a workflow applies itself (not one that another
+        operation applies). If the model (the last one in `history`) names
+        techniques for this one's setting (see `_model_specific_key`), this
+        one is not applied. The first of its genre since the model was fitted
+        applies those techniques (each a copy, as a contest copies its
+        nodes), and a later one does nothing. Either way, its entry in
+        `history` has the "model", the "model_specific" setting, and the
+        techniques it was "replaced_by".
+
+        Args:
+            item: the dataset.
+
+        Returns:
+            The dataset, changed by the model's techniques, or `None` if no
+                technique replaces this one, in which case it is applied.
+
+        """
+        setting = self._model_specific_key()
+        if not setting or _OPERATION_DEPTH.get():
+            return None
+        model, done = _model_and_replaced(item, setting)
+        techniques = _MODEL_SPECIFIC_TECHNIQUES.get().get(
+            model or '', {}).get(setting)
+        if model is None or techniques is None:
+            return None
+        item.record(
+            self.name,
+            model = model,
+            model_specific = setting,
+            replaced_by = [str(t.name) for t in techniques])
+        if done:
+            return item
+        token = _OPERATION_DEPTH.set(_OPERATION_DEPTH.get() + 1)
+        try:
+            for technique in techniques:
+                item = copy.deepcopy(technique).apply(item)
+        finally:
+            _OPERATION_DEPTH.reset(token)
+        return item
+
+    def _prepare(
+        self,
+        item: Dataset,  # noqa: ARG002
+        parameters: dict[str, Any]) -> dict[str, Any]:
+        """Returns `parameters` with any defaults that depend on `item`.
+
+        Subclasses override this to choose a default (such as the scoring
+        function of a feature selector) based on the data or task.
+
+        Args:
+            item: the dataset the tool will be used on.
+            parameters: parameters for the tool.
+
+        Returns:
+            The parameters to build the tool with.
+
+        """
+        return parameters
+
+
+class Visualizer:
+    """Mixin for explorers and critics, which can draw a figure of a table.
+
+    The `apply` of an explorer (a describer) or a critic (an evaluator or an
+    inferer) takes `visualize`, which is `False` unless it is passed (or set
+    in the technique's parameters). If it is `True`, the technique draws the
+    figure that suits its table with the plot named by `visual`, in the
+    style of every plot (see `plots.Plot.make_figure`), and stores it in the
+    dataset's `figures` under the technique's name. Its entry in `history`
+    then has "figure".
+
+    The dataset's `visualize_explorers` or `visualize_critics` (which a
+    project sets from the settings of the same names in the "general"
+    section) replaces the argument of every technique of its stage, if it is
+    set: `True` draws every figure, and `False` draws none, whatever the
+    argument says. Neither is set unless the settings or the dataset set it.
+
+    A figure that cannot be drawn (because matplotlib is not installed, or
+    the plot does not suit the table) does not end the technique: a warning
+    is logged, the table is kept, and the technique's entry in `history` has
+    the reason as "figure_error".
+
+    """
+
+    # The field of `Dataset` (and the setting of the "general" section) that
+    # decides whether every technique of the stage draws its figure, if it
+    # is set.
+    stage_setting: ClassVar[str] = ''
+    # Name of the plot (in `chrisjen.library`) that draws the figure, or an
+    # empty `str` for a technique without one.
+    visual: ClassVar[str] = ''
+    # The name of the technique (a field of `Operation`).
+    name: str
+
+    """ Private Methods """
+
+    def _visual_parameters(
+        self,
+        item: Dataset,  # noqa: ARG002
+        parameters: Mapping[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        """Returns the parameters of the plot that draws the figure.
+
+        Subclasses override this to pass parameters of their own (such as the
+        columns that the technique described) to the plot.
+
+        Args:
+            item: the dataset, with the technique's table.
+            parameters: the parameters that the technique was applied with.
+
+        Returns:
+            The parameters, which by default name the technique's table as
+                the plot's "source".
+
+        """
+        return {'source': self.name}
+
+    def _visualize(
+        self,
+        item: Dataset,
+        visualize: Any,
+        parameters: Mapping[str, Any] | None = None) -> None:
+        """Draws the figure of the technique's table, if it is asked for.
+
+        Call this after the technique has recorded itself in `history`, so
+        that its entry can say whether the figure was drawn.
+
+        Args:
+            item: the dataset, with the technique's table.
+            visualize: the technique's `visualize` argument: `True`, `False`,
+                or the text "true" or "false" (in any case).
+            parameters: the parameters that the technique was applied with.
+                Defaults to `None`, which means that it had none.
+
+        Raises:
+            TypeError: if `visualize` is not true or false.
+
+        """
+        visualize = _validate_switch(visualize, 'visualize')
+        setting = getattr(item, self.stage_setting, None)
+        if setting is not None:
+            visualize = setting
+        if not visualize or not self.visual:
+            return
+        entry: dict[str, Any] = next(
+            (e for e in reversed(item.history)
+             if e.get('technique') == self.name), {})
+        try:
+            plot: Any = chrisjen.library.borrow(self.visual)()
+            figure = plot.make_figure(
+                item, **self._visual_parameters(item, parameters or {}))
+        except Exception as error:  # noqa: BLE001
+            logger.warning(
+                f'the figure of {self.name!r} was not drawn: {error}')
+            entry['figure_error'] = str(error)
+            return
+        item.figures[self.name] = figure
+        entry['figure'] = self.name
+
+
+""" Private Functions """
+
+
+def _model_and_replaced(
+    item: Dataset,
+    setting: str) -> tuple[str | None, bool]:
+    """Returns the dataset's model and whether its techniques were applied.
+
+    Args:
+        item: the dataset.
+        setting: "plots", "evaluators", or "inferers".
+
+    Returns:
+        The name of the dataset's model (see `Dataset.model_name`), or
+            `None` if there is none, and whether a technique was replaced by
+            the techniques of that model's `setting` since it was fitted.
+
+    """
+    replaced = False
+    for entry in reversed(item.history):
+        if entry.get('role') == 'model':
+            return str(entry.get('technique')), replaced
+        if entry.get('model_specific') == setting:
+            replaced = True
+    return None, replaced
+
+
+def _change_columns(
+    item: Dataset,
+    after: pd.DataFrame,
+    technique: str,
+    genre: str) -> Dataset:
+    """Replaces the data of `item` with `after`, which has changed columns.
+
+    Mungers and parsers change and add columns, but keep the rows and every
+    column. The dataset's `history` records the columns whose values or types
+    changed ("changed") and the new columns ("created").
+
+    Args:
+        item: the dataset.
+        after: its data, with changed or new columns.
+        technique: name of the technique that changed the data.
+        genre: the genre of the technique (such as "munger"), for messages.
+
+    Raises:
+        ValueError: if `after` has different rows or lacks a column of the
+            data.
+
+    Returns:
+        The changed dataset.
+
+    """
+    before = item.data
+    removed = [c for c in before.columns if c not in after.columns]
+    if removed or not after.index.equals(before.index):
+        message = (
+            f'a {genre} only changes and adds columns, but {technique!r} '
+            f'changed the rows or removed columns of the data (use a '
+            f'cleaner to remove them)'
+        )
+        raise ValueError(message)
+    item.replace(after)
+    item.record(
+        technique,
+        changed = [
+            c for c in before.columns if not after[c].equals(before[c])],
+        created = [c for c in after.columns if c not in before.columns])
+    return item
+
+
+def _made_up(
+    origins: Sequence[int] | np.ndarray | None,
+    made_up: np.ndarray,
+    count: int) -> np.ndarray:
+    """Returns which resampled rows are not real observations.
+
+    Args:
+        origins: for each resampled row, the position of the training row it
+            copies, or -1 for a synthetic row. `None` means that every row is
+            real.
+        made_up: for each training row before resampling, whether it was
+            made up by an earlier sampler.
+        count: number of resampled rows.
+
+    Returns:
+        A boolean array that is `True` for each synthetic row, each copy of a
+            made-up row, and each copy of a row after its first.
+
+    """
+    if origins is None:
+        return np.zeros(count, dtype = bool)
+    positions = np.asarray(origins, dtype = int)
+    copied = positions >= 0
+    # A copy of a real row is real (if it is the first copy of that row).
+    real = np.zeros(count, dtype = bool)
+    real[copied] = ~np.asarray(made_up, dtype = bool)[positions[copied]]
+    first = np.zeros(count, dtype = bool)
+    first[np.unique(positions, return_index = True)[1]] = True
+    return ~(real & first)
+
+
+def _validate_use_gpu(value: Any) -> bool:
+    """Returns the "use_gpu" setting as a `bool`, checking it.
+
+    Args:
+        value: `True`, `False`, or `None` (which means `False`). The text
+            "true" or "false" (in any case), as a settings `dict` might hold
+            it, is also accepted.
+
+    Raises:
+        TypeError: if `value` is anything else.
+
+    Returns:
+        Whether models that can be fitted on a GPU use one.
+
+    """
+    return bool(_validate_switch(value, 'use_gpu'))
+
+
+def _validate_switch(value: Any, setting: str) -> bool | None:
+    """Returns a setting that is true or false as a `bool`, checking it.
+
+    Args:
+        value: `True`, `False`, or `None` (which means that it is not set).
+            The text "true" or "false" (in any case), as a settings `dict`
+            might hold it, is also accepted.
+        setting: name of the setting, for the message of an error.
+
+    Raises:
+        TypeError: if `value` is anything else.
+
+    Returns:
+        The setting, or `None` if it is not set.
+
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool | np.bool_):
+        return bool(value)
+    if isinstance(value, str) and value.strip().lower() in {'true', 'false'}:
+        return value.strip().lower() == 'true'
+    message = f'{setting} must be true or false, not {value!r}'
+    raise TypeError(message)
+
+
+def _validate_groups(
+    groups: Sequence[str] | str | None,
+    data: pd.DataFrame,
+    label: str | None) -> list[str]:
+    """Returns the names of the group columns, checking them.
+
+    Args:
+        groups: a name, a sequence of names, or `None`.
+        data: the data.
+        label: name of the label, which cannot be a group.
+
+    Raises:
+        KeyError: if a group is not a column of `data`.
+        ValueError: if the label is a group.
+
+    Returns:
+        The names of the group columns.
+
+    """
+    names: list[str] = camina.listify(groups)
+    missing = [g for g in names if g not in data.columns]
+    if missing:
+        message = f'the groups {missing} are not columns of the data'
+        raise KeyError(message)
+    if label is not None and label in names:
+        message = f'the label {label!r} cannot also be a group'
+        raise ValueError(message)
+    return names
+
+
+def _kind_of(column: pd.Series) -> str:
+    """Returns the kind of values in `column`.
+
+    Args:
+        column: a column of data.
+
+    Returns:
+        "booleans", "numerics", "dates" (for dates, times, and periods), or
+            "categoricals" (for categories, text, and anything else).
+
+    """
+    dtype = column.dtype
+    if pd.api.types.is_bool_dtype(dtype):
+        return 'booleans'
+    if pd.api.types.is_numeric_dtype(dtype):
+        return 'numerics'
+    if (
+        pd.api.types.is_datetime64_any_dtype(dtype)
+        or pd.api.types.is_timedelta64_dtype(dtype)
+        or isinstance(dtype, pd.PeriodDtype)):
+        return 'dates'
+    return 'categoricals'

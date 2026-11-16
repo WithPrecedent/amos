@@ -162,6 +162,19 @@ def make_fixest_courts(rows: int = 240) -> amos.Dataset:
     return dataset
 
 
+def split_mixed() -> amos.Dataset:
+    """Returns the mixed dataset, split, with its missing ages filled.
+
+    Returns:
+        The dataset of `make_mixed`, split by `stratified` and with its
+            missing ages filled by `median_impute`.
+
+    """
+    dataset = amos.Dataset(make_mixed(), label = 'outcome', seed = SEED)
+    amos.splitters.Stratified().apply(dataset)
+    return amos.imputers.MedianImpute().apply(dataset)
+
+
 @pytest.fixture
 def mixed() -> amos.Dataset:
     """A dataset with every kind of column and a text label."""

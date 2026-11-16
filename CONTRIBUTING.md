@@ -40,10 +40,19 @@ Don't bother updating the changelog, we will take care of this.
 
 Most contributions to `amos` are new techniques. To add one:
 
-1. Find the module of its genre (`loaders`, `cleaners`, `mungers`,
-   `mergers`, `shapers`, `describers`, `splitters`, `transformers`,
-   `samplers`, `models`, `validators`, `metrics`, `evaluators`, `inferers`,
-   or `plots`) and copy a similar technique. Every class is a `dataclasses.dataclass`.
+1. Find the package of its genre and copy a similar technique. The packages
+   follow the stages of a project: `src/amos/wrangler` holds `loaders`,
+   `parsers`, `cleaners`, `mungers`, `mergers`, and `shapers`;
+   `src/amos/explorer` holds `describers`; `src/amos/analyst` holds
+   `splitters`, `imputers`, `scalers`, `encoders`, `mixers`, `selectors`,
+   `reducers`, `samplers`, `models`, and `validators`; `src/amos/critic`
+   holds `evaluators` and `inferers`; and `src/amos/artist` holds `plots`.
+   Metrics and choosers are in `src/amos/core`. Each step keeps its base
+   class in `_base.py` and its techniques in private modules grouped by
+   theme or by the package they wrap. Import a new technique in the step's
+   `__init__.py` and add it to `__all__`, so it can be used as (for
+   example) `amos.cleaners.Name`. Every class is a
+   `dataclasses.dataclass`.
 2. Wrap tools from other packages by their import paths (in `contents` or
    `tools`), not by importing them at the top of a module. They are imported
    only when the technique is used, so `amos` stays light and its optional
@@ -72,9 +81,10 @@ Most contributions to `amos` are new techniques. To add one:
 4. Make sure the technique learns only from the training rows, records what
    it did in the dataset's `history`, and uses the dataset's `seed` for
    anything random.
-5. Add tests. Tests that use an optional package call `requires` (in
-   `tests/conftest.py`) so that they are skipped where the package cannot be
-   imported.
+5. Add tests in the test file of the step, in the folder of its stage (such
+   as `tests/wrangler/test_cleaners.py`). Tests that use an optional package
+   call `requires` (in `tests/conftest.py`) so that they are skipped where
+   the package cannot be imported.
 
 Examples in the README and the documentation are run by `tests/test_docs.py`.
 The comment lines after a `print` statement are its expected output.

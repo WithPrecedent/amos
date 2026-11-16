@@ -8,7 +8,7 @@ hide:
 
 Every technique in `amos`, by the stage (worker) that usually uses it. A
 technique is named in settings by the name in the first column, and its class
-is in the module of its stage (for example, `random_forest` is
+is in the module of its step (for example, `random_forest` is
 `amos.models.RandomForest`). Each name links to its class in the [API
 reference](reference/amos/index.md). The [advanced user guide](advanced.md)
 describes how techniques work, their parameters, and how to write your own.
@@ -140,58 +140,58 @@ Every model has a pipeline of its own for each task that it can do. The
 
 | Name | Tool | Description |
 | --- | --- | --- |
-| [`iterative_impute`][amos.transformers.IterativeImpute] | <code>sklearn.<wbr>impute.<wbr>IterativeImputer</code> | Fills missing values by modeling each feature from the others. |
-| [`knn_impute`][amos.transformers.KnnImpute] | <code>sklearn.<wbr>impute.<wbr>KNNImputer</code> | Fills missing values with the average of the most similar rows. |
-| [`mean_impute`][amos.transformers.MeanImpute] | <code>sklearn.<wbr>impute.<wbr>SimpleImputer</code> | Fills missing values with the mean of the training rows. |
-| [`median_impute`][amos.transformers.MedianImpute] | <code>sklearn.<wbr>impute.<wbr>SimpleImputer</code> | Fills missing values with the median of the training rows. |
-| [`mode_impute`][amos.transformers.ModeImpute] | <code>sklearn.<wbr>impute.<wbr>SimpleImputer</code> | Fills missing values with the most common value of the training rows. |
+| [`iterative_impute`][amos.imputers.IterativeImpute] | <code>sklearn.<wbr>impute.<wbr>IterativeImputer</code> | Fills missing values by modeling each feature from the others. |
+| [`knn_impute`][amos.imputers.KnnImpute] | <code>sklearn.<wbr>impute.<wbr>KNNImputer</code> | Fills missing values with the average of the most similar rows. |
+| [`mean_impute`][amos.imputers.MeanImpute] | <code>sklearn.<wbr>impute.<wbr>SimpleImputer</code> | Fills missing values with the mean of the training rows. |
+| [`median_impute`][amos.imputers.MedianImpute] | <code>sklearn.<wbr>impute.<wbr>SimpleImputer</code> | Fills missing values with the median of the training rows. |
+| [`mode_impute`][amos.imputers.ModeImpute] | <code>sklearn.<wbr>impute.<wbr>SimpleImputer</code> | Fills missing values with the most common value of the training rows. |
 
 ## Scalers (analyst)
 
 | Name | Tool | Description |
 | --- | --- | --- |
-| [`binarize`][amos.transformers.Binarize] | <code>sklearn.<wbr>preprocessing.<wbr>Binarizer</code> | Makes each feature 1 if it is above a threshold (0 by default). |
-| [`bins`][amos.transformers.Bins] | <code>sklearn.<wbr>preprocessing.<wbr>KBinsDiscretizer</code> | Sorts each feature into bins with about the same number of rows. |
-| [`gauss`][amos.transformers.Gauss] | <code>sklearn.<wbr>preprocessing.<wbr>PowerTransformer</code> | Makes each feature more like a normal distribution (Yeo-Johnson). |
-| [`max_abs`][amos.transformers.MaxAbs] | <code>sklearn.<wbr>preprocessing.<wbr>MaxAbsScaler</code> | Divides each feature by its largest absolute value. |
-| [`min_max`][amos.transformers.MinMax] | <code>sklearn.<wbr>preprocessing.<wbr>MinMaxScaler</code> | Rescales each feature to the range from 0 to 1. |
-| [`normalize`][amos.transformers.Normalize] | <code>sklearn.<wbr>preprocessing.<wbr>Normalizer</code> | Rescales each row to a length of 1. |
-| [`quantile`][amos.transformers.Quantile] | <code>sklearn.<wbr>preprocessing.<wbr>QuantileTransformer</code> | Replaces each value with its quantile in the training rows. |
-| [`robust`][amos.transformers.Robust] | <code>sklearn.<wbr>preprocessing.<wbr>RobustScaler</code> | Centers on the median and scales by the interquartile range. |
-| [`standard`][amos.transformers.Standard] | <code>sklearn.<wbr>preprocessing.<wbr>StandardScaler</code> | Centers each feature on 0 with a standard deviation of 1. |
+| [`binarize`][amos.scalers.Binarize] | <code>sklearn.<wbr>preprocessing.<wbr>Binarizer</code> | Makes each feature 1 if it is above a threshold (0 by default). |
+| [`bins`][amos.scalers.Bins] | <code>sklearn.<wbr>preprocessing.<wbr>KBinsDiscretizer</code> | Sorts each feature into bins with about the same number of rows. |
+| [`gauss`][amos.scalers.Gauss] | <code>sklearn.<wbr>preprocessing.<wbr>PowerTransformer</code> | Makes each feature more like a normal distribution (Yeo-Johnson). |
+| [`max_abs`][amos.scalers.MaxAbs] | <code>sklearn.<wbr>preprocessing.<wbr>MaxAbsScaler</code> | Divides each feature by its largest absolute value. |
+| [`min_max`][amos.scalers.MinMax] | <code>sklearn.<wbr>preprocessing.<wbr>MinMaxScaler</code> | Rescales each feature to the range from 0 to 1. |
+| [`normalize`][amos.scalers.Normalize] | <code>sklearn.<wbr>preprocessing.<wbr>Normalizer</code> | Rescales each row to a length of 1. |
+| [`quantile`][amos.scalers.Quantile] | <code>sklearn.<wbr>preprocessing.<wbr>QuantileTransformer</code> | Replaces each value with its quantile in the training rows. |
+| [`robust`][amos.scalers.Robust] | <code>sklearn.<wbr>preprocessing.<wbr>RobustScaler</code> | Centers on the median and scales by the interquartile range. |
+| [`standard`][amos.scalers.Standard] | <code>sklearn.<wbr>preprocessing.<wbr>StandardScaler</code> | Centers each feature on 0 with a standard deviation of 1. |
 
 ## Encoders (analyst)
 
 | Name | Tool | Description |
 | --- | --- | --- |
-| [`backward_difference`][amos.transformers.BackwardDifference] | <code>category_encoders.<wbr>BackwardDifferenceEncoder</code> | Compares each category to the one before it. |
-| [`base_n`][amos.transformers.BaseN] | <code>category_encoders.<wbr>BaseNEncoder</code> | Writes the number of each category in base N (4 by default). |
-| [`binary`][amos.transformers.Binary] | <code>category_encoders.<wbr>BinaryEncoder</code> | Writes the number of each category in binary digits. |
-| [`cat_boost`][amos.transformers.CatBoost] | <code>category_encoders.<wbr>CatBoostEncoder</code> | Target encoding in the manner of CatBoost, which limits leakage. |
-| [`count`][amos.transformers.Count] | <code>category_encoders.<wbr>CountEncoder</code> | Replaces each category with how often it is in the training rows. |
-| [`date_parts`][amos.transformers.DateParts] | <code>skrub.<wbr>DatetimeEncoder</code> | Splits dates and times into parts: year, month, day, and so on. |
-| [`gap`][amos.transformers.Gap] | <code>skrub.<wbr>GapEncoder</code> | Encodes messy text as a mix of topics of its substrings. |
-| [`hashing`][amos.transformers.Hashing] | <code>category_encoders.<wbr>HashingEncoder</code> | Hashes the categories into a fixed number of columns. |
-| [`helmert`][amos.transformers.Helmert] | <code>category_encoders.<wbr>HelmertEncoder</code> | Compares each category to the mean of the categories before it. |
-| [`james_stein`][amos.transformers.JamesStein] | <code>category_encoders.<wbr>JamesSteinEncoder</code> | Target encoding shrunk toward the overall mean (James-Stein). |
-| [`leave_one_out`][amos.transformers.LeaveOneOut] | <code>category_encoders.<wbr>LeaveOneOutEncoder</code> | Target encoding that leaves out each row's own label. |
-| [`m_estimate`][amos.transformers.MEstimate] | <code>category_encoders.<wbr>MEstimateEncoder</code> | Target encoding shrunk toward the overall mean by m rows. |
-| [`min_hash`][amos.transformers.MinHash] | <code>skrub.<wbr>MinHashEncoder</code> | Encodes messy text by hashing its substrings, which is fast and robust. |
-| [`one_hot`][amos.transformers.OneHot] | <code>sklearn.<wbr>preprocessing.<wbr>OneHotEncoder</code> | Makes a column of 0s and 1s for each category (dummy variables). |
-| [`ordinal`][amos.transformers.Ordinal] | <code>sklearn.<wbr>preprocessing.<wbr>OrdinalEncoder</code> | Numbers the categories (0, 1, 2, ...) in sorted order. |
-| [`polynomial_coding`][amos.transformers.PolynomialCoding] | <code>category_encoders.<wbr>PolynomialEncoder</code> | Contrasts categories as an ordered (polynomial) sequence. |
-| [`sum_coding`][amos.transformers.SumCoding] | <code>category_encoders.<wbr>SumEncoder</code> | Compares each category to the mean of all categories (effect coding). |
-| [`target`][amos.transformers.Target] | <code>category_encoders.<wbr>TargetEncoder</code> | Replaces each category with the mean label of its training rows. |
-| [`tfidf`][amos.transformers.Tfidf] | <code>skrub.<wbr>StringEncoder</code> | Encodes text by the TF-IDF of its substrings, reduced with SVD. |
-| [`weight_of_evidence`][amos.transformers.WeightOfEvidence] | <code>category_encoders.<wbr>WOEEncoder</code> | Replaces each category with its weight of evidence (binary labels). |
+| [`backward_difference`][amos.encoders.BackwardDifference] | <code>category_encoders.<wbr>BackwardDifferenceEncoder</code> | Compares each category to the one before it. |
+| [`base_n`][amos.encoders.BaseN] | <code>category_encoders.<wbr>BaseNEncoder</code> | Writes the number of each category in base N (4 by default). |
+| [`binary`][amos.encoders.Binary] | <code>category_encoders.<wbr>BinaryEncoder</code> | Writes the number of each category in binary digits. |
+| [`cat_boost`][amos.encoders.CatBoost] | <code>category_encoders.<wbr>CatBoostEncoder</code> | Target encoding in the manner of CatBoost, which limits leakage. |
+| [`count`][amos.encoders.Count] | <code>category_encoders.<wbr>CountEncoder</code> | Replaces each category with how often it is in the training rows. |
+| [`date_parts`][amos.encoders.DateParts] | <code>skrub.<wbr>DatetimeEncoder</code> | Splits dates and times into parts: year, month, day, and so on. |
+| [`gap`][amos.encoders.Gap] | <code>skrub.<wbr>GapEncoder</code> | Encodes messy text as a mix of topics of its substrings. |
+| [`hashing`][amos.encoders.Hashing] | <code>category_encoders.<wbr>HashingEncoder</code> | Hashes the categories into a fixed number of columns. |
+| [`helmert`][amos.encoders.Helmert] | <code>category_encoders.<wbr>HelmertEncoder</code> | Compares each category to the mean of the categories before it. |
+| [`james_stein`][amos.encoders.JamesStein] | <code>category_encoders.<wbr>JamesSteinEncoder</code> | Target encoding shrunk toward the overall mean (James-Stein). |
+| [`leave_one_out`][amos.encoders.LeaveOneOut] | <code>category_encoders.<wbr>LeaveOneOutEncoder</code> | Target encoding that leaves out each row's own label. |
+| [`m_estimate`][amos.encoders.MEstimate] | <code>category_encoders.<wbr>MEstimateEncoder</code> | Target encoding shrunk toward the overall mean by m rows. |
+| [`min_hash`][amos.encoders.MinHash] | <code>skrub.<wbr>MinHashEncoder</code> | Encodes messy text by hashing its substrings, which is fast and robust. |
+| [`one_hot`][amos.encoders.OneHot] | <code>sklearn.<wbr>preprocessing.<wbr>OneHotEncoder</code> | Makes a column of 0s and 1s for each category (dummy variables). |
+| [`ordinal`][amos.encoders.Ordinal] | <code>sklearn.<wbr>preprocessing.<wbr>OrdinalEncoder</code> | Numbers the categories (0, 1, 2, ...) in sorted order. |
+| [`polynomial_coding`][amos.encoders.PolynomialCoding] | <code>category_encoders.<wbr>PolynomialEncoder</code> | Contrasts categories as an ordered (polynomial) sequence. |
+| [`sum_coding`][amos.encoders.SumCoding] | <code>category_encoders.<wbr>SumEncoder</code> | Compares each category to the mean of all categories (effect coding). |
+| [`target`][amos.encoders.Target] | <code>category_encoders.<wbr>TargetEncoder</code> | Replaces each category with the mean label of its training rows. |
+| [`tfidf`][amos.encoders.Tfidf] | <code>skrub.<wbr>StringEncoder</code> | Encodes text by the TF-IDF of its substrings, reduced with SVD. |
+| [`weight_of_evidence`][amos.encoders.WeightOfEvidence] | <code>category_encoders.<wbr>WOEEncoder</code> | Replaces each category with its weight of evidence (binary labels). |
 
 ## Mixers (analyst)
 
 | Name | Tool | Description |
 | --- | --- | --- |
-| [`interactions`][amos.transformers.Interactions] | <code>sklearn.<wbr>preprocessing.<wbr>PolynomialFeatures</code> | Adds the product of each pair of features, or of the terms of formulas. |
-| [`polynomial`][amos.transformers.Polynomial] | <code>sklearn.<wbr>preprocessing.<wbr>PolynomialFeatures</code> | Adds the squares and products of the features (degree 2 by default). |
-| [`splines`][amos.transformers.Splines] | <code>sklearn.<wbr>preprocessing.<wbr>SplineTransformer</code> | Replaces each feature with a set of spline curves. |
+| [`interactions`][amos.mixers.Interactions] | <code>sklearn.<wbr>preprocessing.<wbr>PolynomialFeatures</code> | Adds the product of each pair of features, or of the terms of formulas. |
+| [`polynomial`][amos.mixers.Polynomial] | <code>sklearn.<wbr>preprocessing.<wbr>PolynomialFeatures</code> | Adds the squares and products of the features (degree 2 by default). |
+| [`splines`][amos.mixers.Splines] | <code>sklearn.<wbr>preprocessing.<wbr>SplineTransformer</code> | Replaces each feature with a set of spline curves. |
 
 ## Selectors (analyst)
 
@@ -216,7 +216,7 @@ Every model has a pipeline of its own for each task that it can do. The
 
 | Name | Tool | Description |
 | --- | --- | --- |
-| [`pca_reduce`][amos.transformers.PCAReduce] | <code>sklearn.<wbr>decomposition.<wbr>PCA</code> | Replaces the features with their principal components. |
+| [`pca_reduce`][amos.reducers.PCAReduce] | <code>sklearn.<wbr>decomposition.<wbr>PCA</code> | Replaces the features with their principal components. |
 
 ## Samplers (analyst)
 
@@ -409,42 +409,42 @@ Every model has a pipeline of its own for each task that it can do. The
 
 | Name | Description |
 | --- | --- |
-| [`auto`][amos.auto.Auto] | Chooses the techniques of the step that it is in. |
-| [`auto_encoder`][amos.auto.AutoEncoder] | Encodes each categorical feature in the way that suits it. |
-| [`auto_evaluator`][amos.auto.AutoEvaluator] | Applies the evaluators that suit the task and the model. |
-| [`auto_imputer`][amos.auto.AutoImputer] | Fills missing values in the ways that suit the features. |
-| [`auto_model`][amos.auto.AutoModel] | Fits the best of the models whose needs and assumptions the data meets. |
-| [`auto_plot`][amos.auto.AutoPlot] | Draws the figures that suit the data and the model. |
-| [`auto_sampler`][amos.auto.AutoSampler] | Chooses a sampler that suits the classes and the features, or none. |
+| [`auto`][amos.core.auto.Auto] | Chooses the techniques of the step that it is in. |
+| [`auto_encoder`][amos.core.auto.AutoEncoder] | Encodes each categorical feature in the way that suits it. |
+| [`auto_evaluator`][amos.core.auto.AutoEvaluator] | Applies the evaluators that suit the task and the model. |
+| [`auto_imputer`][amos.core.auto.AutoImputer] | Fills missing values in the ways that suit the features. |
+| [`auto_model`][amos.core.auto.AutoModel] | Fits the best of the models whose needs and assumptions the data meets. |
+| [`auto_plot`][amos.core.auto.AutoPlot] | Draws the figures that suit the data and the model. |
+| [`auto_sampler`][amos.core.auto.AutoSampler] | Chooses a sampler that suits the classes and the features, or none. |
 
 ## Metrics
 
 | Name | Tool | Task | Better | Description |
 | --- | --- | --- | --- | --- |
-| [`accuracy`][amos.metrics.Accuracy] | <code>sklearn.<wbr>metrics.<wbr>accuracy_score</code> | classify | higher | The share of rows classified correctly. |
-| [`average_precision`][amos.metrics.AveragePrecision] | <code>sklearn.<wbr>metrics.<wbr>average_precision_score</code> | classify | higher | The area under the precision-recall curve. |
-| [`balanced_accuracy`][amos.metrics.BalancedAccuracy] | <code>sklearn.<wbr>metrics.<wbr>balanced_accuracy_score</code> | classify | higher | The average share of each class classified correctly. |
-| [`brier`][amos.metrics.Brier] | <code>sklearn.<wbr>metrics.<wbr>brier_score_loss</code> | classify | lower | The mean squared error of the predicted probabilities (lower is better). |
-| [`cohen_kappa`][amos.metrics.CohenKappa] | <code>sklearn.<wbr>metrics.<wbr>cohen_kappa_score</code> | classify | higher | Agreement between the predictions and labels beyond chance. |
-| [`concordance`][amos.metrics.Concordance] | <code>amos.<wbr>metrics.<wbr>concordance_index</code> | regress | higher | How often the model orders pairs of times correctly (Harrell's C). |
-| [`demographic_parity`][amos.metrics.DemographicParity] | <code>fairlearn.<wbr>metrics.<wbr>demographic_parity_difference</code> | classify | lower | The largest gap between groups in the share predicted to be positive. |
-| [`demographic_parity_ratio`][amos.metrics.DemographicParityRatio] | <code>fairlearn.<wbr>metrics.<wbr>demographic_parity_ratio</code> | classify | higher | The smallest group's share predicted positive over the largest's. |
-| [`equal_opportunity`][amos.metrics.EqualOpportunity] | <code>fairlearn.<wbr>metrics.<wbr>equal_opportunity_difference</code> | classify | lower | The largest gap between groups in the true positive rate. |
-| [`equal_opportunity_ratio`][amos.metrics.EqualOpportunityRatio] | <code>fairlearn.<wbr>metrics.<wbr>equal_opportunity_ratio</code> | classify | higher | The smallest group's true positive rate over the largest's. |
-| [`equalized_odds`][amos.metrics.EqualizedOdds] | <code>fairlearn.<wbr>metrics.<wbr>equalized_odds_difference</code> | classify | lower | The larger gap between groups in true or false positive rates. |
-| [`equalized_odds_ratio`][amos.metrics.EqualizedOddsRatio] | <code>fairlearn.<wbr>metrics.<wbr>equalized_odds_ratio</code> | classify | higher | The smaller ratio between groups of true or false positive rates. |
-| [`explained_variance`][amos.metrics.ExplainedVariance] | <code>sklearn.<wbr>metrics.<wbr>explained_variance_score</code> | regress | higher | The share of the variance of the label that the model explains. |
-| [`f1`][amos.metrics.F1] | <code>sklearn.<wbr>metrics.<wbr>f1_score</code> | classify | higher | The harmonic mean of precision and recall. |
-| [`log_loss`][amos.metrics.LogLoss] | <code>sklearn.<wbr>metrics.<wbr>log_loss</code> | classify | lower | The negative log-likelihood of the true labels (lower is better). |
-| [`mae`][amos.metrics.MAE] | <code>sklearn.<wbr>metrics.<wbr>mean_absolute_error</code> | regress | lower | The mean absolute error (lower is better). |
-| [`mape`][amos.metrics.MAPE] | <code>sklearn.<wbr>metrics.<wbr>mean_absolute_percentage_error</code> | regress | lower | The mean absolute percentage error (lower is better). |
-| [`matthews`][amos.metrics.Matthews] | <code>sklearn.<wbr>metrics.<wbr>matthews_corrcoef</code> | classify | higher | The Matthews correlation coefficient (phi for two classes). |
-| [`mse`][amos.metrics.MSE] | <code>sklearn.<wbr>metrics.<wbr>mean_squared_error</code> | regress | lower | The mean squared error (lower is better). |
-| [`precision`][amos.metrics.Precision] | <code>sklearn.<wbr>metrics.<wbr>precision_score</code> | classify | higher | The share of rows predicted to be positive that are positive. |
-| [`r2`][amos.metrics.R2] | <code>sklearn.<wbr>metrics.<wbr>r2_score</code> | regress | higher | The coefficient of determination (R squared). |
-| [`recall`][amos.metrics.Recall] | <code>sklearn.<wbr>metrics.<wbr>recall_score</code> | classify | higher | The share of positive rows that are predicted to be positive. |
-| [`rmse`][amos.metrics.RMSE] | <code>sklearn.<wbr>metrics.<wbr>root_mean_squared_error</code> | regress | lower | The root mean squared error (lower is better). |
-| [`roc_auc`][amos.metrics.RocAuc] | <code>sklearn.<wbr>metrics.<wbr>roc_auc_score</code> | classify | higher | The area under the receiver operating characteristic (ROC) curve. |
+| [`accuracy`][amos.core.metrics.Accuracy] | <code>sklearn.<wbr>metrics.<wbr>accuracy_score</code> | classify | higher | The share of rows classified correctly. |
+| [`average_precision`][amos.core.metrics.AveragePrecision] | <code>sklearn.<wbr>metrics.<wbr>average_precision_score</code> | classify | higher | The area under the precision-recall curve. |
+| [`balanced_accuracy`][amos.core.metrics.BalancedAccuracy] | <code>sklearn.<wbr>metrics.<wbr>balanced_accuracy_score</code> | classify | higher | The average share of each class classified correctly. |
+| [`brier`][amos.core.metrics.Brier] | <code>sklearn.<wbr>metrics.<wbr>brier_score_loss</code> | classify | lower | The mean squared error of the predicted probabilities (lower is better). |
+| [`cohen_kappa`][amos.core.metrics.CohenKappa] | <code>sklearn.<wbr>metrics.<wbr>cohen_kappa_score</code> | classify | higher | Agreement between the predictions and labels beyond chance. |
+| [`concordance`][amos.core.metrics.Concordance] | <code>amos.<wbr>metrics.<wbr>concordance_index</code> | regress | higher | How often the model orders pairs of times correctly (Harrell's C). |
+| [`demographic_parity`][amos.core.metrics.DemographicParity] | <code>fairlearn.<wbr>metrics.<wbr>demographic_parity_difference</code> | classify | lower | The largest gap between groups in the share predicted to be positive. |
+| [`demographic_parity_ratio`][amos.core.metrics.DemographicParityRatio] | <code>fairlearn.<wbr>metrics.<wbr>demographic_parity_ratio</code> | classify | higher | The smallest group's share predicted positive over the largest's. |
+| [`equal_opportunity`][amos.core.metrics.EqualOpportunity] | <code>fairlearn.<wbr>metrics.<wbr>equal_opportunity_difference</code> | classify | lower | The largest gap between groups in the true positive rate. |
+| [`equal_opportunity_ratio`][amos.core.metrics.EqualOpportunityRatio] | <code>fairlearn.<wbr>metrics.<wbr>equal_opportunity_ratio</code> | classify | higher | The smallest group's true positive rate over the largest's. |
+| [`equalized_odds`][amos.core.metrics.EqualizedOdds] | <code>fairlearn.<wbr>metrics.<wbr>equalized_odds_difference</code> | classify | lower | The larger gap between groups in true or false positive rates. |
+| [`equalized_odds_ratio`][amos.core.metrics.EqualizedOddsRatio] | <code>fairlearn.<wbr>metrics.<wbr>equalized_odds_ratio</code> | classify | higher | The smaller ratio between groups of true or false positive rates. |
+| [`explained_variance`][amos.core.metrics.ExplainedVariance] | <code>sklearn.<wbr>metrics.<wbr>explained_variance_score</code> | regress | higher | The share of the variance of the label that the model explains. |
+| [`f1`][amos.core.metrics.F1] | <code>sklearn.<wbr>metrics.<wbr>f1_score</code> | classify | higher | The harmonic mean of precision and recall. |
+| [`log_loss`][amos.core.metrics.LogLoss] | <code>sklearn.<wbr>metrics.<wbr>log_loss</code> | classify | lower | The negative log-likelihood of the true labels (lower is better). |
+| [`mae`][amos.core.metrics.MAE] | <code>sklearn.<wbr>metrics.<wbr>mean_absolute_error</code> | regress | lower | The mean absolute error (lower is better). |
+| [`mape`][amos.core.metrics.MAPE] | <code>sklearn.<wbr>metrics.<wbr>mean_absolute_percentage_error</code> | regress | lower | The mean absolute percentage error (lower is better). |
+| [`matthews`][amos.core.metrics.Matthews] | <code>sklearn.<wbr>metrics.<wbr>matthews_corrcoef</code> | classify | higher | The Matthews correlation coefficient (phi for two classes). |
+| [`mse`][amos.core.metrics.MSE] | <code>sklearn.<wbr>metrics.<wbr>mean_squared_error</code> | regress | lower | The mean squared error (lower is better). |
+| [`precision`][amos.core.metrics.Precision] | <code>sklearn.<wbr>metrics.<wbr>precision_score</code> | classify | higher | The share of rows predicted to be positive that are positive. |
+| [`r2`][amos.core.metrics.R2] | <code>sklearn.<wbr>metrics.<wbr>r2_score</code> | regress | higher | The coefficient of determination (R squared). |
+| [`recall`][amos.core.metrics.Recall] | <code>sklearn.<wbr>metrics.<wbr>recall_score</code> | classify | higher | The share of positive rows that are predicted to be positive. |
+| [`rmse`][amos.core.metrics.RMSE] | <code>sklearn.<wbr>metrics.<wbr>root_mean_squared_error</code> | regress | lower | The root mean squared error (lower is better). |
+| [`roc_auc`][amos.core.metrics.RocAuc] | <code>sklearn.<wbr>metrics.<wbr>roc_auc_score</code> | classify | higher | The area under the receiver operating characteristic (ROC) curve. |
 
 ## Pipelines
 

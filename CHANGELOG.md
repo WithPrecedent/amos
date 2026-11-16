@@ -6,6 +6,29 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+* The source follows the stages of a project. `src/amos` has a folder for
+  each stage (`wrangler`, `explorer`, `analyst`, `critic`, and `artist`),
+  each with a package for each of its steps (such as
+  `amos/wrangler/cleaners`), and a `core` folder for what every stage
+  shares (`base`, `workers`, `pipelines`, `interface`, `reports`, `clerks`,
+  `metrics`, `auto`, `options`, and `utilities`). Each step keeps its base
+  class in `_base.py` and its techniques in private modules, grouped by
+  theme or by the package they wrap. Every step and core module is still
+  imported from `amos` itself (such as `amos.cleaners.CleanBooleans` or
+  `amos.base.Dataset`), and techniques are still named by those paths, so
+  settings, records, and pickles are unchanged.
+* **Breaking:** the `transformers` module is split into a step for each of
+  its genres: `amos.imputers`, `amos.scalers`, `amos.encoders`,
+  `amos.mixers`, and `amos.reducers` (for example, `amos.scalers.Standard`
+  rather than `amos.transformers.Standard`). `amos.transformers` keeps only
+  the base class, `Transformer`, and `ColumnWise`. Names in settings (such
+  as `standard`) are unchanged.
+* The API reference lists the core modules, then the steps of each stage in
+  the order of a project. Metrics and choosers are documented in
+  `amos.core.metrics` and `amos.core.auto`.
+* The tests are in a folder for each stage, like the source, and the tests
+  of the transformers are split by step.
+
 * Parsers are a new genre of the wrangler (`amos.Parser`), for techniques
   that find information in the text of a dataset and make columns of it.
   Each kind of search for a regular expression is a parser of its own, which
@@ -36,7 +59,7 @@ All notable changes to this project will be documented in this file.
   `count_patterns`, `map_patterns`, `extract_pattern`, `extract_all`,
   `split_text`, and `replace_text`) are gone: use the parsers instead.
 * The regular-expression helpers that mungers and parsers share are in a
-  private module, `amos._patterns`, and mungers and parsers share the check
+  private module, `amos.wrangler._patterns`, and mungers and parsers share the check
   that they keep the rows and every column.
 * `parse_numbers`, `parse_dates`, and `parse_booleans` are now cleaners named
   `clean_numbers`, `clean_dates`, and `clean_booleans`

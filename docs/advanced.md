@@ -949,7 +949,7 @@ choose others:
 ```python
 cancer = sklearn.datasets.load_breast_cancer(as_frame = True)
 dataset = amos.Dataset.create(cancer, seed = 43)
-amos.transformers.MinMax().apply(dataset, columns = ["mean radius"])
+amos.scalers.MinMax().apply(dataset, columns = ["mean radius"])
 print(dataset.history[-1]["columns"])
 # ['mean radius']
 print(dataset.data["mean radius"].max())
@@ -979,7 +979,7 @@ the product for each combination, as a column of its own. It learns nothing
 from the data, so it can come before the split:
 
 ```python
-amos.transformers.Interactions().apply(
+amos.mixers.Interactions().apply(
     crimes, race = "offender_race * victim_race", age_by_race = "age * victim_race")
 print(crimes.data["race"].tolist())
 # ['white_offender_black_victim', 'black_offender_black_victim', 'black_offender_white_victim']
@@ -1412,7 +1412,7 @@ step). "choices" limits the techniques that a chooser considers (in the
 order to prefer them). Its other parameters ("candidates", "folds", and
 "metric" for `auto_model`, "levels" for `auto_encoder`, and "data" for
 `auto_plot`) are described in the
-[API reference](reference/amos/auto.md), and any others are passed to the
+[API reference](reference/amos/core/auto.md), and any others are passed to the
 techniques it chooses.
 
 The choosers can also be applied directly, and `amos.auto.profile` returns
@@ -1473,7 +1473,7 @@ dataset = amos.Dataset(data, label = "target", seed = 43, groups = ["clinic"])
 print("clinic" in dataset.features)
 # False
 amos.splitters.Stratified().apply(dataset)
-amos.transformers.Standard().apply(dataset)
+amos.scalers.Standard().apply(dataset)
 amos.models.Logit().apply(dataset)
 amos.evaluators.Fairness().apply(dataset)
 print(list(dataset.tables["fairness"].index))
@@ -1975,7 +1975,7 @@ dataset = amos.Dataset.create(cancer, seed = 43)
 amos.splitters.Stratified().apply(dataset)
 experiment = amos.Experiment(name = "models", criteria = amos.metrics.F1())
 experiment.populate([
-    [amos.transformers.Standard(), amos.transformers.Robust()],
+    [amos.scalers.Standard(), amos.scalers.Robust()],
     [amos.models.Baseline(), amos.models.Logit()],
 ])
 result = experiment.apply(dataset)
@@ -2013,7 +2013,7 @@ winner's model:
 lean = amos.Experiment(
     name = "models", criteria = amos.metrics.F1(), conserve_memory = True)
 lean.populate([
-    [amos.transformers.Standard(), amos.transformers.Robust()],
+    [amos.scalers.Standard(), amos.scalers.Robust()],
     [amos.models.Baseline(), amos.models.Logit()],
 ])
 winner = lean.apply(dataset)
@@ -2111,7 +2111,7 @@ number of folds, and `n_repeats` for `repeated_k_fold`), and:
 ```python
 dataset = amos.Dataset.create(cancer, seed = 43)
 amos.splitters.Stratified().apply(dataset)
-amos.transformers.Standard().apply(dataset)
+amos.scalers.Standard().apply(dataset)
 amos.samplers.Smote().apply(dataset)
 amos.models.Logit().apply(dataset)
 amos.validators.StratifiedKFold().apply(dataset, metrics = ["roc_auc", "f1"])

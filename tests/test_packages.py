@@ -61,7 +61,7 @@ def _mixed() -> amos.Dataset:
     dataset = amos.Dataset(make_mixed(), label = 'outcome', seed = SEED)
     amos.cleaners.DropColumns().apply(dataset, columns = ['joined'])
     amos.splitters.Stratified().apply(dataset)
-    return amos.transformers.MedianImpute().apply(dataset)
+    return amos.imputers.MedianImpute().apply(dataset)
 
 
 def test_sklearn(classified: amos.Dataset) -> None:
@@ -70,7 +70,7 @@ def test_sklearn(classified: amos.Dataset) -> None:
     metrics = importlib.import_module('sklearn.metrics')
     x_train, x_test = classified.x_train, classified.x_test
     y_train, y_test = classified.y_train, classified.y_test
-    amos.transformers.Standard().apply(classified)
+    amos.scalers.Standard().apply(classified)
     amos.models.Logit().apply(classified)
     roc_auc = amos.metrics.RocAuc().measure(classified)
     scaler = preprocessing.StandardScaler().fit(x_train)
@@ -93,7 +93,7 @@ def test_category_encoders() -> None:
     region = dataset.data[['region']].copy()
     train = dataset.x_train[['region']]
     codes = dataset.y_train.map({'no': 0, 'yes': 1})
-    amos.transformers.Target().apply(dataset, columns = ['region'])
+    amos.encoders.Target().apply(dataset, columns = ['region'])
     expected = encoders.TargetEncoder().fit(train, codes).transform(region)
     np.testing.assert_allclose(
         dataset.data['region'].to_numpy(), expected['region'].to_numpy())
@@ -266,7 +266,7 @@ def test_skrub() -> None:
     dataset = _mixed()
     region = dataset.data['region'].copy()
     train = dataset.x_train['region']
-    amos.transformers.MinHash().apply(
+    amos.encoders.MinHash().apply(
         dataset, columns = ['region'], n_components = 3)
     expected = skrub.MinHashEncoder(n_components = 3).fit(train).transform(
         region)
@@ -318,7 +318,7 @@ def test_fairlearn() -> None:
     fairness = importlib.import_module('fairlearn.metrics')
     dataset = _mixed()
     dataset.groups = ['member']
-    amos.transformers.OneHot().apply(dataset)
+    amos.encoders.OneHot().apply(dataset)
     amos.models.Logit().apply(dataset)
     measured = amos.metrics.EqualizedOdds().measure(dataset)
     rows = dataset.predictions.index

@@ -52,14 +52,15 @@ print(len(dataset.numerics), dataset.categoricals, dataset.booleans)
 ## 2. Apply techniques by hand
 
 Every technique has an `apply` method that changes the dataset and returns
-it. The techniques are grouped in modules by what they do:
+it. The techniques are grouped in modules by what they do (one for each step
+of a stage, such as `scalers` for the analyst):
 
 ```python
-from amos import describers, metrics, models, splitters, transformers
+from amos import describers, metrics, models, scalers, splitters
 
 describers.Summarize().apply(dataset)
 splitters.Stratified().apply(dataset)
-transformers.Standard().apply(dataset)
+scalers.Standard().apply(dataset)
 models.Logit().apply(dataset)
 print(len(dataset.train), len(dataset.test))
 # 426 143

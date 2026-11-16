@@ -52,7 +52,7 @@ def test_create_adds_groups() -> None:
 def test_transformers_leave_groups_alone() -> None:
     dataset = _grouped()
     amos.splitters.Stratified().apply(dataset)
-    amos.transformers.OneHot().apply(dataset)
+    amos.encoders.OneHot().apply(dataset)
     assert 'court' in dataset.data.columns
     amos.models.Logit().apply(dataset)
     assert 'court' not in dataset.model.feature_names_in_

@@ -104,16 +104,19 @@ def test_every_name_in_the_library_is_unique() -> None:
 
 def test_every_concrete_operation_is_in_the_library() -> None:
     stored = set(chrisjen.library.all.values())
-    modules = (
-        amos.loaders, amos.cleaners, amos.mungers, amos.mergers,
-        amos.shapers, amos.describers, amos.splitters, amos.transformers,
-        amos.selectors, amos.samplers, amos.models, amos.validators, amos.metrics,
-        amos.evaluators, amos.plots, amos.inferers, amos.auto)
-    for module in modules:
+    # Each step's techniques say that they are in `amos.{step}`, wherever
+    # the step's package is.
+    names = (
+        'loaders', 'parsers', 'cleaners', 'mungers', 'mergers', 'shapers',
+        'describers', 'splitters', 'imputers', 'scalers', 'encoders',
+        'mixers', 'selectors', 'reducers', 'samplers', 'models',
+        'validators', 'metrics', 'evaluators', 'plots', 'inferers', 'auto')
+    for name in names:
+        module = getattr(amos, name)
         for _, kind in inspect.getmembers(module, inspect.isclass):
             if (
                 issubclass(kind, amos.Operation)
-                and kind.__module__ == module.__name__
+                and kind.__module__ in (module.__name__, f'amos.{name}')
                 and not inspect.isabstract(kind)
                 and abc.ABC not in kind.__bases__):
                 assert kind in stored, kind

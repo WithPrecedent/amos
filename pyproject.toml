@@ -182,7 +182,8 @@ addopts = "--showlocals"
 timeout = 600
 timeout_method = "thread"
 filterwarnings = ["ignore::DeprecationWarning"]
-pythonpath = ["src"]
+# The tests are in a folder for each stage, and import `conftest` from here.
+pythonpath = ["src", "tests"]
 
 [tool.ruff]
 extend-exclude = ["docs", "scripts", "site", "tests", ".*.*"]

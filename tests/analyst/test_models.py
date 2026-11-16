@@ -1,0 +1,449 @@
+"""Tests the models module."""
+
+from __future__ import annotations
+
+import importlib
+
+import numpy as np
+import pandas as pd
+import pytest
+from conftest import SEED, make_mixed, package_of, requires, techniques
+
+import amos
+from amos import models
+
+MODELS = techniques('model')
+
+
+def _needs(kind: type[amos.Model], item: amos.Dataset) -> dict[str, str]:
+    """Gives `item` what a model needs, and returns the parameters it needs.
+
+    Models of counts get a label of counts, models of groups get a column of
+    groups (the dataset's first group), and `wls` gets a column of weights.
+    """
+    rng = np.random.default_rng(SEED)
+    rows = len(item.data)
+    if kind.counts:
+        item.data['target'] = rng.poisson(
+            np.exp(0.3 * item.data['x0'].clip(-2, 2)))
+    if 'groups' in kind.column_parameters:
+        item.data['court'] = np.resize(list('abcdef'), rows)
+        item.groups = ['court']
+    if 'weights' in kind.column_parameters:
+        item.data['weight'] = rng.uniform(0.5, 2, rows)
+        return {'weights': 'weight'}
+    return {}
+
+
+def _check(item: amos.Dataset, task: str) -> None:
+    """Checks the predictions that a model stored in `item`."""
+    assert item.model is not None
+    assert list(item.predictions.index) == list(item.test)
+    assert item.predictions.name == 'target'
+    if task == 'classify':
+        assert set(item.predictions) <= set(item.classes)
+    record = item.history[-1]
+    assert record['task'] == task
+    assert record['rows'] == len(item.train)
+
+
+@pytest.mark.parametrize(('name', 'kind'), [
+    (n, k) for n, k in MODELS if 'classify' in k.tools])
+def test_classifiers(
+    name: str,
+    kind: type[amos.Model],
+    classified: amos.Dataset) -> None:
+    requires(package_of(kind))
+    kind().apply(classified, **_needs(kind, classified))
+    _check(classified, 'classify')
+    if classified.probabilities is not None:
+        assert list(classified.probabilities.columns) == [0, 1]
+        sums = classified.probabilities.sum(axis = 1)
+        assert np.allclose(sums, 1)
+
+
+@pytest.mark.parametrize(('name', 'kind'), [
+    (n, k) for n, k in MODELS if 'regress' in k.tools])
+def test_regressors(
+    name: str,
+    kind: type[amos.Model],
+    regressed: amos.Dataset) -> None:
+    requires(package_of(kind))
+    kind().apply(regressed, **_needs(kind, regressed))
+    _check(regressed, 'regress')
+    assert regressed.probabilities is None
+
+
+def test_a_model_for_another_task_raises(regressed: amos.Dataset) -> None:
+    with pytest.raises(ValueError, match = 'can classify'):
+        models.Logit().apply(regressed)
+
+
+def test_a_model_needs_a_label() -> None:
+    with pytest.raises(ValueError, match = 'needs a dataset with a label'):
+        models.Logit().apply(pd.DataFrame({'a': [1, 2]}))
+
+
+def _encoded(split: bool = True) -> amos.Dataset:
+    """Returns the mixed dataset, ready for any model."""
+    dataset = amos.Dataset(make_mixed(), label = 'outcome', seed = SEED)
+    amos.cleaners.DropColumns().apply(dataset, columns = ['joined'])
+    if split:
+        amos.splitters.Stratified().apply(dataset)
+    amos.imputers.MedianImpute().apply(dataset)
+    return amos.encoders.OneHot().apply(dataset)
+
+
+def test_models_without_a_split_predict_every_row() -> None:
+    dataset = _encoded(split = False)
+    models.Logit().apply(dataset)
+    assert len(dataset.predictions) == 200
+
+
+def test_models_explain_that_they_need_numbers() -> None:
+    dataset = amos.Dataset(make_mixed(), label = 'outcome')
+    with pytest.raises(ValueError, match = r"\['region', 'joined'\]"):
+        models.Logit().apply(dataset)
+
+
+def test_models_accept_categories() -> None:
+    requires('lightgbm')
+    dataset = amos.Dataset(make_mixed(), label = 'outcome', seed = SEED)
+    amos.cleaners.DropColumns().apply(dataset, columns = ['joined'])
+    amos.mungers.AutoCategorize().apply(dataset, columns = ['region'])
+    models.Lightgbm().apply(dataset, n_estimators = 5)
+    assert len(dataset.predictions) == 200
+
+
+def test_the_seed_makes_models_reproducible(classified: amos.Dataset) -> None:
+    first = models.RandomForest().apply(classified, n_estimators = 10)
+    probabilities = first.probabilities.copy()
+    models.RandomForest().apply(classified, n_estimators = 10)
+    pd.testing.assert_frame_equal(classified.probabilities, probabilities)
+    assert classified.model.random_state == SEED
+
+
+def test_contents_overrides_the_tools(classified: amos.Dataset) -> None:
+    technique = amos.Model(
+        name = 'tree', contents = 'sklearn.tree.ExtraTreeClassifier')
+    technique.apply(classified)
+    assert type(classified.model).__name__ == 'ExtraTreeClassifier'
+
+
+def test_grid_search(classified: amos.Dataset) -> None:
+    models.DecisionTree().apply(
+        classified, search = 'grid', max_depth = [1, 3], cv = 3)
+    table = classified.tables['decision_tree_search']
+    assert len(table) == 2
+    assert list(table['rank_test_score']) == [1, 2]
+    assert classified.model.max_depth in {1, 3}
+    assert classified.history[-1]['search'] == 'grid'
+
+
+def _grouped(item: amos.Dataset, size: int = 3) -> amos.Dataset:
+    """Gives `item` groups of `size` rows in a row, as votes of a case are."""
+    item.data['case'] = np.arange(len(item.data)) // size
+    item.groups = ['case']
+    return item
+
+
+def _divided(item: amos.Dataset, folds: list[tuple[np.ndarray, np.ndarray]]) -> int:
+    """Returns how many groups have training rows on both sides of a fold."""
+    cases = item.data.loc[item.y_train.index, 'case'].to_numpy()
+    return sum(
+        len(set(cases[train]) & set(cases[test])) for train, test in folds)
+
+
+def test_search_folds_keep_groups_together(classified: amos.Dataset) -> None:
+    _grouped(classified)
+    x, y = classified.x_train, classified.y_train
+    folds = models.DecisionTree()._folds(classified, x, y, 4)
+    assert len(folds) == 4
+    assert _divided(classified, folds) == 0
+    tested = np.sort(np.concatenate([test for _, test in folds]))
+    assert (tested == np.arange(len(x))).all()
+    # The classes are balanced across the folds of a classifier.
+    shares = [y.iloc[test].mean() for _, test in folds]
+    assert max(shares) - min(shares) < 0.25
+
+
+def test_search_folds_of_a_regression(regressed: amos.Dataset) -> None:
+    _grouped(regressed, size = 4)
+    folds = models.Ridge()._folds(
+        regressed, regressed.x_train, regressed.y_train, 3)
+    assert _divided(regressed, folds) == 0
+
+
+def test_search_folds_without_groups(classified: amos.Dataset) -> None:
+    assert models.DecisionTree()._folds(
+        classified, classified.x_train, classified.y_train, 3) == 3
+
+
+def test_search_folds_with_missing_groups(classified: amos.Dataset) -> None:
+    _grouped(classified)
+    classified.data['case'] = classified.data['case'].astype(float)
+    classified.data.loc[classified.data.index[:20], 'case'] = np.nan
+    folds = models.DecisionTree()._folds(
+        classified, classified.x_train, classified.y_train, 3)
+    assert _divided(classified, folds) == 0
+    assert sum(len(test) for _, test in folds) == len(classified.y_train)
+
+
+def test_grid_search_with_groups(classified: amos.Dataset) -> None:
+    _grouped(classified)
+    models.DecisionTree().apply(
+        classified, search = 'grid', max_depth = [1, 3], cv = 3)
+    assert len(classified.tables['decision_tree_search']) == 2
+    assert 'case' not in classified.model.feature_names_in_
+
+
+def test_optuna_search_with_groups(classified: amos.Dataset) -> None:
+    requires('optuna_integration')
+    _grouped(classified)
+    models.RandomForest().apply(
+        classified, search = 'optuna', n_estimators = [5, 20], n_iter = 3,
+        cv = 3, scoring = 'roc_auc')
+    assert len(classified.tables['random_forest_search']) == 3
+
+
+def test_random_search_draws_from_ranges(classified: amos.Dataset) -> None:
+    models.RandomForest().apply(
+        classified,
+        search = 'random',
+        n_estimators = [5, 20],
+        max_features = [0.3, 0.9],
+        n_iter = 4,
+        cv = 3,
+        scoring = 'roc_auc')
+    table = classified.tables['random_forest_search']
+    assert len(table) == 4
+    assert table['param_n_estimators'].between(5, 20).all()
+
+
+def test_lists_are_passed_as_they_are_without_a_search(
+    regressed: amos.Dataset) -> None:
+    models.NeuralNetwork().apply(
+        regressed, hidden_layer_sizes = [8, 4], max_iter = 50)
+    assert regressed.model.hidden_layer_sizes == [8, 4]
+
+
+def test_xgboost_classifies_text_labels() -> None:
+    requires('xgboost')
+    dataset = _encoded()
+    models.Xgboost().apply(dataset, n_estimators = 10)
+    assert isinstance(dataset.model, models.LabelCoded)
+    assert set(dataset.predictions) <= {'no', 'yes'}
+    assert list(dataset.probabilities.columns) == ['no', 'yes']
+    assert len(dataset.model.feature_importances_) == len(dataset.features)
+
+
+def test_label_coded_works_with_a_search() -> None:
+    requires('xgboost')
+    dataset = _encoded()
+    models.Xgboost().apply(
+        dataset, search = 'grid', max_depth = [2, 3], n_estimators = 5, cv = 3)
+    assert dataset.model.get_params()['estimator__max_depth'] in {2, 3}
+    assert 0 <= dataset.model.score(dataset.x_test, dataset.y_test) <= 1
+
+
+def test_label_coded_sets_parameters() -> None:
+    wrapper = models.LabelCoded(estimator = models.Statsmodel())
+    wrapper.set_params(estimator__family = 'poisson')
+    assert wrapper.estimator.family == 'poisson'
+    wrapper.set_params(estimator = models.Statsmodel(kind = 'glm'))
+    assert wrapper.kind == 'glm'
+    with pytest.raises(AttributeError):
+        _ = wrapper._private
+
+
+def test_ols_reports_coefficients(regressed: amos.Dataset) -> None:
+    requires('statsmodels')
+    models.OLS().apply(regressed)
+    table = regressed.tables['ols_coefficients']
+    assert list(table.index) == ['const', *regressed.features]
+    assert list(table.columns) == [
+        'coefficient', 'standard_error', 'statistic', 'p_value', 'ci_lower',
+        'ci_upper']
+    assert (table['ci_lower'] <= table['coefficient']).all()
+    assert regressed.model.get_params()['kind'] == 'ols'
+
+
+def test_glm_is_logistic_for_classification(
+    classified: amos.Dataset) -> None:
+    requires('statsmodels')
+    models.GLM().apply(classified)
+    assert classified.model.family == 'binomial'
+    assert 'glm_coefficients' in classified.tables
+    assert list(classified.probabilities.columns) == [0, 1]
+
+
+def test_glm_family_can_be_set(regressed: amos.Dataset) -> None:
+    requires('statsmodels')
+    models.GLM().apply(regressed, family = 'gamma')
+    assert regressed.model.family == 'gamma'
+    with pytest.raises(AttributeError, match = 'binomial'):
+        regressed.model.predict_proba(regressed.x_test)
+
+
+def test_binomial_needs_two_classes(multiclass: amos.Dataset) -> None:
+    requires('statsmodels')
+    with pytest.raises(ValueError, match = 'two classes'):
+        models.GLM().apply(multiclass)
+
+
+def test_statsmodel_without_a_constant(regressed: amos.Dataset) -> None:
+    requires('statsmodels')
+    models.OLS().apply(regressed, constant = False)
+    assert 'const' not in regressed.tables['ols_coefficients'].index
+    assert len(regressed.model.coef_) == len(regressed.features)
+
+
+def _courts(rows: int = 300) -> amos.Dataset:
+    """Returns a regression with judge and court groups (fixed effects)."""
+    rng = np.random.default_rng(9)
+    judge = rng.integers(0, 6, rows)
+    x = rng.normal(size = rows)
+    data = pd.DataFrame({
+        'x': x,
+        'judge': [f'j{j}' for j in judge],
+        'court': [f'c{j % 3}' for j in judge],
+        'target': 2.0 * x + judge + rng.normal(0, 1, rows)})
+    dataset = amos.Dataset(
+        data, label = 'target', seed = SEED, groups = ['judge', 'court'])
+    return amos.splitters.TrainTest().apply(dataset)
+
+
+def test_fixest_with_fixed_effects_and_clusters() -> None:
+    requires('pyfixest')
+    dataset = _courts()
+    models.Fixest().apply(dataset, fixed_effects = 'judge', cluster = 'court')
+    table = dataset.tables['fixest_coefficients']
+    # The judge effects are absorbed, so only "x" is a coefficient.
+    assert list(table.index) == ['x']
+    assert table.loc['x', 'ci_lower'] < 2.0 < table.loc['x', 'ci_upper']
+    assert dataset.model.fixed_effects == 'judge'
+    assert dataset.predictions.notna().all()
+
+
+def test_fixest_matches_pyfixest() -> None:
+    requires('pyfixest')
+    pyfixest = importlib.import_module('pyfixest')
+    dataset = _courts()
+    models.Fixest().apply(dataset, fixed_effects = 'judge', cluster = 'court')
+    data = dataset.data.loc[dataset.train]
+    expected = pyfixest.feols(
+        'target ~ x | judge', data = data, vcov = {'CRV1': 'court'}).tidy()
+    table = dataset.tables['fixest_coefficients']
+    assert table.loc['x', 'coefficient'] == pytest.approx(
+        expected.loc['x', 'Estimate'])
+    assert table.loc['x', 'standard_error'] == pytest.approx(
+        expected.loc['x', 'Std. Error'])
+
+
+def _separated_courts(rows: int = 300) -> pd.DataFrame:
+    """Returns a binary label in which every row of court "f" is 0."""
+    rng = np.random.default_rng(5)
+    x = rng.normal(size = rows)
+    court = np.repeat(list('abcdef'), rows // 6)
+    target = (x + rng.normal(size = rows) > 0).astype(int)
+    target[court == 'f'] = 0
+    return pd.DataFrame({'x': x, 'court': court, 'target': target})
+
+
+def test_fixest_predicts_levels_without_an_estimate_at_the_mean() -> None:
+    requires('pyfixest')
+    data = _separated_courts()
+    model = models.FixedEffects(fixed_effects = 'court', family = 'logit')
+    model.fit(data[['x', 'court']], data['target'])
+    # pyfixest drops court "f" (separation) and never saw court "z".
+    new = pd.DataFrame({'x': [0.5, 0.5, 0.5], 'court': ['a', 'f', 'z']})
+    probabilities = model.predict_proba(new)
+    assert np.isfinite(probabilities).all()
+    np.testing.assert_allclose(probabilities.sum(axis = 1), 1.0)
+    levels = model.effect_levels_[0]
+    assert set(levels) == set('abcde')
+    slope = model.coef_[0]
+    average = np.mean(list(levels.values()))
+    np.testing.assert_allclose(
+        probabilities[:, 1],
+        1 / (1 + np.exp(-(0.5 * slope + np.array(
+            [levels['a'], average, average])))))
+    assert set(model.predict(new)) <= {0, 1}
+
+
+def test_fixest_with_a_separated_level_can_be_scored() -> None:
+    requires('pyfixest')
+    dataset = amos.Dataset(
+        _separated_courts(), label = 'target', seed = SEED,
+        groups = ['court'])
+    amos.splitters.Stratified().apply(dataset)
+    models.Fixest().apply(dataset, fixed_effects = 'court')
+    assert dataset.probabilities.notna().all().all()
+    amos.evaluators.Scorecard().apply(
+        dataset, metrics = ['accuracy', 'roc_auc', 'log_loss'])
+    assert 0.5 < dataset.metrics['roc_auc'] <= 1
+
+
+def test_fixest_poisson_predicts_unseen_levels() -> None:
+    requires('pyfixest')
+    data = _separated_courts()
+    model = models.FixedEffects(fixed_effects = 'court', family = 'poisson')
+    model.fit(data[['x', 'court']], data['target'])
+    predicted = model.predict(
+        pd.DataFrame({'x': [0.0, 0.0], 'court': ['a', 'z']}))
+    assert np.isfinite(predicted).all()
+    assert (predicted > 0).all()
+
+
+def test_fixest_logit_for_classification(classified: amos.Dataset) -> None:
+    requires('pyfixest')
+    models.Fixest().apply(classified)
+    assert classified.model.family == 'logit'
+    assert list(classified.probabilities.columns) == [0, 1]
+
+
+def test_column_parameters_must_name_columns(regressed: amos.Dataset) -> None:
+    requires('pyfixest')
+    with pytest.raises(KeyError, match = 'fixed_effects column'):
+        models.Fixest().apply(regressed, fixed_effects = 'missing')
+
+
+def test_catboost_uses_categories_directly() -> None:
+    requires('catboost')
+    dataset = amos.Dataset(make_mixed(), label = 'outcome', seed = SEED)
+    amos.cleaners.DropColumns().apply(dataset, columns = ['joined'])
+    amos.mungers.AutoCategorize().apply(dataset, columns = ['region'])
+    amos.splitters.Stratified().apply(dataset)
+    models.Catboost().apply(dataset, iterations = 20)
+    assert dataset.model.get_params()['cat_features'] == ['region']
+    assert set(dataset.predictions) <= {'no', 'yes'}
+
+
+def test_optuna_search(classified: amos.Dataset) -> None:
+    requires('optuna_integration')
+    models.RandomForest().apply(
+        classified,
+        search = 'optuna',
+        n_estimators = [5, 20],
+        max_features = [0.3, 0.9],
+        criterion = ['gini', 'entropy'],
+        n_iter = 4,
+        cv = 3)
+    table = classified.tables['random_forest_search']
+    assert len(table) == 4
+    assert {'param_n_estimators', 'param_criterion'} <= set(table.columns)
+    assert table['param_n_estimators'].between(5, 20).all()
+    assert list(table['rank_test_score'])[0] == 1
+    assert classified.history[-1]['search'] == 'optuna'
+
+
+def test_lightgbm_is_quiet_unless_asked(classified: amos.Dataset) -> None:
+    requires('lightgbm')
+    clone = importlib.import_module('sklearn.base').clone
+    # lightgbm takes "verbose" only through `**kwargs`, so it must be passed
+    # even though its signature does not name it.
+    models.Lightgbm().apply(classified, n_estimators = 5)
+    assert classified.model.get_params()['verbose'] == -1
+    assert clone(classified.model).get_params()['verbose'] == -1
+    models.Lightgbm().apply(classified, n_estimators = 5, verbose = 0)
+    assert classified.model.get_params()['verbose'] == 0
