@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.8.1
 
 * A test that runs for more than 10 minutes now fails (with pytest-timeout,
   a new development dependency) and prints the stack of every thread, and a
