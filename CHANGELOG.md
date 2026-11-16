@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
   a new development dependency) and prints the stack of every thread, and a
   CI test job stops after 30 minutes. Some macOS jobs had deadlocked near the
   end of the tests and held their runner for GitHub's limit of 6 hours.
+* CI's macOS jobs run OpenMP with one thread (`OMP_NUM_THREADS=1`). The
+  timeout named the test that deadlocked there, lightgbm's classifier in
+  `test_models.py`, likely because Homebrew's OpenMP and the copy that
+  scikit-learn brings were both loaded in one test process.
 * `amos` requires chrisjen 0.5.0 and bobbie 0.5.0, and calls their public
   helpers (such as `chrisjen.utilities.listify_names` and
   `bobbie.options.file_type`) directly. The wrappers of them in
