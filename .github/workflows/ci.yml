@@ -57,6 +57,17 @@ jobs:
     - name: install dependencies
       run: uv sync
 
+    # scikit-learn (and diptest) bring their own copy of OpenMP, while
+    # xgboost and lightgbm load Homebrew's. Two copies in one process made
+    # lightgbm deadlock or crash in some test runs, so every package's copy
+    # becomes a link to Homebrew's, and the process loads only one.
+    - name: share one OpenMP on macOS
+      if: runner.os == 'macOS'
+      run: |
+        omp="$(brew --prefix libomp)/lib/libomp.dylib"
+        find .venv -path '*/.dylibs/libomp.dylib' -print \
+          -exec ln -sf "$omp" {} \;
+
     - name: run pre-commit
       run: uv run pre-commit run -a --show-diff-on-failure
 
@@ -78,6 +89,10 @@ jobs:
     - uses: astral-sh/setup-uv@v10.3.2
     - run: brew install libomp
     - run: uv sync
+    - run: |
+        omp="$(brew --prefix libomp)/lib/libomp.dylib"
+        find .venv -path '*/.dylibs/libomp.dylib' -print \
+          -exec ln -sf "$omp" {} \;
     - name: OpenMP files in the environment
       run: |
         find .venv \( -name '*omp*.dylib' -o -name '*omp*.so' \) -print
