@@ -49,15 +49,10 @@ jobs:
       uses: astral-sh/setup-uv@v10.3.2
 
     # xgboost and lightgbm need OpenMP, which macOS does not include. The
-    # README's study uses xgboost, so its example fails without it. Some
-    # packages (such as scikit-learn) bring their own copy of OpenMP, and with
-    # two copies in one test process, lightgbm's classifier sometimes
-    # deadlocked. One OpenMP thread avoids the deadlock.
+    # README's study uses xgboost, so its example fails without it.
     - name: install OpenMP on macOS
       if: runner.os == 'macOS'
-      run: |
-        brew install libomp
-        echo "OMP_NUM_THREADS=1" >> "$GITHUB_ENV"
+      run: brew install libomp
 
     - name: install dependencies
       run: uv sync
@@ -67,6 +62,54 @@ jobs:
 
     - name: run tests
       run: uv run pytest -n auto tests
+
+  # TEMPORARY: lists the OpenMP libraries that the packages link and load on
+  # macOS, where lightgbm has crashed or deadlocked in its OpenMP code.
+  openmp_diagnostic:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    env:
+      UV_PYTHON: "3.13"
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.13"
+    - uses: astral-sh/setup-uv@v10.3.2
+    - run: brew install libomp
+    - run: uv sync
+    - name: OpenMP files in the environment
+      run: |
+        find .venv \( -name '*omp*.dylib' -o -name '*omp*.so' \) -print
+        ls -l /opt/homebrew/opt/libomp/lib || true
+    - name: OpenMP that each package links
+      run: |
+        for f in $(find .venv \( -name 'lib_lightgbm*' -o -name 'libxgboost*' \
+            -o -name '_openmp_helpers*.so' -o -name 'libtorch_cpu*' \)); do
+          echo "== $f"; otool -L "$f" | grep -i -E 'omp|rpath' || true
+          otool -l "$f" | grep -A2 LC_RPATH | grep path || true
+        done
+    - name: OpenMP loaded after fitting each model
+      run: |
+        uv run python - <<'EOF'
+        import json
+        import numpy as np
+        import threadpoolctl
+        from sklearn.ensemble import HistGradientBoostingClassifier
+        x = np.random.default_rng(0).random((500, 5))
+        y = (x[:, 0] > 0.5).astype(int)
+        HistGradientBoostingClassifier(max_iter = 5).fit(x, y)
+        print('sklearn', json.dumps(threadpoolctl.threadpool_info(), indent = 1))
+        import lightgbm
+        lightgbm.LGBMClassifier(n_estimators = 5, verbose = -1).fit(x, y)
+        import xgboost
+        xgboost.XGBClassifier(n_estimators = 5).fit(x, y)
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            print('torch is not installed')
+        print('all', json.dumps(threadpoolctl.threadpool_info(), indent = 1))
+        EOF
 
   lint_and_format:
     runs-on: ubuntu-latest
