@@ -7,6 +7,7 @@ import dataclasses
 import re
 import warnings
 from collections.abc import Iterator, Mapping
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -43,15 +44,12 @@ def opinions() -> amos.Dataset:
 
 
 @pytest.fixture(autouse = True)
-def restore_rulebooks() -> Iterator[None]:
-    """Removes the rulebooks and kinds of rules that a test registers."""
-    saved = dict(_rulebooks._RULEBOOKS)
-    kinds = dict(parsers_base._RULE_KINDS)
+def restore_library() -> Iterator[None]:
+    """Removes the parsers (and so rulebooks and kinds) that a test defines."""
+    saved = set(amos.library.all)
     yield
-    _rulebooks._RULEBOOKS.clear()
-    _rulebooks._RULEBOOKS.update(saved)
-    parsers_base._RULE_KINDS.clear()
-    parsers_base._RULE_KINDS.update(kinds)
+    for name in set(amos.library.all) - saved:
+        amos.library.delete(name)
 
 
 def _parse(dataset: amos.Dataset, *rules: dict) -> pd.DataFrame:
@@ -256,35 +254,49 @@ def test_rules_in_courtpy_layout(
     assert data['opinion'].tolist()[1] == 'OPINION: Affirmed.   5 F.3d 2.'
 
 
-def test_registered_rulebooks(
+def test_subclasses_of_parse_all_are_rulebooks(
     opinions: amos.Dataset,
     tmp_path: pathlib.Path) -> None:
     path = tmp_path / 'flags.csv'
     path.write_text(
         'kind,name,pattern\nflags,reversed,REVERSE\n', encoding = 'utf-8')
-    amos.register_rulebook('flags', path)
-    amos.register_rulebook('all', [
-        'flags', {'kind': 'counts', 'name': 'words', 'pattern': r'\S+'}])
-    book = parsers.Rulebook.create('all')
-    assert len(book) == 2
-    assert book.name == 'all'
-    settings = {
-        'general': {'seed': 43},
-        'study_project': {'study_workers': 'wrangler'},
-        'wrangler': {'techniques': 'parse_all'},
-        'parse_all_parameters': {'rules': 'all'}}
-    project = amos.Project.create(settings, item = opinions.data)
-    result = project.result.data
-    assert result['reversed'].tolist() == [True, False, False, False]
-    assert result['words'].tolist()[2:] == [3, 0]
-    assert amos.library.classify('parse_all') == 'parser'
-    amos.register_rulebook('loop', ['loop'])
+
+    @dataclasses.dataclass
+    class ParseOutcomes(parsers.ParseAll):
+        rules: ClassVar[Any] = path
+
+    @dataclasses.dataclass
+    class ParseEverything(parsers.ParseAll):
+        rules: ClassVar[Any] = [
+            'outcomes', {'kind': 'counts', 'name': 'words', 'pattern': r'\S+'}]
+
+    for source in ('everything', 'parse_everything', ParseEverything):
+        book = parsers.Rulebook.create(source)
+        assert len(book) == 2
+        assert book.name == 'everything'
+    assert amos.library.classify('parse_everything') == 'parser'
+    for techniques, parameters in [
+        ('parse_all', {'rules': 'everything'}), ('parse_everything', {})]:
+        settings = {
+            'general': {'seed': 43},
+            'study_project': {'study_workers': 'wrangler'},
+            'wrangler': {'techniques': techniques},
+            f'{techniques}_parameters': parameters}
+        project = amos.Project.create(settings, item = opinions.data.copy())
+        result = project.result.data
+        assert result['reversed'].tolist() == [True, False, False, False]
+        assert result['words'].tolist()[2:] == [3, 0]
+
+    @dataclasses.dataclass
+    class ParseLoop(parsers.ParseAll):
+        rules: ClassVar[Any] = ['loop']
+
     with pytest.raises(ValueError, match = 'names itself'):
         parsers.Rulebook.create('loop')
-    with pytest.raises(FileNotFoundError, match = 'registered rulebook'):
+    with pytest.raises(FileNotFoundError, match = 'or a rulebook'):
         parsers.Rulebook.create('missing')
-    with pytest.raises(ValueError, match = 'needs a name'):
-        amos.register_rulebook(' ', path)
+    with pytest.raises(ValueError, match = 'has no rules'):
+        parsers.Rulebook.create(parsers.ParseAll)
 
 
 @pytest.mark.parametrize(('row', 'message'), [
@@ -426,7 +438,7 @@ def test_parse_split_makes_any_number_of_pieces(
 def test_pattern_parsers_check_their_parameters(
     opinions: amos.Dataset) -> None:
     before = opinions.data.copy()
-    for kind in parsers_base._RULE_KINDS.values():
+    for kind in parsers_base._rule_kinds().values():
         kind().apply(opinions)
     parsers.ParseAll().apply(opinions)
     pd.testing.assert_frame_equal(opinions.data, before)
@@ -441,13 +453,15 @@ def test_pattern_parsers_check_their_parameters(
             opinions, column = 'missing', name = 'x', pattern = 'a')
 
 
-def test_registered_kinds_of_rules(
+def test_pattern_parsers_are_kinds_of_rules(
     opinions: amos.Dataset,
     tmp_path: pathlib.Path) -> None:
 
     @dataclasses.dataclass
     class ParseInitials(parsers.PatternParser):
         """Makes the first letter of each match, joined (for the tests)."""
+
+        rule_aliases: ClassVar[tuple[str, ...]] = ('Map',)
 
         def find(
             self,
@@ -462,11 +476,16 @@ def test_registered_kinds_of_rules(
                 lambda m: ''.join(w[0] for w in m) if isinstance(m, list)
                 else None).astype('str')
 
+    @dataclasses.dataclass
+    class ParseFirstLetters(ParseInitials):
+        """Inherits the search of `ParseInitials`, but not its aliases."""
+
     assert ParseInitials.kind() == 'initials'
-    with pytest.raises(ValueError, match = 'is not one of'):
-        parsers.Rulebook.create([{'kind': 'initials', 'pattern': 'a'}])
-    amos.register_rule_kind('Initials', ParseInitials)
-    amos.register_rule_kind('map', ParseInitials)
+    kinds = parsers_base._rule_kinds()
+    assert kinds['initials'] is ParseInitials
+    assert kinds['first_letters'] is ParseFirstLetters
+    # An alias takes the place of an old kind ("map" was "category").
+    assert kinds['map'] is ParseInitials
     path = tmp_path / 'rules.csv'
     path.write_text(
         'kind,name,pattern\ninitials,initials,[A-Z]\\w+\nmap,caps,[A-Z]+\n',
@@ -477,10 +496,9 @@ def test_registered_kinds_of_rules(
     assert ParseInitials().apply(
         opinions.data, column = 'court', name = 'c',
         pattern = '[A-Z]').data['c'].tolist()[:3] == ['FC', '', 'NC']
-    with pytest.raises(TypeError, match = 'subclass of PatternParser'):
-        amos.register_rule_kind('x', parsers.ParseAll)  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match = 'needs a name'):
-        amos.register_rule_kind(' ', ParseInitials)
+    amos.library.delete('parse_initials')
+    with pytest.raises(ValueError, match = 'is not one of'):
+        parsers.Rulebook.create([{'kind': 'initials', 'pattern': 'a'}])
 
 
 def test_any_parser_can_be_written_without_rules(

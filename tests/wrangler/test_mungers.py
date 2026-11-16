@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -10,7 +11,6 @@ import pytest
 
 import amos
 from amos import mungers
-from amos.wrangler.mungers import _values as mungers_values
 
 
 def test_auto_categorize(mixed: amos.Dataset) -> None:
@@ -231,29 +231,47 @@ def test_set_kinds_checks_dummies_and_kinds() -> None:
         mungers.SetKinds().apply(data.copy(), dummy = 'missing')
 
 
-def test_map_values_uses_registered_maps() -> None:
+def test_map_values_subclasses_map_their_columns() -> None:
     data = pd.DataFrame({
         'offender_race': ['W', 'B', None],
         'victim_race': pd.Categorical(['B', 'B', 'W']),
-        'state': ['ny', 'ca', 'tx']})
+        'state': ['ny', 'ca', 'tx'],
+        'city': ['a', 'b', 'c']})
+    races = {'W': 'white', 'B': 'black'}
+
+    @dataclasses.dataclass
+    class MapCodes(mungers.MapValues):
+        value_maps: ClassVar[dict[str, Any]] = {
+            'offender_race': races, 'victim_race': races,
+            'state': str.upper, 'county': str.upper}
+
+    @dataclasses.dataclass
+    class MapBadCodes(mungers.MapValues):
+        value_maps: ClassVar[dict[str, Any]] = {'state': 5}
+
     try:
-        amos.register_value_map(
-            ['offender_race', 'victim_race'], {'W': 'white', 'B': 'black'})
-        amos.register_value_map('state', str.upper)
-        result = mungers.MapValues().apply(
-            data, columns = ['offender_race', 'victim_race', 'state'])
-        changed = result.data
-        assert changed['offender_race'].tolist()[:2] == ['white', 'black']
-        assert pd.isna(changed['offender_race'].iloc[2])
-        assert isinstance(changed['victim_race'].dtype, pd.CategoricalDtype)
-        assert changed['victim_race'].tolist() == ['black', 'black', 'white']
-        assert changed['state'].tolist() == ['NY', 'CA', 'TX']
+        assert amos.library.classify('map_codes') == 'munger'
+        for columns in (['offender_race', 'victim_race', 'state'], None):
+            changed = MapCodes().apply(data.copy(), columns = columns).data
+            assert changed['offender_race'].tolist()[:2] == ['white', 'black']
+            assert pd.isna(changed['offender_race'].iloc[2])
+            assert isinstance(
+                changed['victim_race'].dtype, pd.CategoricalDtype)
+            assert changed['victim_race'].tolist() == [
+                'black', 'black', 'white']
+            assert changed['state'].tolist() == ['NY', 'CA', 'TX']
+            assert changed['city'].tolist() == ['a', 'b', 'c']
         with pytest.raises(TypeError, match = 'a dict or a function'):
-            amos.register_value_map('state', 5)  # type: ignore[arg-type]
+            MapBadCodes().apply(data.copy())
+        with pytest.raises(KeyError, match = 'value_maps'):
+            MapCodes().apply(data.copy(), columns = 'city')
     finally:
-        mungers_values._VALUE_MAPS.clear()
-    with pytest.raises(KeyError, match = 'register_value_map'):
+        amos.library.delete('map_codes')
+        amos.library.delete('map_bad_codes')
+    with pytest.raises(KeyError, match = 'value_maps'):
         mungers.MapValues().apply(data, columns = 'state')
+    unchanged = mungers.MapValues().apply(data.copy()).data
+    pd.testing.assert_frame_equal(unchanged, data)
 
 
 def test_mungers_check_their_columns(cases: amos.Dataset) -> None:

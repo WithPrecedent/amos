@@ -36,7 +36,7 @@ can also be `dict`s in settings, with the same keys. The columns are:
 | --- | --- |
 | `column` | The columns of text to search, separated by commas. Defaults to the parser's "column" (such as "text") if blank. |
 | `name` | The column that the rule makes (or adds to). A `split` rule names two or more, separated by commas. It is blank for a `replace` rule that changes the text it searches, and optional for a `fields` rule (whose columns are named for the labels in the text) and for a `match` or `matches` rule whose pattern has named groups. |
-| `kind` | What the rule does: one of the kinds above, or one registered with `register_rule_kind`. |
+| `kind` | What the rule does: one of the kinds above, or the kind of a pattern parser of your own. |
 | `pattern` | A regular expression to search for. |
 | `value` | What a `category`, `categories`, or `replace` rule writes. Otherwise blank. |
 | `flags` | Any of "ignorecase", "dotall" (so "." also matches line breaks), "multiline" (so "^" and "$" match at each line), and "verbose", separated by commas. Optional. |
@@ -60,8 +60,10 @@ TRUE or FALSE in "ignorecase" and "dotall" columns, and the kinds "label",
 the rules they stand for.
 
 To write a parser, subclass `Parser` and write `parse`. To write a parser
-that can also be a kind of rule, subclass `PatternParser`, write `find`, and
-name the kind with `register_rule_kind`.
+that can also be a kind of rule, subclass `PatternParser` and write `find`:
+the subclass is then a kind of rule, named for the class (`ParseInitials` is
+"initials"). To name a rulebook, so that settings and other rulebooks can
+use it, subclass `ParseAll` and set its `rules` (see `ParseAll`).
 
 Contents:
     Parser: base class for techniques that turn text into data.
@@ -82,8 +84,6 @@ Contents:
     ParseSplit: splits text into columns where a pattern matches.
     ParseAll: finds information in text with a rulebook.
     Rulebook: an ordered collection of rules.
-    register_rule_kind: names a pattern parser as a kind of rule.
-    register_rulebook: registers the rules of a rulebook under a name.
 
 """
 
@@ -106,9 +106,7 @@ __all__: list[str] = [
     'Parser',
     'PatternParser',
     'Rule',
-    'Rulebook',
-    'register_rule_kind',
-    'register_rulebook']
+    'Rulebook']
 
 from ._base import Parser, PatternParser, Rule
 from ._categories import ParseCategories, ParseCategory
@@ -121,12 +119,7 @@ from ._matches import (
     ParseReplace,
     ParseSplit,
 )
-from ._rulebooks import (
-    ParseAll,
-    Rulebook,
-    register_rule_kind,
-    register_rulebook,
-)
+from ._rulebooks import ParseAll, Rulebook
 
 # The public names say that they are in `amos.parsers` (rather than in the
 # private module that defines them, or in `amos.wrangler.parsers`), where they

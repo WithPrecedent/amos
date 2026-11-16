@@ -2,14 +2,10 @@
 
 Contents:
     _HOWS: the ways that `CombineFlags` can combine flags.
-    _VALUE_MAPS: columns of data mapped to the values or function that
-        `MapValues` uses for them when it is not given "values" (see
-        `register_value_map`).
     Coalesce: takes the first value that is not missing from several columns.
     CombineFlags: combines flags into one.
     DeriveColumns: makes columns from expressions of other columns.
     MapValues: replaces values with others.
-    register_value_map: registers the values that `MapValues` gives columns.
 
 """
 
@@ -17,9 +13,8 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import Any, ClassVar
 
-import camina
 import numpy as np
 import pandas as pd
 
@@ -28,9 +23,6 @@ from ._base import Munger
 
 # The ways that `CombineFlags` can combine flags.
 _HOWS: frozenset[str] = frozenset({'all', 'any', 'count'})
-# Columns of data mapped to the values or function that `MapValues` uses for
-# them when it is not given "values" (see `register_value_map`).
-_VALUE_MAPS: dict[str, Mapping[Any, Any] | Callable[[Any], Any]] = {}
 
 
 @dataclasses.dataclass
@@ -201,12 +193,29 @@ class MapValues(Munger):
     `parse_replace` to change part of the text). Other values are kept. A
     categorical column stays categorical.
 
-    Without "values", each column in "columns" is changed by the map or
-    function registered for it with `register_value_map` (so a package can
-    register the meanings of its codes once, and the settings only name the
-    columns). A function is applied to each value that is not missing.
+    Without "values", each column is changed by its map or function in
+    `value_maps`, which a subclass sets. A package built on `amos` can give
+    the meanings of its codes once (such as "W" for "white"), and every
+    project can then map them by naming the subclass, with or without
+    "columns". A function is applied to each value that is not missing. For
+    example:
+
+    ```py
+    @dataclasses.dataclass
+    class MapRaceCodes(amos.mungers.MapValues):
+        value_maps: ClassVar[dict[str, Any]] = {
+            'offender_race': {'W': 'white', 'B': 'black'},
+            'victim_race': {'W': 'white', 'B': 'black'},
+            'state': str.upper}
+    ```
 
     """
+
+    # The map (a `dict` of values to the values that replace them) or the
+    # function of each column, which `munge` uses when it is not given
+    # "values".
+    value_maps: ClassVar[
+        Mapping[str, Mapping[Any, Any] | Callable[[Any], Any]]] = {}
 
     def munge(
         self,
@@ -220,16 +229,19 @@ class MapValues(Munger):
         Args:
             data: the data to change.
             columns: columns to change. Defaults to `None`, which changes
-                every column if `values` is given, and nothing otherwise.
+                every column if `values` is given, and otherwise every column
+                of `value_maps` that is in the data.
             values: `dict` mapping values to the values that replace them.
                 `None` makes a value missing. Defaults to `None`, in which
-                case each column in `columns` is changed by the map or
-                function registered for it (see `register_value_map`).
+                case each column is changed by its map or function in
+                `value_maps`.
             **kwargs: not used.
 
         Raises:
             KeyError: if `values` is not given and a column in `columns` has
-                no registered map or function.
+                no map or function in `value_maps`.
+            TypeError: if a map in `value_maps` is neither a mapping nor
+                callable.
 
         Returns:
             The data, with the new values. The type of a changed column is
@@ -242,58 +254,29 @@ class MapValues(Munger):
                 data[column] = _recode(data[column], mapping)
             return data
         if columns is None:
-            return data
-        names = utilities.select_columns(data, columns)
-        unknown = [c for c in names if c not in _VALUE_MAPS]
+            names = [c for c in self.value_maps if c in data.columns]
+        else:
+            names = utilities.select_columns(data, columns)
+        unknown = [c for c in names if c not in self.value_maps]
         if unknown:
             message = (
-                f'map_values has no values for the columns {unknown}: pass '
-                f'"values" or register them with amos.register_value_map'
+                f'{self.name} has no values for the columns {unknown}: pass '
+                f'"values" or subclass MapValues with "value_maps" for them'
             )
             raise KeyError(message)
         for column in names:
-            registered = _VALUE_MAPS[column]
-            if isinstance(registered, Mapping):
-                data[column] = _recode(data[column], dict(registered))
+            mapped = self.value_maps[column]
+            if isinstance(mapped, Mapping):
+                data[column] = _recode(data[column], dict(mapped))
+            elif callable(mapped):
+                data[column] = data[column].map(mapped, na_action = 'ignore')
             else:
-                data[column] = data[column].map(
-                    registered, na_action = 'ignore')
+                message = (
+                    f'the values for {column!r} must be a dict or a '
+                    f'function, not {type(mapped).__name__}'
+                )
+                raise TypeError(message)
         return data
-
-
-""" Public Functions """
-
-
-def register_value_map(
-    columns: str | Sequence[str],
-    values: Mapping[Any, Any] | Callable[[Any], Any]) -> None:
-    """Registers the values that `map_values` gives `columns`.
-
-    `map_values` uses the map or function registered for a column when its
-    settings name the column but give no "values". A package built on `amos`
-    can register the meanings of its codes once (such as "W" for "white"), so
-    that every project can map them by naming the columns. A column that is
-    registered again gets the new map or function.
-
-    Args:
-        columns: a column name, or a sequence of them, that `values` is for.
-        values: a `dict` mapping values to the values that replace them (other
-            values are kept), or a function that takes a value and returns
-            the value that replaces it (which is not applied to missing
-            values).
-
-    Raises:
-        TypeError: if `values` is neither a mapping nor callable.
-
-    """
-    if not isinstance(values, Mapping) and not callable(values):
-        message = (
-            f'the values for {columns!r} must be a dict or a function, not '
-            f'{type(values).__name__}'
-        )
-        raise TypeError(message)
-    for column in camina.listify(columns):
-        _VALUE_MAPS[column] = values
 
 
 """ Private Functions """

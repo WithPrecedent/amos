@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.9.0
 
 * The source follows the stages of a project. `src/amos` has a folder for
   each stage (`wrangler`, `explorer`, `analyst`, `critic`, and `artist`),
@@ -52,11 +52,19 @@ All notable changes to this project will be documented in this file.
   those searches, named by its kind (`flags`, `counts`, `category`,
   `categories`, `match`, `matches`, `split`, `names`, `fields`, or
   `replace`). Each rule searches every row at once, and the columns that a
-  rulebook makes are added all at once. `amos.register_rulebook` names a
-  rulebook so that settings can use it, and CSV files in an older layout of
-  rules are read as they are.
-* `amos.register_rule_kind` makes a pattern parser of your own a kind of
-  rule, so rulebooks can name it in their "kind" column.
+  rulebook makes are added all at once. A subclass of `ParseAll` that sets
+  its `rules` is a named rulebook: a technique of its own (such as
+  `parse_federal`) and a name that settings and other rulebooks can use
+  (`rules = federal`). CSV files in an older layout of rules are read as
+  they are.
+* Every pattern parser is a kind of rule, named for its class without
+  "Parse" (`ParseInitials` is "initials"), so subclassing `PatternParser` is
+  all it takes for rulebooks to name a parser of your own in their "kind"
+  column. Its `rule_aliases` give the kind other names.
+* **Breaking:** `amos.register_value_map` is gone. A subclass of `MapValues`
+  sets the map or function of each column in its `value_maps`, and settings
+  name the subclass (such as `map_race_codes`). Without "columns", it maps
+  every column of `value_maps` that is in the data.
 * The mungers that searched text for patterns (`flag_patterns`,
   `count_patterns`, `map_patterns`, `extract_pattern`, `extract_all`,
   `split_text`, and `replace_text`) are gone: use the parsers instead.

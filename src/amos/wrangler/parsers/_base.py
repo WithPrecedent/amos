@@ -7,7 +7,6 @@ Contents:
     _KIND_ALIASES: kinds of rules in the older layout and the first layout of
         this module, mapped to the kinds they stand for.
     _OLD_FLAGS: columns of flags in the older layout, which hold TRUE or FALSE.
-    _RULE_KINDS: the pattern parser of each kind of rule, by the kind.
     _SEPARATOR: what separates several values in one cell of the data.
     _TRUE: words (in lower case) that mean true in the older flag columns.
     Parser: base class for techniques that turn text into data.
@@ -26,6 +25,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, ClassVar
 
 import camina
+import chrisjen
 import numpy as np
 import pandas as pd
 
@@ -55,8 +55,6 @@ _KIND_ALIASES: dict[str, str] = {
     'remove': 'replace',
     'section': 'match'}
 _OLD_FLAGS: tuple[str, ...] = ('dotall', 'ignorecase')
-# The built-in kinds are added after their parsers are defined.
-_RULE_KINDS: dict[str, type[PatternParser]] = {}
 _SEPARATOR: str = ', '
 _TRUE: frozenset[str] = frozenset({'true', 't', 'yes', 'y', '1'})
 
@@ -120,8 +118,15 @@ class PatternParser(Parser, abc.ABC):
 
     Each pattern parser is one kind of search, which a workflow can apply on
     its own (with the parameters of `parse`) or name as the kind of a rule in
-    a rulebook (see `ParseAll` and `register_rule_kind`). Either way, the
-    search is described by a `Rule`, which `find` applies.
+    a rulebook (see `ParseAll`). Either way, the search is described by a
+    `Rule`, which `find` applies.
+
+    Every subclass is a kind of rule, named by `kind`: the snake case name of
+    the class without "parse_" (`ParseFlags` is "flags"). Defining the
+    subclass is all it takes for rulebooks to name it. Set `rule_aliases` to
+    give the kind other names, such as an old name or the name of a kind that
+    the subclass replaces. Aliases are not inherited, and they take the
+    place of a kind of the same name.
 
     A subclass writes `find`. It can also change what a rule needs: set
     `nameless` if the search can make columns without a name, and override
@@ -139,6 +144,9 @@ class PatternParser(Parser, abc.ABC):
 
     # Whether a rule of this kind can leave its name blank.
     nameless: ClassVar[bool] = False
+    # Other names of the kind, which rulebooks can use in its place. Only the
+    # class that sets them has them.
+    rule_aliases: ClassVar[tuple[str, ...]] = ()
 
     """ Required Methods """
 
@@ -233,14 +241,9 @@ class PatternParser(Parser, abc.ABC):
         """Returns the kind of rule that this parser is.
 
         Returns:
-            The kind that the class is registered as (see
-                `register_rule_kind`), or the snake case name of the class
-                without "parse_" if it is not registered.
+            The snake case name of the class without "parse_".
 
         """
-        for kind, parser in _RULE_KINDS.items():
-            if parser is cls:
-                return kind
         return str(camina.snakify(cls.__name__)).removeprefix('parse_')
 
     @classmethod
@@ -387,7 +390,7 @@ class Rule:
         origin: where the rule came from (such as a file and row), for
             messages. Defaults to an empty `str`.
         parser: the pattern parser that applies the rule. Defaults to `None`,
-            in which case it is the parser registered for `kind`.
+            in which case it is the pattern parser of `kind`.
 
     """
 
@@ -425,10 +428,11 @@ class Rule:
         """
         cells = _translate(row)
         kind = str(cells.get('kind') or '').strip().lower()
-        if kind not in _RULE_KINDS:
-            message = f'the kind {kind!r} is not one of {sorted(_RULE_KINDS)}'
+        kinds = _rule_kinds()
+        if kind not in kinds:
+            message = f'the kind {kind!r} is not one of {sorted(kinds)}'
             raise ValueError(message)
-        return _RULE_KINDS[kind].make_rule(
+        return kinds[kind].make_rule(
             cells.get('pattern'),
             columns = cells.get('column'),
             names = cells.get('name'),
@@ -490,19 +494,19 @@ class Rule:
             column: the column of text to search if the rule has no
                 `columns`. Defaults to "text".
             parser: the parser that applies the rule. Defaults to `None`, in
-                which case it is an instance of `parser` or of the parser
-                registered for `kind`.
+                which case it is an instance of `parser` or of the pattern
+                parser of `kind`.
 
         Raises:
             ValueError: if no parser applies the rule.
 
         """
         if parser is None:
-            kind = self.parser or _RULE_KINDS.get(self.kind)
+            kind = self.parser or _rule_kinds().get(self.kind)
             if kind is None:
                 message = (
-                    f'{self.description}: no parser is registered for the '
-                    f'kind {self.kind!r}'
+                    f'{self.description}: no pattern parser is the kind '
+                    f'{self.kind!r}'
                 )
                 raise ValueError(message)
             parser = kind()
@@ -837,6 +841,28 @@ def _pattern_values(pattern: Any, value: Any) -> list[tuple[Any, Any]]:
     return [(p, value) for p in pattern]
 
 
+def _rule_kinds() -> dict[str, type[PatternParser]]:
+    """Returns the pattern parser of each kind of rule, by the kind.
+
+    Every pattern parser in the library (every subclass of `PatternParser`)
+    is the kind that `PatternParser.kind` names, and the kind of each of its
+    own `rule_aliases`. An alias takes the place of a kind of the same name.
+
+    Returns:
+        The pattern parsers, by their kinds and aliases.
+
+    """
+    layer = chrisjen.library.get_genre(PatternParser)
+    parsers = [
+        p for p in chrisjen.utilities.flatten_dict(layer).values()
+        if isinstance(p, type) and issubclass(p, PatternParser)]
+    kinds: dict[str, type[PatternParser]] = {p.kind(): p for p in parsers}
+    for parser in parsers:
+        for alias in vars(parser).get('rule_aliases', ()):
+            kinds[str(alias).strip().lower()] = parser
+    return kinds
+
+
 def _settle(values: np.ndarray, index: pd.Index) -> pd.Series:
     """Returns values as a column, in the type that suits them.
 
@@ -901,9 +927,9 @@ def _translate(row: Mapping[str, Any]) -> dict[str, Any]:
 
     The columns of the older layout ("target", "variable", and TRUE or FALSE
     in "ignorecase" and "dotall") become those they stand for, and old kinds
-    (see `_KIND_ALIASES`) become the kinds they stand for, unless a kind of
-    the same name is registered. A "remove" rule replaces its matches with a
-    space, as the older layout did.
+    (see `_KIND_ALIASES`) become the kinds they stand for, unless a pattern
+    parser is (or has an alias of) the same name. A "remove" rule replaces
+    its matches with a space, as the older layout did.
 
     Args:
         row: the cells of a rule, by the names of their columns.
@@ -922,7 +948,7 @@ def _translate(row: Mapping[str, Any]) -> dict[str, Any]:
             flags.append(name)
     cells['flags'] = flags
     kind = str(cells.get('kind') or '').strip().lower()
-    if kind in _KIND_ALIASES and kind not in _RULE_KINDS:
+    if kind in _KIND_ALIASES and kind not in _rule_kinds():
         cells['kind'] = _KIND_ALIASES[kind]
         if kind == 'remove' and not str(cells.get('value') or ''):
             cells['value'] = ' '

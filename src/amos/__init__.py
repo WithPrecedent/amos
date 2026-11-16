@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = '0.8.1'
+__version__ = '0.9.0'
 
 __author__: str = 'Corey Rayburn Yung'
 
@@ -43,9 +43,6 @@ __all__: list[str] = [
     'Transformer',
     'Validator',
     'library',
-    'register_rule_kind',
-    'register_rulebook',
-    'register_value_map',
 ]
 
 # Importing each module adds its techniques to the `chrisjen` library, so
@@ -114,13 +111,8 @@ from .wrangler import cleaners, loaders, mergers, mungers, parsers, shapers
 from .wrangler.cleaners import Cleaner
 from .wrangler.loaders import Loader
 from .wrangler.mergers import Merger
-from .wrangler.mungers import Munger, register_value_map
-from .wrangler.parsers import (
-    Parser,
-    PatternParser,
-    register_rule_kind,
-    register_rulebook,
-)
+from .wrangler.mungers import Munger
+from .wrangler.parsers import Parser, PatternParser
 from .wrangler.shapers import Shaper
 
 # Each step and each module of the core can be imported from `amos` itself

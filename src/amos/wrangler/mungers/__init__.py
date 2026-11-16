@@ -26,7 +26,6 @@ Contents:
     DeriveColumns: makes columns from expressions of other columns, such as "a /
         b".
     MapValues: replaces values with others, such as "N/A" with a missing value.
-    register_value_map: registers the values that `MapValues` gives columns.
 
 """
 
@@ -44,19 +43,12 @@ __all__: list[str] = [
     'Munger',
     'NormalizeText',
     'SetKinds',
-    'StripText',
-    'register_value_map']
+    'StripText']
 
 from ._base import Munger
 from ._text import NormalizeText, StripText
 from ._types import AutoCategorize, ConvertTypes, SetKinds
-from ._values import (
-    Coalesce,
-    CombineFlags,
-    DeriveColumns,
-    MapValues,
-    register_value_map,
-)
+from ._values import Coalesce, CombineFlags, DeriveColumns, MapValues
 
 # The public names say that they are in `amos.mungers` (rather than in the
 # private module that defines them, or in `amos.wrangler.mungers`), where they

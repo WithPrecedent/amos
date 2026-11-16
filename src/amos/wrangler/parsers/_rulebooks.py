@@ -2,11 +2,8 @@
 
 Contents:
     _REQUIRED: columns that every file of rules must have.
-    _RULEBOOKS: the sources of each registered rulebook, by its name.
     ParseAll: finds information in text with a rulebook.
     Rulebook: an ordered collection of rules.
-    register_rule_kind: names a pattern parser as a kind of rule.
-    register_rulebook: registers the rules of a rulebook under a name.
 
 """
 
@@ -16,46 +13,56 @@ import csv
 import dataclasses
 import pathlib
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Any
+from typing import Any, ClassVar
 
+import camina
+import chrisjen
 import pandas as pd
 
 from ._base import (
     _COLUMN_ALIASES,
-    _RULE_KINDS,
     _SEPARATOR,
     Parser,
-    PatternParser,
     Rule,
     _apply_rules,
     _cell_names,
 )
-from ._categories import ParseCategories, ParseCategory
-from ._fields import ParseFields, ParseNames
-from ._matches import (
-    ParseCounts,
-    ParseFlags,
-    ParseMatch,
-    ParseMatches,
-    ParseReplace,
-    ParseSplit,
-)
 
 _REQUIRED: tuple[str, ...] = ('kind', 'pattern')
-_RULEBOOKS: dict[str, tuple[Any, ...]] = {}
 
 
 @dataclasses.dataclass
 class ParseAll(Parser):
     """Finds information in text with a rulebook.
 
-    The rules can be the name of a registered rulebook (see
-    `register_rulebook`), the path of a CSV file of rules or of a folder of
-    them, a list of rules (as `dict`s, with the columns of a CSV file as
-    keys), or a list of any of these, which are applied in order. Each rule
-    is applied by the pattern parser of its kind (see `register_rule_kind`).
+    The rules can be the path of a CSV file of rules or of a folder of them,
+    a list of rules (as `dict`s, with the columns of a CSV file as keys), the
+    name of a rulebook, or a list of any of these, which are applied in order
+    (see `Rulebook.create`). Each rule is applied by the pattern parser of its
+    kind (see `PatternParser`).
+
+    A subclass that sets `rules` is a rulebook of its own. It is in the
+    library under its name, like any technique, so settings can name it as a
+    technique ("parse_federal" for `ParseFederal`) that needs no parameters.
+    Its name, with or without "parse_", is also the name of its rulebook,
+    which other rulebooks and the "rules" of `parse_all` can name ("rules =
+    federal"). For example, a package built on `amos` can keep its rules in
+    its own CSV files:
+
+    ```py
+    @dataclasses.dataclass
+    class ParseFederal(amos.parsers.ParseAll):
+        rules: ClassVar[Any] = RULES_FOLDER / 'federal'
+    ```
+
+    The rules are read each time they are used, so changes to their files
+    take effect at once.
 
     """
+
+    # The rules that `parse` applies when it is given none, in any form that
+    # `Rulebook.create` accepts.
+    rules: ClassVar[Any] = None
 
     def parse(
         self,
@@ -69,7 +76,8 @@ class ParseAll(Parser):
         Args:
             data: the data to parse.
             rules: the rules to apply (see `Rulebook.create`). Defaults to
-                `None`, which changes nothing.
+                `None`, which applies the class's `rules` (and changes
+                nothing if it has none).
             column: the column of text that rules with a blank `column`
                 search. Defaults to "text", the column of text that
                 `load_files` makes.
@@ -79,6 +87,8 @@ class ParseAll(Parser):
             The data, with the columns that the rules make.
 
         """
+        if rules is None:
+            rules = self.rules
         if rules is None or (
             isinstance(rules, Sequence) and not isinstance(rules, str)
             and not rules):
@@ -108,18 +118,19 @@ class Rulebook:
         """Returns a rulebook with the rules of every source, in order.
 
         Args:
-            *sources: names of registered rulebooks (see
-                `register_rulebook`), paths of CSV files of rules or of
-                folders of them (whose files are read in alphabetical order),
-                rules as `dict`s (with the columns of a CSV file as keys),
-                `Rule`s, `Rulebook`s, or sequences of any of these. A text
-                with commas that is not a file or registered name is a list
-                of them. A file that two sources name is read only the first
+            *sources: names of rulebooks (subclasses of `ParseAll` that set
+                `rules`, named with or without "parse_"), those subclasses
+                themselves, paths of CSV files of rules or of folders of them
+                (whose files are read in alphabetical order), rules as
+                `dict`s (with the columns of a CSV file as keys), `Rule`s,
+                `Rulebook`s, or sequences of any of these. A text with commas
+                that is not a file or the name of a rulebook is a list of
+                them. A file that two sources name is read only the first
                 time.
 
         Raises:
-            FileNotFoundError: if a source is not a registered name, a file,
-                or a folder with CSV files.
+            FileNotFoundError: if a source is not the name of a rulebook, a
+                file, or a folder with CSV files.
             ValueError: if a file is missing a column or a rule is not valid.
                 The message says which file and row (or which rule).
 
@@ -217,88 +228,27 @@ class Rulebook:
         return len(self.rules)
 
 
-""" Public Functions """
-
-
-def register_rule_kind(kind: str, parser: type[PatternParser]) -> None:
-    """Names a pattern parser as a kind of rule.
-
-    Rulebooks (see `parse_all`) can then name `kind` in the "kind" column of
-    a rule, and the rule is applied by `parser`. A kind that is registered
-    again gets the new parser, and a kind that has the name of an old kind
-    (such as "map") takes its place.
-
-    Args:
-        kind: the name of the kind, which is made lower-case.
-        parser: a subclass of `PatternParser`.
-
-    Raises:
-        TypeError: if `parser` is not a subclass of `PatternParser`.
-        ValueError: if `kind` is blank.
-
-    """
-    name = str(kind).strip().lower()
-    if not name:
-        message = 'a kind of rule needs a name'
-        raise ValueError(message)
-    if not (isinstance(parser, type) and issubclass(parser, PatternParser)):
-        message = (
-            f'a kind of rule needs a subclass of PatternParser, not '
-            f'{parser!r}'
-        )
-        raise TypeError(message)
-    _RULE_KINDS[name] = parser
-
-
-def register_rulebook(name: str, sources: Any) -> None:
-    """Registers the rules of a rulebook under `name`.
-
-    `parse_all` (and `Rulebook.create`) then accept `name` in place of its
-    sources, so a package built on `amos` can keep its rules in its own CSV
-    files and every project can name them in its settings (as in "rules =
-    federal"). The sources are read each time the rulebook is used, so
-    changes to its files take effect at once. A name that is registered
-    again gets the new sources.
-
-    Args:
-        name: the name of the rulebook.
-        sources: what `Rulebook.create` accepts: paths of CSV files or
-            folders, names of other registered rulebooks, rules, or a
-            sequence of them, in the order they are applied.
-
-    Raises:
-        ValueError: if `name` is blank.
-
-    """
-    if not str(name).strip():
-        message = 'a rulebook needs a name'
-        raise ValueError(message)
-    if isinstance(sources, str | pathlib.Path | Mapping | Rule | Rulebook):
-        sources = (sources,)
-    _RULEBOOKS[str(name).strip()] = tuple(sources)
-
-
 """ Private Functions """
 
 
 def _gather(
     source: Any,
     read: set[pathlib.Path],
-    registered: tuple[str, ...]) -> tuple[list[Rule], list[str]]:
+    named: tuple[str, ...]) -> tuple[list[Rule], list[str]]:
     """Returns the rules of a source of `Rulebook.create`, and its names.
 
     Args:
         source: a source (see `Rulebook.create`).
         read: the files read so far, which are not read again. It is changed
             in place.
-        registered: the names of the registered rulebooks that led to
-            `source`, so that a rulebook that names itself is caught.
+        named: the names of the rulebooks that led to `source`, so that a
+            rulebook that names itself is caught.
 
     Raises:
-        FileNotFoundError: if a source is not a registered name, a file, or a
-            folder with CSV files.
-        ValueError: if a registered rulebook names itself, a file is missing
-            a column, or a rule is not valid.
+        FileNotFoundError: if a source is not the name of a rulebook, a file,
+            or a folder with CSV files.
+        ValueError: if a rulebook names itself, a file is missing a column,
+            or a rule is not valid.
 
     Returns:
         The rules, in order, and names for them (such as the stems of their
@@ -311,30 +261,84 @@ def _gather(
         return [source], []
     if isinstance(source, Mapping):
         return [_rule(source, 'a rule of the settings')], []
-    if isinstance(source, str) and source.strip() in _RULEBOOKS:
-        name = source.strip()
-        if name in registered:
+    book = _rulebook(source)
+    if book is not None:
+        name = _rulebook_name(book)
+        if name in named:
             message = f'the rulebook {name!r} names itself'
             raise ValueError(message)
-        rules: list[Rule] = []
-        for part in _RULEBOOKS[name]:
-            found, _ = _gather(part, read, (*registered, name))
-            rules.extend(found)
-        return rules, [name]
+        found, _ = _gather(book.rules, read, (*named, name))
+        return found, [name]
     if isinstance(source, str | pathlib.Path):
         path = pathlib.Path(source)
         if isinstance(source, str) and ',' in source and not path.exists():
-            return _gather(_cell_names(source), read, registered)
+            return _gather(_cell_names(source), read, named)
         return _read_rules(path, read)
-    rules, names = [], []
+    rules: list[Rule] = []
+    names: list[str] = []
     for position, part in enumerate(source):
         if isinstance(part, Mapping):
             rules.append(_rule(part, f'rule {position + 1}'))
             continue
-        found, labels = _gather(part, read, registered)
+        found, labels = _gather(part, read, named)
         rules.extend(found)
         names.extend(labels)
     return rules, names
+
+
+def _rulebook(source: Any) -> type[ParseAll] | None:
+    """Returns the rulebook that `source` is or names, if it is one.
+
+    Args:
+        source: a source of `Rulebook.create`.
+
+    Raises:
+        ValueError: if `source` is a subclass of `ParseAll` without `rules`.
+
+    Returns:
+        `source`, if it is a subclass of `ParseAll`, the subclass of
+            `ParseAll` in the library that `source` names (with or without
+            "parse_"), or `None` if it is neither.
+
+    """
+    if isinstance(source, type) and issubclass(source, ParseAll):
+        if source.rules is None:
+            message = f'{source.__name__} has no rules'
+            raise ValueError(message)
+        return source
+    if isinstance(source, str):
+        name = source.strip().lower().removeprefix('parse_')
+        return _rulebooks().get(name)
+    return None
+
+
+def _rulebook_name(book: type[ParseAll]) -> str:
+    """Returns the name of a rulebook.
+
+    Args:
+        book: a subclass of `ParseAll`.
+
+    Returns:
+        The snake case name of the class without "parse_".
+
+    """
+    return str(camina.snakify(book.__name__)).removeprefix('parse_')
+
+
+def _rulebooks() -> dict[str, type[ParseAll]]:
+    """Returns the rulebooks in the library, by their names.
+
+    Returns:
+        Every subclass of `ParseAll` in the library that sets `rules`, by
+            its name (see `_rulebook_name`).
+
+    """
+    layer = chrisjen.library.get_genre(Parser)
+    return {
+        _rulebook_name(p): p
+        for p in chrisjen.utilities.flatten_dict(layer).values()
+        if isinstance(p, type) and issubclass(p, ParseAll)
+        and p.rules is not None}
 
 
 def _read_rules(
@@ -367,7 +371,7 @@ def _read_rules(
     else:
         message = (
             f'{str(path)!r} is not a file of rules, a folder of them, or a '
-            f'registered rulebook ({sorted(_RULEBOOKS)})'
+            f'rulebook ({sorted(_rulebooks())})'
         )
         raise FileNotFoundError(message)
     rules: list[Rule] = []
@@ -436,17 +440,3 @@ def _rule(cells: Mapping[str, Any], origin: str) -> Rule:
     except ValueError as error:
         message = f'{origin}: {error}'
         raise ValueError(message) from error
-
-
-# Each pattern parser of `amos` is a kind of rule.
-_RULE_KINDS.update({
-    'categories': ParseCategories,
-    'category': ParseCategory,
-    'counts': ParseCounts,
-    'fields': ParseFields,
-    'flags': ParseFlags,
-    'match': ParseMatch,
-    'matches': ParseMatches,
-    'names': ParseNames,
-    'replace': ParseReplace,
-    'split': ParseSplit})

@@ -38,6 +38,8 @@ how names in settings are found. The genres are nested layers of the library:
 
 ```python
 import dataclasses
+import pathlib
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -494,11 +496,22 @@ separated by commas; the shaper `lists_to_rows` can make rows of them.
 
 The "rules" of `parse_all` can be a CSV file, a folder of them (read in
 alphabetical order), a list of rules as dictionaries (with the columns above
-as keys), or a list of any of these. A package can register its rulebooks
-with `amos.register_rulebook`, so that its users name them in settings (as
-in `rules = surveys`) without knowing where the files are. CSV files in an
+as keys), the name of a rulebook, or a list of any of these. CSV files in an
 older layout of rules (with "target", "variable", "ignorecase", and "dotall"
 columns, and its kinds, such as "section" and "label") are read too.
+
+A package can name its rulebooks by subclassing `amos.parsers.ParseAll` and
+setting its `rules`, so that its users name them in settings without knowing
+where the files are. The subclass is a technique of its own
+(`parse_surveys`, which needs no parameters), and its name without "parse_"
+is a rulebook that `parse_all` and other rulebooks can name (`rules =
+surveys`):
+
+```python
+@dataclasses.dataclass
+class ParseSurveys(amos.parsers.ParseAll):
+    rules: ClassVar[Any] = pathlib.Path("rules", "surveys")
+```
 
 ### Writing your own parsers
 
@@ -508,8 +521,9 @@ techniques](#writing-your-own-techniques)). A parser that searches for a
 pattern subclasses `amos.PatternParser` and writes `find`, which takes a
 `Rule` (with its `pattern`, the `names` of the columns to make, and its
 `value`), the columns of text to search, and the columns made so far (to
-add to). The parser takes the parameters above at once, and
-`amos.register_rule_kind` makes it a kind of rule that rulebooks can name:
+add to). The parser takes the parameters above at once, and it is also a
+kind of rule that rulebooks can name, after the class without "Parse"
+(`ParseLast` is "last"). Set `rule_aliases` to give the kind other names:
 
 ```python
 @dataclasses.dataclass
@@ -522,7 +536,6 @@ class ParseLast(amos.PatternParser):
         made[rule.names[0]] = found.str[-1].astype("str")
 
 
-amos.register_rule_kind("last", ParseLast)
 paper = amos.Dataset(pd.DataFrame({"text": ["See 10.1037/abc123 and 10.1080/q2."]}))
 amos.parsers.ParseAll().apply(paper, rules = [
     {"kind": "last", "name": "last_doi", "pattern": r"10\.\d{4}/\w+"}])
@@ -656,25 +669,34 @@ Arithmetic on small integer types can overflow (`int8` holds only -128 to
 ### Maps of values
 
 `map_values` replaces values with others, as its "values" map says. Without
-"values", it uses the map (or function) registered for each of its
-"columns" with `amos.register_value_map`, so a package built on `amos` can
-register the meanings of its codes once and its projects only name the
-columns:
+"values", it uses the map (or function) for each column in its
+`value_maps`, which a subclass sets. A package built on `amos` can give the
+meanings of its codes once, and its projects name the subclass as a
+technique (`map_race_codes`), with "columns" to map only some of them:
 
 ```python
-amos.register_value_map(["offender_race", "victim_race"], {"W": "white", "B": "black"})
+@dataclasses.dataclass
+class MapRaceCodes(amos.mungers.MapValues):
+    value_maps: ClassVar[dict[str, Any]] = {
+        "offender_race": {"W": "white", "B": "black"},
+        "victim_race": {"W": "white", "B": "black"},
+    }
+
+
 crimes = amos.Dataset(pd.DataFrame({
     "offender_race": ["W", "B", "B"],
     "victim_race": ["B", "B", "W"],
     "age": [19, 34, 52],
 }))
-amos.mungers.MapValues().apply(crimes, columns = ["offender_race", "victim_race"])
+MapRaceCodes().apply(crimes)
 print(crimes.data["offender_race"].tolist())
 # ['white', 'black', 'black']
 ```
 
-The order of the wrangler's techniques is up to you: a technique after
-`map_values` sees the new values, not the codes.
+A subclass of that subclass can add columns of its own with
+`value_maps = {**MapRaceCodes.value_maps, "weapon": ...}`. The order of the
+wrangler's techniques is up to you: a technique after a map sees the new
+values, not the codes.
 
 ## Merging data
 
