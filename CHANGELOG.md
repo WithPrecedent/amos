@@ -28,6 +28,8 @@ All notable changes to this project will be documented in this file.
   `amos.core.metrics` and `amos.core.auto`.
 * The tests are in a folder for each stage, like the source, and the tests
   of the transformers are split by step.
+* Two of the new private modules no longer end with a blank line, which
+  failed the pre-commit check in CI.
 
 * Parsers are a new genre of the wrangler (`amos.Parser`), for techniques
   that find information in the text of a dataset and make columns of it.

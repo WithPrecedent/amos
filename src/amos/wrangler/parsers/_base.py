@@ -949,4 +949,3 @@ def _wrap(pattern: re.Pattern[str], before: str, after: str) -> str:
     match = _patterns.LEADING_FLAGS.match(text)
     start = match.end() if match else 0
     return f'{text[:start]}{before}{_body(pattern)}{after}'
-

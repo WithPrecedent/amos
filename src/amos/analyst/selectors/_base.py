@@ -55,4 +55,3 @@ class Selector(transformers.Transformer, abc.ABC):
                 f'loosen its parameters (such as "alpha" or "threshold")'
             )
             raise ValueError(message)
-
