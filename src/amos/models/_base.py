@@ -771,14 +771,14 @@ def search_folds(
     cv: int) -> int | list[tuple[np.ndarray, np.ndarray]]:
     """Returns the folds of a search, which keep groups together.
 
-    When rows are not independent (such as the votes of the judges of one
-    case), a fold that splits a group puts rows that are nearly copies of
-    each other on both sides, so the search scores the model on rows it
-    has partly seen. So if the dataset has groups, each group of its first
-    group column is kept wholly in one fold, as the group validators keep
-    them: with the classes balanced across folds for a classifier, and in
-    folds of about equal size for a regression. A row with a missing
-    group is a group of its own.
+    When rows are not independent (such as the ratings of several reviewers of
+    one product), a fold that splits a group puts rows that are nearly copies of
+    each other on both sides, so the search scores the model on rows it has
+    partly seen. So if the dataset has groups, each group of its first group
+    column is kept wholly in one fold, as the group validators keep them: with
+    the classes balanced across folds for a classifier, and in folds of about
+    equal size for a regression. A row with a missing group is a group of its
+    own.
 
     Wraps:
         - [`sklearn.model_selection.StratifiedGroupKFold`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedGroupKFold.html)

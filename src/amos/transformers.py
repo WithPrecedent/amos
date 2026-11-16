@@ -311,7 +311,7 @@ class ColumnWise:
 
 @dataclasses.dataclass
 class Imputer(Transformer, abc.ABC):
-    """Genre of techniques that fill missing values.
+    """Base class for techniques that fill missing values.
 
     By default, an imputer fills the numeric features that have missing
     values. `ModeImpute` fills features of every kind.
@@ -336,14 +336,14 @@ class Imputer(Transformer, abc.ABC):
 
 @dataclasses.dataclass
 class Scaler(Transformer, abc.ABC):
-    """Genre of techniques that rescale the numeric features."""
+    """Base class for techniques that rescale the numeric features."""
 
     kinds: ClassVar[tuple[str, ...]] = ('numerics',)
 
 
 @dataclasses.dataclass
 class Encoder(Transformer, abc.ABC):
-    """Genre of techniques that turn categorical and text features into numbers.
+    """Base class for techniques that turn categories and text into numbers.
 
     Supervised encoders (such as `target`) are fitted with the training labels.
     A label of text is given to them as the position of each class in
@@ -356,14 +356,14 @@ class Encoder(Transformer, abc.ABC):
 
 @dataclasses.dataclass
 class Mixer(Transformer, abc.ABC):
-    """Genre of techniques that make new features from the numeric features."""
+    """Base class for techniques that make new features from numeric ones."""
 
     kinds: ClassVar[tuple[str, ...]] = ('numerics',)
 
 
 @dataclasses.dataclass
 class Reducer(Transformer, abc.ABC):
-    """Genre of techniques that reduce the number of features.
+    """Base class for techniques that reduce the number of features.
 
     Unlike a selector (see the `selectors` module), a reducer can replace the
     features with new ones, such as their principal components.
@@ -708,8 +708,8 @@ class DateParts(Encoder):
 class Gap(Encoder):
     """Encodes messy text as a mix of topics of its substrings.
 
-    Useful for text with typos or variations (such as "District Ct." and
-    "district court"). Each new column is named for the most common
+    Useful for text with typos or variations (such as "St. Louis" and
+    "Saint Louis"). Each new column is named for the most common
     substrings of its topic, so it can be interpreted. It wraps skrub's
     `GapEncoder` (10 topics by default).
 

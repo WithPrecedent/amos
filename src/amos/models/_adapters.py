@@ -640,7 +640,7 @@ class FixedEffects:
     """Adapts a pyfixest regression to the scikit-learn interface.
 
     pyfixest estimates regressions with many fixed effects (such as one for
-    each judge or year) quickly, with standard errors clustered by any
+    each firm or year) quickly, with standard errors clustered by any
     column, as R's fixest does. The `coefficients` method returns the
     coefficients of the features and their statistics as a table.
 
@@ -961,9 +961,9 @@ class FixedEffects:
 class ProportionalHazards:
     """Adapts statsmodels' Cox regression to the scikit-learn interface.
 
-    The label is the time until an event (such as rearrest) or until the row
-    stopped being observed (censoring). Rows with the same time are handled
-    with Efron's method. The model predicts the expected time until the
+    The label is the time until an event (such as a machine's failure) or until
+    the row stopped being observed (censoring). Rows with the same time are
+    handled with Efron's method. The model predicts the expected time until the
     event. The `coefficients` method returns the coefficients, hazard ratios,
     and their statistics as a table.
 

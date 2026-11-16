@@ -23,7 +23,7 @@ from ._base import Evaluator, _Published
 
 @dataclasses.dataclass
 class Scorecard(_Published, Evaluator):
-    """The results of every branch of an analysis, ready to publish.
+    """Tabulates the results of every branch of an analysis, ready to publish.
 
     A scorecard has one row for each branch of the most recent `experiment`
     (each combination of techniques that it tried): its rank, the technique
@@ -44,9 +44,9 @@ class Scorecard(_Published, Evaluator):
     Unless "metrics" are chosen, a scorecard has the `defaults` for the task.
     It also has the `fairness` metrics if the label has two classes and the
     dataset's first `groups` column (the one that fairness metrics compare)
-    has at most `fairness_limit` distinct values, such as race or court.
-    Groups with more values (such as the case of each row, which keeps a
-    case's rows together when they are split or clustered) are not compared:
+    has at most `fairness_limit` distinct values, such as race or region.
+    Groups with more values (such as the person of each row, which keeps a
+    person's rows together when they are split or clustered) are not compared:
     a gap between hundreds of thousands of groups says nothing about
     fairness. Name the fairness metrics in "metrics" to compare them anyway.
     A default metric whose optional package is not installed (such as

@@ -44,7 +44,7 @@ _REFUTERS: frozenset[str] = frozenset({
 
 @dataclasses.dataclass
 class Dowhy(Inferer, abc.ABC):
-    """Genre of DoWhy's methods of estimation.
+    """Base class for inferers that use DoWhy's methods of estimation.
 
     DoWhy models the features as causes of both the treatment and the label
     (and any instrument as a cause of the treatment alone), identifies the
@@ -200,7 +200,7 @@ class Dowhy(Inferer, abc.ABC):
 
 @dataclasses.dataclass
 class DistanceMatching(Dowhy):
-    """DoWhy's matching of treated rows with the most similar untreated rows.
+    """Estimates an effect by matching treated rows with similar untreated ones.
 
     It matches rows by the distance between their features (rather than by
     their propensity scores) and compares the labels of matched rows. The
@@ -220,7 +220,7 @@ class DistanceMatching(Dowhy):
 
 @dataclasses.dataclass
 class DoublyRobust(Dowhy):
-    """DoWhy's doubly robust estimator (augmented inverse propensity weighting).
+    """Estimates an effect with a doubly robust estimator (augmented IPW).
 
     It combines a regression of the label with weighting by the propensity
     score, so that its estimate is right if either one is. The treatment
@@ -239,7 +239,7 @@ class DoublyRobust(Dowhy):
 
 @dataclasses.dataclass
 class GLMAdjustment(Dowhy):
-    """DoWhy's generalized linear model of the label, adjusted for the features.
+    """Estimates an effect with a generalized linear model of the label.
 
     For a label with two classes, it is a logistic regression, and the effect
     is the change in the chance of the second class. Otherwise, it is a
@@ -273,7 +273,7 @@ class GLMAdjustment(Dowhy):
 
 @dataclasses.dataclass
 class InstrumentalVariable(Dowhy):
-    """DoWhy's estimate of an effect through an instrument.
+    """Estimates an effect through an instrumental variable.
 
     The instrument ("instrument") must change the treatment but affect the
     label only through it, so that the treatment may share causes with the
@@ -296,7 +296,7 @@ class InstrumentalVariable(Dowhy):
 
 @dataclasses.dataclass
 class PropensityMatching(Dowhy):
-    """DoWhy's matching of treated and untreated rows by propensity score.
+    """Estimates an effect by matching rows on their propensity scores.
 
     Each row is matched with the row of the other group whose chance of
     treatment (given the features) is closest, and the labels of matched
@@ -316,7 +316,7 @@ class PropensityMatching(Dowhy):
 
 @dataclasses.dataclass
 class PropensityStratification(Dowhy):
-    """DoWhy's comparison of the treated and untreated in strata of propensity.
+    """Estimates an effect by comparing rows within strata of propensity.
 
     The rows are divided into groups (strata) of similar propensity scores,
     and the effect is the average of the differences within them. The
@@ -336,7 +336,7 @@ class PropensityStratification(Dowhy):
 
 @dataclasses.dataclass
 class PropensityWeighting(Dowhy):
-    """DoWhy's inverse propensity weighting.
+    """Estimates an effect by inverse propensity weighting.
 
     Each row is weighted by the inverse of its chance of the treatment that
     it had, so that the treated and untreated rows resemble each other. The
@@ -356,7 +356,7 @@ class PropensityWeighting(Dowhy):
 
 @dataclasses.dataclass
 class RegressionAdjustment(Dowhy):
-    """DoWhy's linear regression of the label, which adjusts for the features.
+    """Estimates an effect with a linear regression adjusted for the features.
 
     The effect is the treatment's coefficient in a linear regression of the
     label on the treatment and features, with its standard error from the

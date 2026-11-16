@@ -1,25 +1,26 @@
 r"""Techniques that add the columns of another table to the data.
 
 These are techniques of the "wrangler" stage of a project. Research often
-needs data from sources that are not organized the same way: one table has a
-row for each case, and another has a row for each judge, or for each court
-that a judge has served on. A merger matches each row of the data to a row
-of another table and adds the columns of that row. The mergers differ in how
-they match rows:
+combines tables that are organized differently: one table has a row for each
+patient visit, another a row for each hospital, and a third a row for each
+period that a doctor worked at a hospital. A merger matches each row of the
+data to a row of another table and adds the columns of that row. The mergers
+differ in how they match rows:
 
-* `merge_keys` matches the row with the same keys (such as the same court).
+* `merge_keys` matches the row with the same keys (such as the same
+  hospital).
 * `merge_nearest` matches the row with the nearest number or date (such as
-  the last rating of a court before a case was decided).
+  the last price of a stock before a trade).
 * `merge_ranges` matches the row whose range has a number or date in it (such
-  as the judge with a name who was serving in the year of a case).
+  as the job that an employee held on the date of a survey).
 * `merge_summary` matches every row with the same keys, and adds summaries of
-  them (such as the number of judges of a court and their mean age).
+  them (such as the number of students at a school and their mean age).
 
 A merger never adds, removes, or reorders the rows of the data, so the data
 keeps the unit that it studies, and its label, groups, and index. A row
 without a match gets missing values. Start from the table whose rows are what
 you study, and merge the others into it. To change what a row is first (to
-make a row for each judge on each case, for example), use a shaper (see the
+make a row for each item of each order, for example), use a shaper (see the
 `shapers` module).
 
 The other table is the "source" parameter of every merger: the path of a data
@@ -94,7 +95,7 @@ class Merger(base.Operation, abc.ABC):
     | `source` | The other table: the path of a data file (looked for in the current folder and then in the clerk's input folder), or a `DataFrame`, a `Dataset`, or anything else that `Dataset.create` accepts. |
     | `reader` | A `dict` of parameters for loading the file, as for `load_file` (such as "file_format", "member", or "sep"). |
     | `columns` | The columns of the other table to add. By default, they are every column whose name the data does not already have, other than the keys of the other table ("other_on"), which repeat those of the data. |
-    | `prefix` | Text to put before the names of the added columns (such as "judge_"). |
+    | `prefix` | Text to put before the names of the added columns (such as "store_"). |
     | `indicator` | The name of a column to make that says whether each row was matched. |
 
     The dataset's `history` records the source, the number of rows of the
@@ -284,9 +285,9 @@ class Merger(base.Operation, abc.ABC):
 class MergeKeys(Merger):
     """Adds columns from another table's row that has the same keys.
 
-    For example, each case gets the columns of its court from a table with a
-    row for each court. The keys are the columns that say which row of the
-    other table a row of the data belongs with (here, the name of the court).
+    For example, each sale gets the columns of its store from a table with a
+    row for each store. The keys are the columns that say which row of the
+    other table a row of the data belongs with (here, the store's ID).
     Many rows of the data can match the same row of the other table. A row
     with a missing key matches nothing.
 
@@ -352,9 +353,9 @@ class MergeKeys(Merger):
 class MergeNearest(Merger):
     """Adds columns from another table's row with the nearest date or number.
 
-    For example, each case gets the most recent rating of its court before
-    the day it was decided, from a table with a row for each rating. The row
-    can also be limited to those with the same keys (here, the court).
+    For example, each trade gets the most recent price of its stock before
+    the time of the trade, from a table with a row for each price. The row
+    can also be limited to those with the same keys (here, the stock).
 
     Wraps:
         [`pandas.merge_asof`](https://pandas.pydata.org/docs/reference/api/pandas.merge_asof.html)
@@ -463,11 +464,12 @@ class MergeNearest(Merger):
 class MergeRanges(Merger):
     """Adds columns from another table's row whose range has a date or number.
 
-    For example, each judge on a case gets the columns of the judge's service
-    on a court from a table with a row for each court that each judge has
-    served on, with the years that the service began and ended. The row must
-    have the same keys (here, the judge's name) and a range that has the year
-    of the case in it. The start and the end are both in the range.
+    For example, each answer to a survey gets the columns of the job that the
+    employee held when they answered, from a table with a row for each job
+    that each employee has held, with the dates that the job began and ended.
+    The row must have the same keys (here, the employee's ID) and a range
+    that has the date of the answer in it. The start and the end are both in
+    the range.
 
     Without keys, every row of the data is compared with every row of the
     other table, which suits a small table of ranges (such as the terms of
@@ -610,11 +612,11 @@ class MergeRanges(Merger):
 class MergeSummary(MergeKeys):
     """Adds summaries of the rows of another table that have the same keys.
 
-    For example, each court gets the number of its judges and their mean age
-    from a table with a row for each judge. The rows of the other table are
-    summarized as `group_rows` summarizes them (see the `shapers` module),
-    and each row of the data gets the summaries of the rows with its keys. A
-    row that matches no rows gets missing summaries.
+    For example, each school gets the number of its students and their mean age
+    from a table with a row for each student. The rows of the other table are
+    summarized as `group_rows` summarizes them (see the `shapers` module), and
+    each row of the data gets the summaries of the rows with its keys. A row
+    that matches no rows gets missing summaries.
 
     Wraps:
         - [`pandas.DataFrame.groupby`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.groupby.html)

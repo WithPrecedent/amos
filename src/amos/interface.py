@@ -55,7 +55,7 @@ _SETTINGS_WRITERS: dict[str, str] = {'toml': 'tomli_w', 'yaml': 'yaml'}
 
 @dataclasses.dataclass
 class Project(chrisjen.Project):
-    """A `chrisjen.Project` for data science.
+    """A data science study: its settings, data, workflow, and results.
 
     It works like a `chrisjen.Project` (see its documentation), with these
     differences:

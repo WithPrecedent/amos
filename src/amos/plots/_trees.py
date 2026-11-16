@@ -31,7 +31,7 @@ _UNNAMED_WARNING: str = 'X does not have valid feature names'
 
 @dataclasses.dataclass
 class TreeFeatureSpace(Plot):
-    """How a decision tree divides one or two features.
+    """Shows how a decision tree divides one or two features.
 
     dtreeviz's feature space of a `decision_tree`, or of one tree (numbered
     `tree`) of a `random_forest`, `extra_trees`, or `adaboost` model: the
@@ -81,7 +81,7 @@ class TreeFeatureSpace(Plot):
 
 @dataclasses.dataclass
 class TreeLeafDistributions(Plot):
-    """The label of the training rows in each leaf of a decision tree.
+    """Plots the label of the training rows in each leaf of a decision tree.
 
     dtreeviz's distributions of the leaves of a tree (see `tree_leaf_sizes`
     for the trees it draws): for a classifier, the number of training rows of
@@ -125,7 +125,7 @@ class TreeLeafDistributions(Plot):
 
 @dataclasses.dataclass
 class TreeLeafPurity(Plot):
-    """The impurity of each leaf of a decision tree.
+    """Plots the impurity of each leaf of a decision tree.
 
     dtreeviz's purity of the leaves of a `decision_tree`, or of one tree
     (numbered `tree`) of a `random_forest`, `extra_trees`, or `adaboost`
@@ -163,7 +163,7 @@ class TreeLeafPurity(Plot):
 
 @dataclasses.dataclass
 class TreeLeafSizes(Plot):
-    """The number of training rows in each leaf of a decision tree.
+    """Plots the number of training rows in each leaf of a decision tree.
 
     dtreeviz's sizes of the leaves of a `decision_tree`, of one tree (numbered
     `tree`) of a `random_forest`, `extra_trees`, or `adaboost` model, or of
@@ -199,7 +199,7 @@ class TreeLeafSizes(Plot):
 
 @dataclasses.dataclass
 class TreePlot(Plot):
-    """The splits of a decision tree (or of one tree of a forest).
+    """Draws the splits of a decision tree (or of one tree of a forest).
 
     scikit-learn's tree plot of a `decision_tree`, or of the tree numbered
     `tree` of a `random_forest`, `extra_trees`, `gradient_boosting`, or
@@ -270,7 +270,7 @@ class TreePlot(Plot):
 
 @dataclasses.dataclass
 class TreePredictionPath(Plot):
-    """How much each feature decides one row's path down a decision tree.
+    """Shows how much each feature decides one row's path down a decision tree.
 
     dtreeviz's importance of the features for one row, in a `decision_tree`
     or in one tree (numbered `tree`) of a `random_forest`, `extra_trees`, or

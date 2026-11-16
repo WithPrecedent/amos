@@ -24,7 +24,7 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Project` | A `chrisjen.Project` that makes your data into a `Dataset`, applies the workflow to a copy of it, and can `export` the results. |
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
-| `Loader`, `Parser`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, `Selector`, and `Reducer`, and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
+| `Loader`, `Parser`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, `Selector`, and `Reducer`, `Parser` has the genre `PatternParser`, and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
 | `Metric` | Base class for metrics, which score a model's predictions. A metric is a `chrisjen.Criteria`, not a technique, so it is not a step of a workflow: name it as a `criterion`, or in the `metrics` of a technique such as `scorecard` or a validator. `GroupMetric` is its genre of fairness metrics. |
 | `Chooser` | The genre of the techniques that choose other techniques to suit the data (`auto`, `auto_sampler`, `auto_model`, and `auto_plot`). See [Choosing techniques automatically](#choosing-techniques-automatically). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
@@ -177,14 +177,14 @@ features of each kind:
 ```python
 data = pd.DataFrame({
     "age": [31, 45, 52, 38],
-    "court": ["state", "federal", "state", "state"],
-    "appealed": [True, False, True, False],
-    "decided": pd.to_datetime(["2020-01-02", "2021-03-04", "2022-05-06", "2023-07-08"]),
-    "reversed": ["yes", "no", "no", "yes"],
+    "clinic": ["north", "south", "north", "north"],
+    "insured": [True, False, True, False],
+    "admitted": pd.to_datetime(["2020-01-02", "2021-03-04", "2022-05-06", "2023-07-08"]),
+    "readmitted": ["yes", "no", "no", "yes"],
 })
-dataset = amos.Dataset(data, label = "reversed")
+dataset = amos.Dataset(data, label = "readmitted")
 print(dataset.numerics, dataset.categoricals, dataset.booleans, dataset.dates)
-# ['age'] ['court'] ['appealed'] ['decided']
+# ['age'] ['clinic'] ['insured'] ['admitted']
 print(dataset.task, dataset.classes)
 # classify ['no', 'yes']
 ```
@@ -213,42 +213,42 @@ downloads are saved in the input folder.
 | Loader | Source | Other parameters |
 | --- | --- | --- |
 | `load_file` | The path of a data file. | |
-| `load_files` | A folder, a pattern of paths (such as "opinions/*.txt"), or a list of paths. Files of tables add their rows, and files of text add a row each, with the text in a "text" column. Every row names its file in a "file" column. | `pattern` (of the names of a folder's files, such as "*.txt"), `recursive` (whether to look in subfolders), `file_column`, `text_column`, `limit` (most files), and `workers` (threads that read at once) |
+| `load_files` | A folder, a pattern of paths (such as "reports/*.txt"), or a list of paths. Files of tables add their rows, and files of text add a row each, with the text in a "text" column. Every row names its file in a "file" column. | `pattern` (of the names of a folder's files, such as "*.txt"), `recursive` (whether to look in subfolders), `file_column`, `text_column`, `limit` (most files), and `workers` (threads that read at once) |
 | `download` | The URL of a file (http or https), or the name (such as "credit-g") or id (such as 31) of an [OpenML](https://www.openml.org) dataset. Both are saved in the input folder and only downloaded again if they are missing. An OpenML dataset's default target is the label unless "label" is set. | For a URL, `file_name` (what to save it as), `refresh` (to download it again), and `timeout` (in seconds). For OpenML, `version`, `target_column`, and the other parameters of `sklearn.datasets.fetch_openml` |
 
 Every loader takes a `source`, and the `label`, `task`, and `groups` of the
 data, which default to those in the "general" section. The dataset's history
 records the source. This project loads a file from its input folder:
 
-<!-- file: data/cases.csv -->
+<!-- file: data/customers.csv -->
 ```csv
-court,appeals,reversed
-state,2,yes
-federal,1,no
-state,2,yes
-state,0,no
-federal,3,yes
-state,1,no
+plan,calls,canceled
+basic,2,yes
+premium,1,no
+basic,2,yes
+basic,0,no
+premium,3,yes
+basic,1,no
 ```
 
 ```python
 settings = {
-    "general": {"label": "reversed", "seed": 43},
+    "general": {"label": "canceled", "seed": 43},
     "files": {"input_folder": "data"},
-    "cases_project": {"cases_workers": "wrangler, explorer"},
+    "customers_project": {"customers_workers": "wrangler, explorer"},
     "wrangler": {
         "steps": "load, clean",
         "load_techniques": "load_file",
         "clean_techniques": "drop_duplicates",
     },
-    "load_file_parameters": {"source": "cases.csv"},
+    "load_file_parameters": {"source": "customers.csv"},
     "explorer": {"techniques": "label_balance"},
 }
 project = amos.Project.create(settings, id = "loaded")
 print(project.result)
-# Dataset(rows=5, columns=3, label='reversed', task='classify')
+# Dataset(rows=5, columns=3, label='canceled', task='classify')
 print(project.result.history[0])
-# {'technique': 'load_file', 'source': 'cases.csv', 'rows': 6, 'columns': 3}
+# {'technique': 'load_file', 'source': 'customers.csv', 'rows': 6, 'columns': 3}
 ```
 
 `load_file` and `download` load a file in any format that the clerk knows
@@ -256,7 +256,7 @@ print(project.result.history[0])
 HDF, ORC, XML, Stata, SAS, and SPSS), which they find from the file's
 extension. A path passed as a project's `item`, or to `Dataset.create`, is
 read the same way. `pandas` opens a compressed file (such
-as "cases.csv.gz") itself. Set `file_format` (such as "csv") for a file whose
+as "customers.csv.gz") itself. Set `file_format` (such as "csv") for a file whose
 name does not say what it is, and `member` to load one file from a zip
 archive, which is extracted to a folder named for the archive. Other
 parameters, such as `sep`, go to the `pandas` reader if it accepts them.
@@ -273,7 +273,7 @@ load_techniques = download
 clean_techniques = drop_duplicates
 
 [download_parameters]
-source = https://example.com/data/cases.csv.gz
+source = https://example.com/data/customers.csv.gz
 ```
 
 To read another kind of file, add a format to `nagata`. Every subclass of
@@ -297,9 +297,9 @@ class FileFormatPsv(nagata.FileFormatCSV):
         kwargs.setdefault("sep", "|")
         return super().load(path, **kwargs)
 
-pd.DataFrame({"court": ["state", "federal"], "appeals": [2, 1]}).to_csv(
-    "appeals.psv", sep = "|", index = False)
-print(amos.Dataset.create("appeals.psv"))
+pd.DataFrame({"plan": ["basic", "premium"], "calls": [2, 1]}).to_csv(
+    "calls.psv", sep = "|", index = False)
+print(amos.Dataset.create("calls.psv"))
 # Dataset(rows=2, columns=2)
 ```
 
@@ -312,64 +312,162 @@ Loaders bring documents into a dataset as they are: `load_files` makes a row
 for each file of text, with its path in a "file" column and its text in a
 "text" column. *Parsers* then find information in that text and make columns
 of it. Like mungers, they keep the rows and every column, and they come
-before the data is split. Where a munger does one thing to a column, the
-`parse_documents` parser applies a *rulebook*: an ordered list of rules, each
-of which searches text for a [regular
+before the data is split. Each parser searches text for a [regular
 expression](https://docs.python.org/3/library/re.html) and records what it
-finds. Each rule searches every row at once, so a rulebook of hundreds of
-rules parses thousands of documents in seconds.
+finds. A pattern is found anywhere in the text, so "deliver" is found in
+"Delivered late", and "deliver|arriv" finds either word. Characters with
+special meanings, such as "." and "(", need a backslash to stand for
+themselves ("Ph\.D\."). Missing text matches nothing. Each search covers every
+row at once, so hundreds of searches parse thousands of documents in seconds.
 
-Rules are usually rows of CSV files, so they can be written and checked in a
-spreadsheet:
+Each kind of search is a parser of its own, and the [technique
+catalog](catalog.md#parsers-wrangler) lists them:
 
-<!-- file: rules/opinions.csv -->
+| Parser | Kind | Makes |
+| --- | --- | --- |
+| `parse_flags` | `flags` | True if the pattern appears, and otherwise false. |
+| `parse_counts` | `counts` | The number of times the pattern appears. |
+| `parse_category` | `category` | The `value` if the pattern appears. The first pattern (or rule) for a column that matches wins, so they can turn text into categories. |
+| `parse_categories` | `categories` | The `value` of every pattern (or rule) for the column that appears, once each. |
+| `parse_match` | `match` | The first match, or a column for each named group of the pattern (such as "(?P<year>\d{4})"). |
+| `parse_matches` | `matches` | Every match, or a column for each named group. |
+| `parse_split` | `split` | A column for each name: the text before the first match, between the first and second, and so on, with the rest in the last. |
+| `parse_names` | `names` | The names in the text, split wherever the pattern matches (the pattern matches what comes between names). The names are made upper-case without periods or apostrophes. |
+| `parse_fields` | `fields` | A column for each label that the pattern matches (such as "AUTHORS:"), with the text after it, up to the next label. The columns are named for the labels in snake case, after the `name` if there is one. |
+| `parse_replace` | `replace` | The text with every match replaced by the `value` ("\1" is the first group of the match). A blank `value` removes the matches. |
+
+Every one of them takes the same parameters:
+
+| Parameter | Meaning |
+| --- | --- |
+| `pattern` | The regular expression to search for, or a list of them, which are applied in order and combined (see below). For the parsers that write a `value`, it can map patterns to their values instead. |
+| `column` | The columns of text to search, separated by commas. Defaults to "text". "*" searches every column of text that is not categorical. |
+| `name` | The column to make. `parse_split` names two or more, separated by commas. `parse_replace` without a name changes the text it searches. `parse_fields`, and `parse_match` and `parse_matches` with named groups, need no name, and use one as the start of the names of their columns. |
+| `value` | What `parse_category`, `parse_categories`, and `parse_replace` write, if `pattern` does not map patterns to values. |
+| `flags` | Any of "ignorecase", "dotall" (so "." also matches line breaks), "multiline" (so "^" and "$" match at each line), and "verbose", separated by commas. |
+| `separator` | What separates several values in one cell (for `parse_categories`, `parse_matches`, and `parse_names`). Defaults to a comma and a space. |
+| `default` | Only for `parse_category`: the value of text that matches no pattern. |
+
+In a toml settings file, text in single quotes keeps its backslashes as they
+are:
+
+<!-- file: shipping.toml -->
+```toml
+[shipping_project]
+shipping_workers = "wrangler"
+
+[wrangler]
+techniques = "parse_split, parse_flags, parse_category, clean_numbers"
+
+[parse_split_parameters]
+column = "route"
+pattern = '\s+to\s+'
+name = "origin, destination"
+
+[parse_flags_parameters]
+column = "route"
+name = "coastal"
+pattern = '\bBoston\b|\bMiami\b'
+
+[parse_category_parameters]
+column = "status"
+name = "outcome"
+default = "other"
+flags = "ignorecase"
+
+[parse_category_parameters.pattern]
+'deliver|arriv' = "delivered"
+'return|refus' = "returned"
+
+[clean_numbers_parameters]
+columns = "cost"
+```
+
+```python
+orders = pd.DataFrame({
+    "route": ["Boston to Denver", "Austin to Reno", "Tulsa to Boise"],
+    "status": ["DELIVERED late", "Returned.", "Arrived."],
+    "cost": ["$1,200", "n/a", "$350.50"],
+})
+shipping = amos.Project.create("shipping.toml", item = orders)
+shipped = shipping.result.data
+print(shipped["origin"].tolist(), shipped["destination"].tolist())
+# ['Boston', 'Austin', 'Tulsa'] ['Denver', 'Reno', 'Boise']
+print(shipped["coastal"].tolist(), shipped["outcome"].tolist())
+# [True, False, False] ['delivered', 'returned', 'delivered']
+print(shipped["cost"].tolist())
+# [1200.0, nan, 350.5]
+print(shipping.result.history[0])
+# {'technique': 'parse_split', 'changed': [], 'created': ['origin', 'destination']}
+```
+
+Like any technique, a parser can also be applied by hand. A pattern with
+named groups makes a column of each group:
+
+```python
+sizes = amos.Dataset(
+    pd.DataFrame({"size": ["12 x 30 cm", "8 x 10 in", "unknown"]}))
+amos.parsers.ParseMatch().apply(
+    sizes, column = "size", pattern = r"(?P<width>\d+) x (?P<height>\d+)")
+amos.cleaners.CleanNumbers().apply(sizes, columns = ["width", "height"])
+print(sizes.data["width"].tolist(), sizes.data["height"].tolist())
+# [12.0, 8.0, nan] [30.0, 10.0, nan]
+```
+
+### Rulebooks
+
+The `parse_all` parser applies a *rulebook*: an ordered list of rules, each
+of which is one of the searches above, named by its kind. Rules are usually
+rows of CSV files, so they can be written and checked in a spreadsheet:
+
+<!-- file: rules/papers.csv -->
 ```csv
 column,name,kind,pattern,value,flags,note
-,caption,extract,^.*,,,The first line
-caption,"party1, party2",split,\sv\.\s,,,The parties on either side of "v."
-,,fields,^[A-Z]+:,,multiline,Sections such as JUDGES: and OPINION:
-judges,panel,names,"BEFORE|CIRCUIT JUDGES?|\bAND\b|,",,,
-opinion,outcome,map,revers,reversed,ignorecase,The first that matches wins
-opinion,outcome,map,affirm,affirmed,ignorecase,
-opinion,citations,extract_all,\d+ F\.\w+ \d+,,,
+,title,match,^.*,,,The first line
+title,"topic, subtitle",split,:\s,,,The title on either side of the colon
+,,fields,^[A-Z]+:,,multiline,Sections such as AUTHORS: and ABSTRACT:
+authors,team,names,"\bBY\b|\bAND\b|,",,,
+abstract,finding,category,no effect|no difference,null,ignorecase,The first that matches wins
+abstract,finding,category,increase|reduce,effect,ignorecase,
+abstract,dois,matches,10\.\d{4}/\w+,,,
 ```
 
-<!-- file: opinions/smith.txt -->
+<!-- file: papers/smith.txt -->
 ```text
-United States v. Smith
-JUDGES: Before LYNCH, O'SCANNLAIN, and BARRON, Circuit Judges.
-OPINION: We REVERSE. See 512 F.3d 1093 and 98 F.4th 12.
+Sleep and Memory: A Field Study
+AUTHORS: By LYNCH, O'BRIEN, and BARRON.
+ABSTRACT: Sleep loss REDUCES recall. See 10.1037/abc123 and 10.1016/xyz9.
 ```
 
-<!-- file: opinions/jones.txt -->
+<!-- file: papers/jones.txt -->
 ```text
-Jones v. Acme Corp.
-JUDGES: Before BOUDIN, Circuit Judge.
-OPINION: Affirmed. See 5 F.3d 2.
+Tutoring at Scale: Evidence from Ohio
+AUTHORS: By BOUDIN.
+ABSTRACT: We find no effect. See 10.1080/q2.
 ```
 
 ```python
 settings = {
     "general": {"seed": 43},
-    "opinions_project": {"opinions_workers": "wrangler"},
+    "papers_project": {"papers_workers": "wrangler"},
     "wrangler": {
         "steps": "load, parse",
         "load_techniques": "load_files",
-        "parse_techniques": "parse_documents",
+        "parse_techniques": "parse_all",
     },
-    "load_files_parameters": {"source": "opinions", "pattern": "*.txt"},
-    "parse_documents_parameters": {"rules": "rules/opinions.csv"},
+    "load_files_parameters": {"source": "papers", "pattern": "*.txt"},
+    "parse_all_parameters": {"rules": "rules/papers.csv"},
 }
-project = amos.Project.create(settings, id = "opinions")
+project = amos.Project.create(settings, id = "papers")
 parsed = project.result.data
-print(parsed[["file", "party1", "party2", "panel", "outcome"]].to_string(index = False))
-#      file        party1     party2                     panel  outcome
-# jones.txt         Jones Acme Corp.                    BOUDIN affirmed
-# smith.txt United States      Smith LYNCH, OSCANNLAIN, BARRON reversed
-print(parsed["citations"].tolist())
-# ['5 F.3d 2', '512 F.3d 1093, 98 F.4th 12']
+print(parsed[["file", "topic", "team", "finding"]].to_string(index = False))
+#      file             topic                  team finding
+# jones.txt Tutoring at Scale                BOUDIN    null
+# smith.txt  Sleep and Memory LYNCH, OBRIEN, BARRON  effect
+print(parsed["dois"].tolist())
+# ['10.1080/q2', '10.1037/abc123, 10.1016/xyz9']
 print(project.result.history[-1]["created"])
-# ['caption', 'party1', 'party2', 'judges', 'opinion', 'panel', 'outcome', 'citations']
+# ['title', 'topic', 'subtitle', 'authors', 'abstract', 'team', 'finding', 'dois']
 ```
 
 The columns of a file of rules are:
@@ -377,44 +475,60 @@ The columns of a file of rules are:
 | Column | Meaning |
 | --- | --- |
 | `column` | The columns of text to search, separated by commas. If it is blank, the rule searches the parser's `column` ("text" unless it is set). |
-| `name` | The column that the rule makes (or adds to). A `split` rule names two. It is blank for a `replace` rule that changes the text it searches, and optional for a `fields` rule. |
-| `kind` | What the rule does (see below). |
+| `name` | The column that the rule makes (or adds to), as the parameter `name` above. |
+| `kind` | What the rule does: one of the kinds above, or one you register (see below). |
 | `pattern` | The regular expression to search for. |
-| `value` | What a `map`, `map_all`, or `replace` rule writes. Blank for the other kinds. |
-| `flags` | Optional: any of "ignorecase", "dotall" (so "." also matches line breaks), "multiline" (so "^" and "$" match at each line), and "verbose", separated by commas. |
+| `value` | What a `category`, `categories`, or `replace` rule writes. Blank for the other kinds. |
+| `flags` | Optional: as the parameter `flags` above. |
+| `separator` | Optional: as the parameter `separator` above. |
 | `note` | Optional: anything you want to say about the rule. |
 
-The kinds of rules are:
-
-| Kind | Makes |
-| --- | --- |
-| `flag` | True if the pattern appears, and otherwise false. |
-| `count` | The number of times the pattern appears. |
-| `map` | The rule's `value` if the pattern appears. The first rule for a column that matches wins, so rules can turn text into categories. |
-| `map_all` | The `value` of every rule for the column whose pattern appears, once each, separated by commas. |
-| `extract` | The first match. |
-| `extract_all` | Every match, separated by commas. |
-| `split` | Two columns: the text before the first match and the text after it. |
-| `names` | The names in the text, separated by commas, split wherever the pattern matches (the pattern matches what comes between names). The names are made upper-case without periods or apostrophes. |
-| `fields` | A column for each label that the pattern matches (such as "JUDGES:"), with the text after it, up to the next label. The columns are named for the labels in snake case, after the rule's `name` if it has one. |
-| `replace` | The text with every match replaced by the `value` ("\1" is the first group of the match). A blank `value` removes the matches. |
-
 Rules are applied from top to bottom, and every column that a rule makes can
-be searched by the rules after it, as the rules above search the "judges"
-and "opinion" columns that the `fields` rule made. Rules that make the same
+be searched by the rules after it, as the rules above search the "authors"
+and "abstract" columns that the `fields` rule made. Rules that make the same
 column are combined: flags are true if any rule matches, counts are added,
-the first `map` or `extract` that matches is kept, and the results of
-`map_all`, `extract_all`, and `names` rules are joined. Several values in one
-cell are separated by commas; a munger such as `split_text` can make columns
-of them, and the shaper `lists_to_rows` can make rows of them.
+the first `category` or `match` that matches is kept, and the results of
+`categories`, `matches`, and `names` rules are joined. A parser given a list
+of patterns combines them in the same way. Several values in one cell are
+separated by commas; the shaper `lists_to_rows` can make rows of them.
 
-The "rules" of `parse_documents` can be a CSV file, a folder of them (read in
+The "rules" of `parse_all` can be a CSV file, a folder of them (read in
 alphabetical order), a list of rules as dictionaries (with the columns above
 as keys), or a list of any of these. A package can register its rulebooks
 with `amos.register_rulebook`, so that its users name them in settings (as
-in `rules = federal`) without knowing where the files are. CSV files in the
-layout of courtpy's rules (with "target", "variable", "ignorecase", and
-"dotall" columns) are read too.
+in `rules = surveys`) without knowing where the files are. CSV files in an
+older layout of rules (with "target", "variable", "ignorecase", and "dotall"
+columns, and its kinds, such as "section" and "label") are read too.
+
+### Writing your own parsers
+
+A parser that does something other than search for a pattern subclasses
+`amos.Parser` and writes `parse` (see [Writing your own
+techniques](#writing-your-own-techniques)). A parser that searches for a
+pattern subclasses `amos.PatternParser` and writes `find`, which takes a
+`Rule` (with its `pattern`, the `names` of the columns to make, and its
+`value`), the columns of text to search, and the columns made so far (to
+add to). The parser takes the parameters above at once, and
+`amos.register_rule_kind` makes it a kind of rule that rulebooks can name:
+
+```python
+@dataclasses.dataclass
+class ParseLast(amos.PatternParser):
+    """Keeps the last match of a pattern in text."""
+
+    def find(self, rule, texts, made, index):
+        text = next(iter(texts.values()))
+        found = text.str.findall(rule.pattern.pattern, flags = rule.flags)
+        made[rule.names[0]] = found.str[-1].astype("str")
+
+
+amos.register_rule_kind("last", ParseLast)
+paper = amos.Dataset(pd.DataFrame({"text": ["See 10.1037/abc123 and 10.1080/q2."]}))
+amos.parsers.ParseAll().apply(paper, rules = [
+    {"kind": "last", "name": "last_doi", "pattern": r"10\.\d{4}/\w+"}])
+print(paper.data["last_doi"].tolist())
+# ['10.1080/q2']
+```
 
 ## Munging data
 
@@ -429,90 +543,17 @@ cleaners, they belong in the wrangler, before the data is split. The
 
 | Kind | Mungers |
 | --- | --- |
-| Text | `strip_text`, `normalize_text`, `replace_text` |
-| Patterns in text | `flag_patterns`, `count_patterns`, `map_patterns`, `extract_pattern`, `extract_all`, `split_text` |
+| Text | `strip_text`, `normalize_text` |
 | Values and types | `map_values`, `convert_types`, `auto_categorize`, `set_kinds` |
 | Combining columns | `coalesce`, `combine_flags`, `derive_columns` |
 
-Many mungers search text for patterns, which are [regular
-expressions](https://docs.python.org/3/library/re.html). A pattern is found
-anywhere in the text, so "revers" is found in "Reversed and remanded", and
-"revers|vacat" finds either word. Characters with special meanings, such as
-"." and "(", need a backslash to stand for themselves ("F\.3d"). Set
-"ignorecase" to ignore the difference between capital and lower-case letters.
-Missing text matches nothing.
-
-A munger that searches text reads one `column`. `flag_patterns` and
-`count_patterns` make a column for each name in their "patterns", and the
-others make the column in their "name" (or, without one, replace the column
-they read). Parameters that map names or patterns to values, such as
-"patterns", need settings that have mappings: a toml, json, or yaml file, or
-a Python `dict` (an ini file has none). In toml, text in single quotes keeps
-its backslashes as they are:
-
-<!-- file: coding.toml -->
-```toml
-[coding_project]
-coding_workers = "wrangler"
-
-[wrangler]
-techniques = "split_text, flag_patterns, map_patterns, clean_numbers"
-
-[split_text_parameters]
-column = "caption"
-pattern = '\s+v\.\s+'
-names = ["party1", "party2"]
-
-[flag_patterns_parameters]
-column = "caption"
-
-[flag_patterns_parameters.patterns]
-government = 'United States|\bState of\b'
-
-[map_patterns_parameters]
-column = "disposition"
-name = "outcome"
-ignorecase = true
-
-[map_patterns_parameters.patterns]
-'revers|vacat' = "reversed"
-affirm = "affirmed"
-
-[clean_numbers_parameters]
-columns = "damages"
-```
-
-```python
-opinions = pd.DataFrame({
-    "caption": ["United States v. Smith", "Jones v. Acme Corp.", "Doe v. Roe"],
-    "disposition": ["REVERSED and remanded", "Affirmed.", "Vacated."],
-    "damages": ["$1,200", "n/a", "$350.50"],
-})
-coding = amos.Project.create("coding.toml", item = opinions)
-coded = coding.result.data
-print(coded["party1"].tolist(), coded["party2"].tolist())
-# ['United States', 'Jones', 'Doe'] ['Smith', 'Acme Corp.', 'Roe']
-print(coded["government"].tolist(), coded["outcome"].tolist())
-# [True, False, False] ['reversed', 'affirmed', 'reversed']
-print(coded["damages"].tolist())
-# [1200.0, nan, 350.5]
-print(coding.result.history[0])
-# {'technique': 'split_text', 'changed': [], 'created': ['party1', 'party2']}
-```
-
-Each munger records the columns whose values or types it changed and the
-columns it made. Like any technique, a munger can also be applied by hand. A
-pattern with named groups makes a column of each group:
-
-```python
-citations = amos.Dataset(
-    pd.DataFrame({"cite": ["512 F.3d 1093", "98 F.4th 12", "unpublished"]}))
-amos.mungers.ExtractPattern().apply(
-    citations, column = "cite", pattern = r"(?P<volume>\d+) F\.\w+ (?P<page>\d+)")
-amos.cleaners.CleanNumbers().apply(citations, columns = ["volume", "page"])
-print(citations.data["volume"].tolist(), citations.data["page"].tolist())
-# [512.0, 98.0, nan] [1093.0, 12.0, nan]
-```
+To search text for patterns, use the parsers (see [Parsing
+documents](#parsing-documents)). Each munger records the columns whose
+values or types it changed and the columns it made. Parameters that map
+names to values, such as the "values" of `map_values`, need settings that
+have mappings: a toml, json, or yaml file, or a Python `dict` (an ini file
+has none), unless the technique takes settings named for columns (see
+below).
 
 ### Settings named for columns
 
@@ -542,7 +583,7 @@ inferred once the column is made.
 <!-- file: wrangle.ini -->
 ```ini
 [general]
-label = won  # made by derive_columns
+label = repaid  # made by derive_columns
 
 [wrangle_project]
 wrangle_workers = wrangler
@@ -552,32 +593,32 @@ techniques = rename_columns, filter_rows, derive_columns,
     set_kinds
 
 [rename_columns_parameters]
-court_type = court
+loan_type = product
 
 [filter_rows_parameters]
-court = not in [tax, bankruptcy]
-damages = > 0
+product = not in [payday, pawn]
+amount = > 0
 
 [derive_columns_parameters]
-won = outcome in [reversed, vacated]
-federal = court == federal
+repaid = status in [paid, closed]
+secured = product == mortgage
 
 [set_kinds_parameters]
-dummy = federal
-categorical = court
+dummy = secured
+categorical = product
 ```
 
 ```python
-appeals = pd.DataFrame({
-    "court_type": ["federal", "state", "tax", "federal", "state"],
-    "damages": [100.0, 2500.0, 40.0, 0.0, 75.5],
-    "outcome": ["reversed", "affirmed", "reversed", "vacated", "vacated"],
+loans = pd.DataFrame({
+    "loan_type": ["mortgage", "auto", "payday", "mortgage", "auto"],
+    "amount": [100.0, 2500.0, 40.0, 0.0, 75.5],
+    "status": ["paid", "late", "paid", "closed", "closed"],
 })
-wrangled = amos.Project.create("wrangle.ini", item = appeals).result
-print(wrangled.label, wrangled.task, wrangled.data["won"].tolist())
-# won classify [1, 0, 1]
+wrangled = amos.Project.create("wrangle.ini", item = loans).result
+print(wrangled.label, wrangled.task, wrangled.data["repaid"].tolist())
+# repaid classify [1, 0, 1]
 print(wrangled.data.dtypes.astype(str).to_dict())
-# {'court': 'category', 'damages': 'float32', 'outcome': 'category', 'won': 'int8', 'federal': 'int8'}
+# {'product': 'category', 'amount': 'float32', 'status': 'category', 'repaid': 'int8', 'secured': 'int8'}
 ```
 
 Since every setting of these techniques other than those in the last column
@@ -606,7 +647,7 @@ columns:
 
 ```python
 print(wrangled.booleans, wrangled.categoricals, wrangled.numerics)
-# ['federal'] ['court', 'outcome'] ['damages']
+# ['secured'] ['product', 'status'] ['amount']
 ```
 
 Arithmetic on small integer types can overflow (`int8` holds only -128 to
@@ -638,25 +679,25 @@ The order of the wrangler's techniques is up to you: a technique after
 ## Merging data
 
 Research often needs data from sources that are not organized the same way:
-one table has a row for each case, and another has a row for each court, or
-for each court that each judge has served on. A *merger* matches each row of
+one table has a row for each project, another has a row for each department,
+and another has a row for each department that each employee has worked in. A *merger* matches each row of
 the data to a row of another table and adds that row's columns. The mergers
 differ in how they match rows (the [technique
 catalog](catalog.md#mergers-wrangler) lists them):
 
 | Merger | A row of the data gets | Its parameters |
 | --- | --- | --- |
-| `merge_keys` | The columns of the row with the same keys (such as its court). | `on`, `other_on`, `ignorecase`, and `duplicates` |
-| `merge_nearest` | The columns of the row with the nearest date or number (such as the last rating of its court before it was decided). | `column`, `other_column`, `direction`, `tolerance`, and keys, if any |
+| `merge_keys` | The columns of the row with the same keys (such as its department). | `on`, `other_on`, `ignorecase`, and `duplicates` |
+| `merge_nearest` | The columns of the row with the nearest date or number (such as the last price of its stock before it was traded). | `column`, `other_column`, `direction`, `tolerance`, and keys, if any |
 | `merge_ranges` | The columns of the row whose range has its date or number in it (such as the president in office in its year). | `column`, `start`, `end`, `duplicates`, and keys, if any |
-| `merge_summary` | Summaries of every row with the same keys (such as the number of judges of its court and the share of them who are women). | `how`, `count`, and the keys |
+| `merge_summary` | Summaries of every row with the same keys (such as the number of employees in its department and the share of them who are women). | `how`, `count`, and the keys |
 
 A merger never adds, removes, or reorders rows. The data keeps the unit that
 it studies, its label, its groups, and its index, so a merger cannot quietly
 multiply or lose your observations. A row without a match gets missing
 values. So start from the table whose rows are what you study (which is the
 table with the label), and merge the others into it. If the other table
-describes something else (judges, when the rows of the data are cases),
+describes something else (employees, when the rows of the data are projects),
 reshape the data first (see [reshaping data](#reshaping-data)).
 
 Every merger takes these parameters:
@@ -666,7 +707,7 @@ Every merger takes these parameters:
 | `source` | The other table: the path of a data file, which is found and loaded as a [loader](#loading-data) would (a relative path is looked for in the current folder and then in the clerk's input folder). In Python, it can also be a `DataFrame`, a `Dataset`, or anything else that `Dataset.create` accepts. |
 | `reader` | Parameters for loading the file, such as `file_format`, `member`, or `sep`. |
 | `columns` | The columns of the other table to add. By default, they are every column whose name the data does not already have (other than the keys of the other table, which repeat those of the data). |
-| `prefix` | Text to put before the names of the added columns, such as "judge_". |
+| `prefix` | Text to put before the names of the added columns, such as "store_". |
 | `indicator` | The name of a column to make that says whether each row was matched. |
 
 `on` names the key columns of the data, and `other_on` those of the other
@@ -680,38 +721,38 @@ the "first" or "last" of them (`merge_summary` summarizes them instead).
 The history records how many rows were matched, which is worth checking (and
 reporting) every time:
 
-<!-- file: data/courts.csv -->
+<!-- file: data/departments.csv -->
 ```csv
-court,circuit,judgeships
-First Circuit,1,6
-Ninth Circuit,9,29
-Second Circuit,2,13
+department,floor,budget
+Research,1,6
+Marketing,9,29
+Finance,2,13
 ```
 
 ```python
-rulings = pd.DataFrame({
-    "case": ["a1", "a2", "a3", "a4"],
-    "court": ["First Circuit", "ninth circuit", "First Circuit", "Tax Court"],
+projects = pd.DataFrame({
+    "project": ["a1", "a2", "a3", "a4"],
+    "department": ["Research", "marketing", "Research", "Sales"],
     "year": [2001, 2015, 2019, 2010],
-    "reversed": [True, False, True, False],
+    "on_time": [True, False, True, False],
 })
 merging = {
-    "general": {"label": "reversed"},
+    "general": {"label": "on_time"},
     "files": {"input_folder": "data"},
-    "rulings_project": {"rulings_workers": "wrangler"},
+    "projects_project": {"projects_workers": "wrangler"},
     "wrangler": {"techniques": "merge_keys"},
     "merge_keys_parameters": {
-        "source": "courts.csv",
-        "on": "court",
+        "source": "departments.csv",
+        "on": "department",
         "ignorecase": True,
-        "indicator": "court_found",
+        "indicator": "department_found",
     },
 }
-merged = amos.Project.create(merging, item = rulings).result
-print(merged.data["circuit"].tolist(), merged.data["court_found"].tolist())
+merged = amos.Project.create(merging, item = projects).result
+print(merged.data["floor"].tolist(), merged.data["department_found"].tolist())
 # [1.0, 9.0, 1.0, nan] [True, True, True, False]
 print(merged.history[0])
-# {'technique': 'merge_keys', 'source': 'courts.csv', 'rows': 4, 'matched': 3, 'created': ['circuit', 'judgeships', 'court_found']}
+# {'technique': 'merge_keys', 'source': 'departments.csv', 'rows': 4, 'matched': 3, 'created': ['floor', 'budget', 'department_found']}
 ```
 
 `merge_ranges` and `merge_nearest` match rows in time. A range has a `start`
@@ -739,22 +780,22 @@ summarizes them as [`group_rows`](#reshaping-data) does: by default, with the
 mean of each column of numbers and booleans (the mean of a boolean is the
 share that are true). `count` names a column for the number of rows:
 
-<!-- file: data/judges.csv -->
+<!-- file: data/employees.csv -->
 ```csv
-name,court,began,ended,party,woman
-Lynch,First Circuit,1995,,-1,True
-Selya,First Circuit,1986,2021,1,False
-Boudin,First Circuit,1992,2021,1,False
-Barron,First Circuit,2014,,-1,False
-Kozinski,Ninth Circuit,1985,2017,1,False
-Reinhardt,Ninth Circuit,1980,2018,-1,False
+name,department,began,ended,level,woman
+Lee,Research,1995,,3,True
+Silva,Research,1986,2021,2,False
+Bose,Research,1992,2021,2,False
+Baker,Research,2014,,1,False
+Kim,Marketing,1985,2017,3,False
+Reyes,Marketing,1980,2018,1,False
 ```
 
 ```python
 amos.mergers.MergeSummary().apply(
-    merged, source = "data/judges.csv", on = "court", ignorecase = True,
-    count = "judges", prefix = "bench_")
-print(merged.data["bench_judges"].tolist(), merged.data["bench_woman"].tolist())
+    merged, source = "data/employees.csv", on = "department",
+    ignorecase = True, count = "employees", prefix = "staff_")
+print(merged.data["staff_employees"].tolist(), merged.data["staff_woman"].tolist())
 # [4.0, 2.0, 4.0, nan] [0.25, 0.0, 0.25, nan]
 ```
 
@@ -768,7 +809,7 @@ catalog](catalog.md#shapers-wrangler) lists them):
 | --- | --- | --- |
 | `wide_to_long` | Stacks columns into rows: a row for each state, with a column for each year, becomes a row for each state in each year. | `columns` (with `name` and `value`), or `stubs` (with `name` and `separator`) |
 | `long_to_wide` | Spreads the rows of each group into columns, which is the opposite. | `names`, `values` or `stubs`, `ids`, and `separator` |
-| `lists_to_rows` | Makes a row for each item of a list: a row for each case becomes a row for each judge on each case. | `column`, `separator`, `name`, and `position` |
+| `lists_to_rows` | Makes a row for each item of a list: a row for each project becomes a row for each member of its team. | `column`, `separator`, `name`, and `position` |
 | `group_rows` | Makes one row for each group of rows, with summaries of its columns, which is the opposite. | `by`, `how`, and `count` |
 
 The rows of reshaped data are not the rows that it began with, so:
@@ -808,78 +849,78 @@ print(list(long.data.columns))
 `group_rows` summarizes the columns of each group with the summaries in its
 "how": "mean", "median", "sum", "min", "max", "std", "count", "nunique",
 "first", "last", "any", "all", or "list". Without one, a column that is the
-same throughout each group keeps its value (so a case's year stays its year),
+same throughout each group keeps its value (so a project's year stays its year),
 the mean is taken of other numbers and booleans, and the first value is
 taken of anything else. A `dict` gives columns their own summaries.
 
 Together, shapers and mergers join tables whose rows are different things.
-Opinions name the judges of each case in one cell, and the table of judges
-above has a row for each court that each judge has served on. To study the
-panels, this project makes a row for each judge on each case, adds what is
-known about the judge of that name who was serving on the court that year,
-and groups the rows into cases again:
+Each project lists the members of its team in one cell, and the table of
+employees above has a row for each department that each employee has worked
+in. To study the teams, this project makes a row for each member of each
+team, adds what is known about the employee of that name who was working in
+the department that year, and groups the rows into projects again:
 
-<!-- file: panels.toml -->
+<!-- file: teams.toml -->
 ```toml
 [general]
-label = "reversed"
+label = "on_time"
 
 [files]
 input_folder = "data"
 
-[panels_project]
-panels_workers = "wrangler"
+[teams_project]
+teams_workers = "wrangler"
 
 [wrangler]
 techniques = "lists_to_rows, merge_ranges, group_rows"
 
 [lists_to_rows_parameters]
-column = "panel"
+column = "team"
 separator = ";"
-name = "judge"
+name = "member"
 
 [merge_ranges_parameters]
-source = "judges.csv"
+source = "employees.csv"
 column = "year"
 start = "began"
 end = "ended"
-on = ["judge", "court"]
-other_on = ["name", "court"]
+on = ["member", "department"]
+other_on = ["name", "department"]
 ignorecase = true
-columns = ["party", "woman"]
-prefix = "panel_"
+columns = ["level", "woman"]
+prefix = "team_"
 indicator = "found"
 
 [group_rows_parameters]
-by = "case"
-count = "judges"
+by = "project"
+count = "members"
 
 [group_rows_parameters.how]
-judge = "list"
+member = "list"
 found = "sum"
 ```
 
 ```python
-argued = pd.DataFrame({
-    "case": ["a1", "a2", "a3"],
-    "court": ["First Circuit", "Ninth Circuit", "First Circuit"],
+staffed = pd.DataFrame({
+    "project": ["a1", "a2", "a3"],
+    "department": ["Research", "Marketing", "Research"],
     "year": [2001, 2015, 2019],
-    "panel": ["LYNCH; SELYA; BOUDIN", "KOZINSKI; REINHARDT", "LYNCH; BARRON; SOUTER"],
-    "reversed": [True, False, True],
+    "team": ["LEE; SILVA; BOSE", "KIM; REYES", "LEE; BAKER; STONE"],
+    "on_time": [True, False, True],
 })
-panels = amos.Project.create("panels.toml", item = argued).result
-print(panels.data["judges"].tolist(), panels.data["found"].tolist())
+teams = amos.Project.create("teams.toml", item = staffed).result
+print(teams.data["members"].tolist(), teams.data["found"].tolist())
 # [3, 2, 3] [3, 2, 2]
-print(panels.data["panel_party"].round(2).tolist(), panels.data["panel_woman"].tolist())
-# [0.33, 0.0, -1.0] [0.3333333333333333, 0.0, 0.5]
-print(panels.data["reversed"].tolist(), panels.label, panels.task)
-# [True, False, True] reversed classify
-print(panels.history[1])
-# {'technique': 'merge_ranges', 'source': 'judges.csv', 'rows': 8, 'matched': 7, 'created': ['panel_party', 'panel_woman', 'found']}
+print(teams.data["team_level"].round(2).tolist(), teams.data["team_woman"].tolist())
+# [2.33, 2.0, 2.0] [0.3333333333333333, 0.0, 0.5]
+print(teams.data["on_time"].tolist(), teams.label, teams.task)
+# [True, False, True] on_time classify
+print(teams.history[1])
+# {'technique': 'merge_ranges', 'source': 'employees.csv', 'rows': 8, 'matched': 7, 'created': ['team_level', 'team_woman', 'found']}
 ```
 
-Justice Souter sat with the First Circuit after he retired, so no row of the
-table of judges matches him, and the means of the third panel leave him out.
+Stone was a contractor from another company, so no row of the table of
+employees matches Stone, and the means of the third team leave Stone out.
 The "found" column says so, which is why an `indicator` is worth keeping.
 
 ## How techniques work
@@ -977,7 +1018,7 @@ two or more orders of magnitude (such as a learning rate from 0.001 to 0.1) on
 a log scale. The search uses the training rows only, and the results of every
 combination are stored in `tables` as "{name}_search".
 
-When rows are not independent, such as the votes of the judges of one case,
+When rows are not independent, such as the ratings of one product by several reviewers,
 give the dataset `groups`. A search then folds whole groups (with
 `StratifiedGroupKFold` for a classifier and `GroupKFold` for a regression),
 just as the group validators do, so that no group has rows on both sides of
@@ -1102,7 +1143,7 @@ print(project.result.features)
 
 A listed name that is not a feature keeps the features made from it, whose
 names start with it and an underscore, so a group can name a column before
-it is encoded ("court" keeps "court_federal" and "court_state" after
+it is encoded ("region" keeps "region_north" and "region_south" after
 `one_hot`). A group's name must not be the name of another technique.
 
 To keep some features in every group, list them as `always_use` in the
@@ -1239,7 +1280,7 @@ statsmodels stores the same table:
 | `glm` | `GLM` | Generalized linear models of any "family". |
 | `quantile_regression` | `QuantReg` | A "quantile" of the label (the median by default), which outliers sway less. |
 | `robust_regression` | `RLM` | Regression that gives outliers less weight, by "norm" (Huber's by default). |
-| `mixedlm` | `MixedLM` | Regression with a random intercept for each of "groups" (such as each judge). |
+| `mixedlm` | `MixedLM` | Regression with a random intercept for each of "groups" (such as each hospital). |
 | `gee` | `GEE` | A `glm` for rows correlated within "groups", with "covariance" "independence" or "exchangeable". |
 | `poisson`, `negative_binomial`, `generalized_poisson`, `zero_inflated_poisson` | `Poisson`, `NegativeBinomial`, `GeneralizedPoisson`, `ZeroInflatedPoisson` | Counts: whole numbers of 0 or more, which may vary more than a Poisson's or have extra zeros. |
 | `logit_sm`, `probit` | `Logit`, `Probit` | Two classes. Unlike `logit` (scikit-learn's logistic regression), `logit_sm` has no penalty. |
@@ -1288,7 +1329,7 @@ print(list(features.tables["factor_analysis"].columns[-3:]))
 ```
 
 `fixest` wraps pyfixest for regressions with fixed effects (an intercept for
-each level of a column, such as each judge or year) and standard errors
+each level of a column, such as each firm or year) and standard errors
 clustered by a column. The columns named by its "fixed_effects" and "cluster"
 parameters are usually the dataset's `groups`, and they are not used as
 features. It is a least squares regression, or a logit model for
@@ -1380,24 +1421,24 @@ than a Poisson model assumes:
 
 ```python
 generator = np.random.default_rng(0)
-dockets = pd.DataFrame({
-    "judges": generator.integers(1, 10, 500),
-    "pages": generator.normal(30, 8, 500),
+stores = pd.DataFrame({
+    "staff": generator.integers(1, 10, 500),
+    "hours": generator.normal(30, 8, 500),
 })
-mean = np.exp(0.2 + 0.15 * dockets["judges"] + 0.01 * dockets["pages"])
-dockets["appeals"] = generator.negative_binomial(2, 2 / (2 + mean))
-appeal_data = amos.Dataset(dockets, label = "appeals", task = "regress", seed = 43)
-appeal_data = amos.splitters.TrainTest().apply(appeal_data)
+mean = np.exp(0.2 + 0.15 * stores["staff"] + 0.01 * stores["hours"])
+stores["complaints"] = generator.negative_binomial(2, 2 / (2 + mean))
+complaint_data = amos.Dataset(stores, label = "complaints", task = "regress", seed = 43)
+complaint_data = amos.splitters.TrainTest().apply(complaint_data)
 amos.auto.AutoModel().apply(
-    appeal_data, choices = ["poisson", "negative_binomial", "linear", "random_forest"])
-model_table = appeal_data.tables["auto_model"]
+    complaint_data, choices = ["poisson", "negative_binomial", "linear", "random_forest"])
+model_table = complaint_data.tables["auto_model"]
 print(model_table.index[model_table["chosen"]].tolist())
 # ['negative_binomial']
 print(model_table.loc["poisson", "reason"])
 # assumes that the variance of the counts equals their mean, but they are overdispersed (dispersion 3.31)
 print(model_table.loc["linear", "reason"])
 # assumes normal errors, but they are not (skewness 1.95, excess kurtosis 5.34)
-found = amos.auto.profile(appeal_data)
+found = amos.auto.profile(complaint_data)
 print(found.counts, found.overdispersed, found.normal)
 # True True False
 ```
@@ -1405,8 +1446,8 @@ print(found.counts, found.overdispersed, found.normal)
 ## Groups and fairness
 
 Research about people often needs to know whether a model treats groups
-differently. Name the columns that identify groups (such as race, court, or
-judge) as the dataset's `groups`, or in the "groups" setting of the "general"
+differently. Name the columns that identify groups (such as race, school, or
+region) as the dataset's `groups`, or in the "groups" setting of the "general"
 section. Groups stay in the data but are not features, so transformers and
 models do not use them. Then:
 
@@ -1420,7 +1461,7 @@ models do not use them. Then:
 * The `scorecard` adds `demographic_parity` and `equalized_odds` for every
   branch if the first group has at most 20 values
   (`Scorecard.fairness_limit`) and fairlearn is installed. A group with more
-  values (such as the case of each row) is not compared unless the fairness
+  values (such as the person of each row) is not compared unless the fairness
   metrics are named in the scorecard's "metrics".
 * `fixest` can use groups as fixed effects and clusters, and `group_split`
   keeps each row of the dataset's first group in the same set.
@@ -1539,8 +1580,8 @@ print(list(dataset.tables["quantile_effects"].index))
 ```
 
 For a time series, the rows must be in order. tigramite's methods find which
-variables cause which others, and at what lag. Here, filings raise hearings a
-week later, which raise the backlog two weeks after that:
+variables cause which others, and at what lag. Here, ads raise visits to a
+website a week later, which raise sales two weeks after that:
 
 ```python
 rng = np.random.default_rng(2)
@@ -1551,16 +1592,16 @@ for week in range(2, 300):
         0.5 * weeks[week - 1, 1] + 0.6 * weeks[week - 1, 0] + rng.normal())
     weeks[week, 2] = (
         0.4 * weeks[week - 1, 2] + 0.8 * weeks[week - 2, 1] + rng.normal())
-docket = pd.DataFrame(weeks, columns = ["filings", "hearings", "backlog"])
-series = amos.Dataset(docket, label = "backlog", seed = 43)
+traffic = pd.DataFrame(weeks, columns = ["ads", "visits", "sales"])
+series = amos.Dataset(traffic, label = "sales", seed = 43)
 amos.inferers.PCMCI().apply(series, max_lag = 3, alpha = 0.01)
 print(series.tables["pcmci"][["cause", "effect", "lag"]].values.tolist())
-# [['filings', 'filings', 1], ['filings', 'hearings', 1], ['hearings', 'hearings', 1], ['hearings', 'backlog', 2], ['backlog', 'backlog', 1]]
+# [['ads', 'ads', 1], ['ads', 'visits', 1], ['visits', 'visits', 1], ['visits', 'sales', 2], ['sales', 'sales', 1]]
 amos.inferers.TimeSeriesEffect().apply(
-    series, treatment = "filings", lag = 3, max_lag = 3, alpha = 0.01)
+    series, treatment = "ads", lag = 3, max_lag = 3, alpha = 0.01)
 effect = series.tables["time_series_effect"].iloc[0]
 print(effect.name, effect["ci_lower"] < 0.6 * 0.8 < effect["ci_upper"])
-# filings (lag 3) True
+# ads (lag 3) True
 ```
 
 The estimates are causal only if the assumptions of their designs hold: most
@@ -1570,7 +1611,7 @@ treatment. DoWhy's refuters test some of these assumptions.
 
 ## Survival analysis
 
-For the time until an event (such as rearrest or the end of a case), the
+For the time until an event (such as a patient's relapse or a customer's cancellation), the
 label is the time, and a column says whether the event happened (1) or the
 row stopped being observed first (0, censored). `kaplan_meier` and
 `survival_curves` describe and draw the share of rows without the event over
@@ -1581,17 +1622,17 @@ predictions. They wrap statsmodels:
 
 ```python
 rng = np.random.default_rng(2)
-prior = rng.poisson(2, 400).astype(float)
+complaints = rng.poisson(2, 400).astype(float)
 times = pd.DataFrame({
-    "prior": prior,
-    "arrested": (rng.random(400) < 0.7).astype(int),
-    "days": rng.exponential(400 / (1 + prior)).round() + 1,
+    "complaints": complaints,
+    "canceled": (rng.random(400) < 0.7).astype(int),
+    "days": rng.exponential(400 / (1 + complaints)).round() + 1,
 })
-dataset = amos.Dataset(times, label = "days", seed = 43, groups = ["arrested"])
-amos.describers.KaplanMeier().apply(dataset, event = "arrested")
+dataset = amos.Dataset(times, label = "days", seed = 43, groups = ["canceled"])
+amos.describers.KaplanMeier().apply(dataset, event = "canceled")
 amos.splitters.TrainTest().apply(dataset)
-amos.models.Cox().apply(dataset, event = "arrested")
-print(dataset.tables["cox_coefficients"].loc["prior", "hazard_ratio"] > 1)
+amos.models.Cox().apply(dataset, event = "canceled")
+print(dataset.tables["cox_coefficients"].loc["complaints", "hazard_ratio"] > 1)
 # True
 print(amos.metrics.Concordance().measure(dataset) > 0.5)
 # True

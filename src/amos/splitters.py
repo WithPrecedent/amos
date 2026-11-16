@@ -107,8 +107,8 @@ class Splitter(base.Operation, abc.ABC):
 class GroupSplit(Splitter):
     """Keeps all of the rows of each group in the same set.
 
-    Use this when rows are not independent (for example, several cases
-    decided by the same judge, or several observations of one person), so
+    Use this when rows are not independent (for example, several students
+    in the same school, or several observations of one person), so
     that a model is tested on groups it has not seen.
 
     Wraps:

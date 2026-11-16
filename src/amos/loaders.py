@@ -418,7 +418,7 @@ class LoadFile(Loader):
 class LoadFiles(Loader):
     """Loads a batch of files into one table.
 
-    The source is a folder, a pattern of paths (such as "opinions/*.txt"), or
+    The source is a folder, a pattern of paths (such as "reports/*.txt"), or
     a list of paths. Each file is read with the clerk, as `load_file` reads
     one, so its format comes from its name unless "file_format" names one for
     every file. A file of a table (such as a CSV file) adds its rows, and a
@@ -450,7 +450,7 @@ class LoadFiles(Loader):
         """Loads the files at `source` into one table.
 
         Args:
-            source: a folder, a pattern of paths (such as "opinions/*.txt"),
+            source: a folder, a pattern of paths (such as "reports/*.txt"),
                 or a list of paths of files. A relative path or pattern is
                 looked for in the current folder and then in the clerk's
                 input folder.

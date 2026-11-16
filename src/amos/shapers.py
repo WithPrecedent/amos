@@ -4,7 +4,7 @@ These are techniques of the "wrangler" stage of a project. Cleaners (see the
 `cleaners` module) remove rows and columns, and mungers (see the `mungers`
 module) change what is in the columns. Shapers change what a row is: they
 rearrange the same data so that each row stands for something else. A table
-with a row for each case becomes one with a row for each judge on each case
+with a row for each order becomes one with a row for each item of each order
 (`lists_to_rows`), and back again (`group_rows`). A table with a column for
 each year becomes one with a row for each year (`wide_to_long`), and back
 again (`long_to_wide`).
@@ -173,12 +173,12 @@ class Shaper(base.Operation, abc.ABC):
 class GroupRows(Shaper):
     """Makes one row for each group of rows, with summaries of its columns.
 
-    For example, a table with a row for each judge on each case becomes a
-    table with a row for each case, with the share of its judges who are
+    For example, a table with a row for each student in each class becomes a
+    table with a row for each class, with the share of its students who are
     women and their mean age. It is the opposite of `lists_to_rows`.
 
     Unless "how" says otherwise, a column that has the same value in every
-    row of each group keeps that value (so a case's court stays its court).
+    row of each group keeps that value (so a class keeps its teacher).
     Of the columns that vary within a group, the mean is taken of numbers and
     booleans (the mean of a boolean is the share that are true), and the
     first value is taken of anything else.
@@ -270,7 +270,7 @@ class GroupRows(Shaper):
 
 @dataclasses.dataclass
 class ListsToRows(Shaper):
-    """Makes a row for each item of a list, such as each judge of a case.
+    """Makes a row for each item of a list, such as each author of a book.
 
     A column that lists several things in one cell (as a Python list, or as
     text such as "Lynch; Thompson; Barron") is split into a row for each of

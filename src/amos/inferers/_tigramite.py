@@ -37,7 +37,7 @@ _TESTS: dict[str, str] = {
 
 @dataclasses.dataclass
 class Tigramite(Inferer, abc.ABC):
-    """Genre of tigramite's methods of causal discovery in time series.
+    """Base class for inferers that find causes in time series with tigramite.
 
     The rows are a time series, in order, and the variables are the label
     and the features (which must be numbers, without missing values). The
@@ -127,7 +127,7 @@ class Tigramite(Inferer, abc.ABC):
 
 @dataclasses.dataclass
 class LPCMCI(Tigramite):
-    """tigramite's LPCMCI: causal discovery in time series with hidden causes.
+    """Finds causes in time series, allowing for hidden causes (LPCMCI).
 
     Unlike `pcmci_plus`, it allows for causes that are not among the
     variables (latent confounders), so a link may be "o->" (one end not
@@ -168,7 +168,7 @@ class LPCMCI(Tigramite):
 
 @dataclasses.dataclass
 class PCMCI(Tigramite):
-    """tigramite's PCMCI: which variables cause which others at later times.
+    """Finds which variables cause which others at later times (PCMCI).
 
     It finds the lagged causes (at lags of 1 to "max_lag") of each variable,
     with the PC algorithm and then the momentary conditional independence
@@ -211,7 +211,7 @@ class PCMCI(Tigramite):
 
 @dataclasses.dataclass
 class PCMCIPlus(Tigramite):
-    """tigramite's PCMCI+: causes at later times and at the same time.
+    """Finds causes at later times and at the same time (PCMCI+).
 
     Like `pcmci`, but it also finds links between variables at the same time
     (lag 0), whose direction may not be known ("o-o").
@@ -251,7 +251,7 @@ class PCMCIPlus(Tigramite):
 
 @dataclasses.dataclass
 class TimeSeriesEffect(Tigramite):
-    """tigramite's causal effect of one series (the treatment) on the label.
+    """Estimates the causal effect of one series (the treatment) on the label.
 
     It finds the causes of each variable with `pcmci`, fits a linear model of
     each variable on its causes, and multiplies the coefficients along every

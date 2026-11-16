@@ -269,7 +269,7 @@ class DistributionTest(Describer, abc.ABC):
 
 @dataclasses.dataclass
 class AssociationRules(Describer):
-    """Rules of which values tend to appear in the same rows.
+    """Finds rules of which values tend to appear in the same rows.
 
     mlxtend's association rules, as in an analysis of shopping baskets: each
     row is a set of items, which are the values of the categorical columns
@@ -355,7 +355,7 @@ class AssociationRules(Describer):
 
 @dataclasses.dataclass
 class Correlations(Describer):
-    """Correlations between the numeric columns (including the label).
+    """Tabulates the correlations between the numeric columns and the label.
 
     Wraps:
         [`pandas.DataFrame.corr`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.corr.html)
@@ -391,7 +391,7 @@ class Correlations(Describer):
 
 @dataclasses.dataclass
 class Describe(Describer):
-    """The `pandas` description of every column, one row per column.
+    """Tabulates `pandas`' description of every column, one row per column.
 
     Wraps:
         [`pandas.DataFrame.describe`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.describe.html)
@@ -436,7 +436,7 @@ class Describe(Describer):
 
 @dataclasses.dataclass
 class Distributions(Describer):
-    """The distribution that fits each column best, and its skew.
+    """Finds the distribution that fits each column best, and its skew.
 
     Each distribution that suits a column's values (for example, a Poisson
     distribution only for counts, and a beta distribution only for values
@@ -531,7 +531,7 @@ class Distributions(Describer):
 
 @dataclasses.dataclass
 class Frequencies(Describer):
-    """The count and share of each value of the categorical columns."""
+    """Counts each value of the categorical columns, with its share."""
 
     visual: ClassVar[str] = 'frequency_plots'
 
@@ -573,7 +573,7 @@ class Frequencies(Describer):
 
 @dataclasses.dataclass
 class IsBernoulli(DistributionTest):
-    """Whether each column is a Bernoulli distribution (0s and 1s).
+    """Tests whether each column is a Bernoulli distribution (0s and 1s).
 
     A column fits if every value is 0 or 1 (or true or false). Any such
     column is a Bernoulli distribution, so there is nothing to test.
@@ -585,7 +585,7 @@ class IsBernoulli(DistributionTest):
 
 @dataclasses.dataclass
 class IsBeta(DistributionTest):
-    """Whether each column fits a beta distribution.
+    """Tests whether each column fits a beta distribution.
 
     A column fits if every value is between 0 and 1 (not either) and the
     Kolmogorov-Smirnov test does not reject the beta distribution fitted to
@@ -602,7 +602,7 @@ class IsBeta(DistributionTest):
 
 @dataclasses.dataclass
 class IsBimodal(DistributionTest):
-    """Whether each column has more than one peak (Hartigan's dip test).
+    """Tests whether each column has more than one peak (Hartigan's dip test).
 
     A column fits if Hartigan's dip test rejects that it has a single peak.
     `distribution_fits` draws a mixture of two normal distributions over it.
@@ -617,7 +617,7 @@ class IsBimodal(DistributionTest):
 
 @dataclasses.dataclass
 class IsBinomial(DistributionTest):
-    """Whether each column fits a binomial distribution.
+    """Tests whether each column fits a binomial distribution.
 
     A column fits if its values are whole numbers from 0 to the number of
     trials and the chi-square test does not reject the binomial distribution
@@ -635,7 +635,7 @@ class IsBinomial(DistributionTest):
 
 @dataclasses.dataclass
 class IsExponential(DistributionTest):
-    """Whether each column fits an exponential distribution.
+    """Tests whether each column fits an exponential distribution.
 
     A column fits if none of its values is negative and the Anderson-Darling
     test does not reject the exponential distribution with its mean.
@@ -651,7 +651,7 @@ class IsExponential(DistributionTest):
 
 @dataclasses.dataclass
 class IsLeftSkewed(DistributionTest):
-    """Whether each column is skewed to the left.
+    """Tests whether each column is skewed to the left.
 
     A column is skewed to the left (its longer tail is of small values) if
     D'Agostino's test finds that its skew is below 0. `distribution_fits`
@@ -685,7 +685,7 @@ class IsLeftSkewed(DistributionTest):
 
 @dataclasses.dataclass
 class IsLogNormal(DistributionTest):
-    """Whether each column fits a log-normal distribution.
+    """Tests whether each column fits a log-normal distribution.
 
     A column fits if all of its values are above 0 and their logarithms fit
     a normal distribution (by the test of `is_normal`).
@@ -703,7 +703,7 @@ class IsLogNormal(DistributionTest):
 
 @dataclasses.dataclass
 class IsNormal(DistributionTest):
-    """Whether each column fits a normal distribution.
+    """Tests whether each column fits a normal distribution.
 
     A column fits if the Shapiro-Wilk test (for up to 5,000 values) or
     D'Agostino and Pearson's test (for more, since the p-value of the
@@ -722,7 +722,7 @@ class IsNormal(DistributionTest):
 
 @dataclasses.dataclass
 class IsPoisson(DistributionTest):
-    """Whether each column fits a Poisson distribution.
+    """Tests whether each column fits a Poisson distribution.
 
     A column fits if its values are whole numbers of at least 0 and the
     chi-square test does not reject the Poisson distribution with its mean.
@@ -738,7 +738,7 @@ class IsPoisson(DistributionTest):
 
 @dataclasses.dataclass
 class IsRightSkewed(DistributionTest):
-    """Whether each column is skewed to the right.
+    """Tests whether each column is skewed to the right.
 
     A column is skewed to the right (its longer tail is of large values) if
     D'Agostino's test finds that its skew is above 0. `distribution_fits`
@@ -772,7 +772,7 @@ class IsRightSkewed(DistributionTest):
 
 @dataclasses.dataclass
 class IsStudent(DistributionTest):
-    """Whether each column fits a Student's t distribution.
+    """Tests whether each column fits a Student's t distribution.
 
     A column fits if the Kolmogorov-Smirnov test does not reject the
     Student's t distribution (with a location and scale) fitted to it by
@@ -789,7 +789,7 @@ class IsStudent(DistributionTest):
 
 @dataclasses.dataclass
 class IsUniform(DistributionTest):
-    """Whether each column fits a uniform distribution.
+    """Tests whether each column fits a uniform distribution.
 
     A column fits if the uniform distribution from its smallest to its
     largest value is not rejected: by the chi-square test for whole numbers
@@ -809,13 +809,13 @@ class IsUniform(DistributionTest):
 
 @dataclasses.dataclass
 class KaplanMeier(Describer):
-    """The share of rows without an event over time (a survival curve).
+    """Estimates the share of rows still without an event over time.
 
-    The label is the time until the event (such as rearrest) or until the row
-    stopped being observed. Set "event" to the column that is 1 if the event
-    happened and 0 if the row was censored (by default, every event was
-    observed), and "group" to a column to make a curve for each group. It
-    wraps statsmodels' `SurvfuncRight`.
+    The label is the time until the event (such as a patient's relapse) or until
+    the row stopped being observed. Set "event" to the column that is 1 if the
+    event happened and 0 if the row was censored (by default, every event was
+    observed), and "group" to a column to make a curve for each group. It wraps
+    statsmodels' `SurvfuncRight`.
 
     Wraps:
         [`statsmodels.duration.survfunc.SurvfuncRight`](https://www.statsmodels.org/stable/generated/statsmodels.duration.survfunc.SurvfuncRight.html)
@@ -877,7 +877,7 @@ class KaplanMeier(Describer):
 
 @dataclasses.dataclass
 class LabelBalance(Describer):
-    """The count and share of each value of the label."""
+    """Counts each value of the label, with its share."""
 
     visual: ClassVar[str] = 'label_plot'
 
@@ -919,7 +919,7 @@ class LabelBalance(Describer):
 
 @dataclasses.dataclass
 class MissingValues(Describer):
-    """The count and share of missing values in each column."""
+    """Counts the missing values in each column, with their share."""
 
     visual: ClassVar[str] = 'missing_bars'
 
@@ -942,7 +942,7 @@ class MissingValues(Describer):
 
 @dataclasses.dataclass
 class Summarize(Describer):
-    """Summary statistics of the numeric columns, as reported in papers.
+    """Tabulates the summary statistics of numeric columns that papers report.
 
     Beyond `pandas.DataFrame.describe`, this includes the number of missing
     values, the median, the skew, and the kurtosis of each column.

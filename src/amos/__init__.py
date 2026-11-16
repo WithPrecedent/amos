@@ -30,6 +30,7 @@ __all__: list[str] = [
     'Munger',
     'Operation',
     'Parser',
+    'PatternParser',
     'Pipeline',
     'Plot',
     'Project',
@@ -42,6 +43,7 @@ __all__: list[str] = [
     'Transformer',
     'Validator',
     'library',
+    'register_rule_kind',
     'register_rulebook',
     'register_value_map',
 ]
@@ -63,7 +65,12 @@ from .mergers import Merger
 from .metrics import GroupMetric, Metric
 from .models import Model
 from .mungers import Munger, register_value_map
-from .parsers import Parser, register_rulebook
+from .parsers import (
+    Parser,
+    PatternParser,
+    register_rule_kind,
+    register_rulebook,
+)
 from .pipelines import Pipeline
 from .plots import Plot
 from .reports import Findings

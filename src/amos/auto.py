@@ -202,7 +202,7 @@ class Profile:
     """What the training rows of a dataset are like.
 
     Made by `profile` from the real training rows (not the rows that a
-    sampler made up), or from a random sample of `_PROFILE_ROWS` of them.
+    sampler made up), or from a random sample of 10,000 of them.
 
     Args:
         task: "classify", "regress", or `None` if there is no label.
@@ -216,7 +216,7 @@ class Profile:
         text: number of features of text or dates, which models cannot use.
         missing: whether any feature has a missing value.
         unscaled: whether the numeric features are on very different scales
-            (the largest standard deviation is more than `_SCALES` times the
+            (the largest standard deviation is more than 10 times the
             smallest).
         vif: the largest variance inflation factor of the numeric features,
             or `None` if there are fewer than two.
@@ -636,7 +636,7 @@ class AutoEncoder(Chooser):
             item: the dataset to encode.
             choices: names of the encoders to choose from, in the order to
                 prefer them, for every feature. Defaults to `None`, which uses
-                those in `_ENCODERS` for each kind of feature.
+                those described above for each kind of feature.
             levels: most levels of a feature for dummy variables. Defaults to
                 15.
             **kwargs: parameters for the encoders (such as "drop" for
@@ -815,7 +815,7 @@ class AutoImputer(Chooser):
         Args:
             item: the dataset to fill.
             choices: names of the imputers to choose from, in the order to
-                prefer them. Defaults to `None`, which uses `_IMPUTERS`.
+                prefer them. Defaults to `None`, which uses those described above.
             **kwargs: parameters for the imputers. Each imputer uses those
                 it accepts.
 
@@ -878,8 +878,11 @@ class AutoImputer(Chooser):
 class AutoModel(Chooser):
     """Fits the best of the models whose needs and assumptions the data meets.
 
-    The models it considers (in the order it prefers them) are in
-    `_MODELS`, with what each needs and assumes. It rules out the models
+    In the order it prefers them, it considers `poisson`,
+    `negative_binomial`, `zero_inflated_poisson`, `ordinal_regression`,
+    `robust_regression`, `linear`, `logit`, `ridge`, `random_forest`,
+    `gradient_boosting`, `lightgbm`, `xgboost`, `catboost`, `lasso`,
+    `naive_bayes`, `svm`, `knn`, and `neural_network`. It rules out the models
     that cannot do the task or use the features (missing values, categorical
     features, more features than rows, or features on very different scales
     for models that need them on similar scales), whose package is not
@@ -941,8 +944,8 @@ class AutoModel(Chooser):
         Args:
             item: the dataset to model. It must have a label.
             choices: names of the models to choose from, in the order to
-                prefer them. Defaults to `None`, which uses the models in
-                `_MODELS` that can do the task.
+                prefer them. Defaults to `None`, which uses the models
+                described above that can do the task.
             candidates: most models to cross-validate. Defaults to 4.
             folds: number of cross-validation folds. Defaults to 5. If it is
                 less than 2 (or the rarest class has fewer than 2 rows), the
@@ -1130,7 +1133,7 @@ class AutoSampler(Chooser):
         Args:
             item: the dataset to resample.
             choices: names of the samplers to choose from, in the order to
-                prefer them. Defaults to `None`, which uses `_SAMPLERS`.
+                prefer them. Defaults to `None`, which uses those described above.
             **kwargs: parameters for the sampler (such as
                 "sampling_strategy"). Each sampler uses those it accepts.
 
@@ -1317,7 +1320,7 @@ def _described(columns: Sequence[str], counts: Mapping[str, int]) -> str:
         counts: number of levels of each categorical feature.
 
     Returns:
-        The features as a list in words, such as "court (3 levels) and judge
+        The features as a list in words, such as "region (3 levels) and store
             (212 levels)". A feature without a count is named alone.
 
     """

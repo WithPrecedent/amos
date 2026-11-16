@@ -42,7 +42,17 @@ Every model has a pipeline of its own for each task that it can do. The
 
 | Name | Description |
 | --- | --- |
-| [`parse_documents`][amos.parsers.ParseDocuments] | Finds information in text with a rulebook. |
+| [`parse_all`][amos.parsers.ParseAll] | Finds information in text with a rulebook. |
+| [`parse_categories`][amos.parsers.ParseCategories] | Lists the value of every pattern that text matches, in order. |
+| [`parse_category`][amos.parsers.ParseCategory] | Gives each text the value of the first pattern that it matches. |
+| [`parse_counts`][amos.parsers.ParseCounts] | Counts the matches of a pattern in text. |
+| [`parse_fields`][amos.parsers.ParseFields] | Makes a column for each labeled section of text. |
+| [`parse_flags`][amos.parsers.ParseFlags] | Flags whether text matches a pattern. |
+| [`parse_match`][amos.parsers.ParseMatch] | Keeps the first match of a pattern in text (or the groups of a match). |
+| [`parse_matches`][amos.parsers.ParseMatches] | Keeps every match of a pattern in text (or the groups of each match). |
+| [`parse_names`][amos.parsers.ParseNames] | Finds the names in text. |
+| [`parse_replace`][amos.parsers.ParseReplace] | Replaces the matches of a pattern in text. |
+| [`parse_split`][amos.parsers.ParseSplit] | Splits text into columns where a pattern matches. |
 
 ## Cleaners (wrangler)
 
@@ -67,17 +77,10 @@ Every model has a pipeline of its own for each task that it can do. The
 | [`coalesce`][amos.mungers.Coalesce] | Takes the first value that is not missing from several columns. |
 | [`combine_flags`][amos.mungers.CombineFlags] | Combines flags into one: whether any or all are true, or how many are. |
 | [`convert_types`][amos.mungers.ConvertTypes] | Changes the data types of columns. |
-| [`count_patterns`][amos.mungers.CountPatterns] | Counts the matches of patterns in text. |
 | [`derive_columns`][amos.mungers.DeriveColumns] | Makes columns from expressions of other columns, such as "a / b". |
-| [`extract_all`][amos.mungers.ExtractAll] | Keeps every match of a pattern in text. |
-| [`extract_pattern`][amos.mungers.ExtractPattern] | Keeps the first match of a pattern in text (or the groups of a match). |
-| [`flag_patterns`][amos.mungers.FlagPatterns] | Makes columns that say whether text matches patterns. |
-| [`map_patterns`][amos.mungers.MapPatterns] | Turns text into values by the first pattern that it matches. |
 | [`map_values`][amos.mungers.MapValues] | Replaces values with others, such as "N/A" with a missing value. |
 | [`normalize_text`][amos.mungers.NormalizeText] | Normalizes the spaces, case, accents, and punctuation of text. |
-| [`replace_text`][amos.mungers.ReplaceText] | Replaces the matches of patterns in text. |
 | [`set_kinds`][amos.mungers.SetKinds] | Sets the kind of each column, with the smallest type that holds it. |
-| [`split_text`][amos.mungers.SplitText] | Splits text into columns where a pattern matches. |
 | [`strip_text`][amos.mungers.StripText] | Trims spaces from text, and optionally makes it lowercase. |
 
 ## Mergers (wrangler)
@@ -94,7 +97,7 @@ Every model has a pipeline of its own for each task that it can do. The
 | Name | Description |
 | --- | --- |
 | [`group_rows`][amos.shapers.GroupRows] | Makes one row for each group of rows, with summaries of its columns. |
-| [`lists_to_rows`][amos.shapers.ListsToRows] | Makes a row for each item of a list, such as each judge of a case. |
+| [`lists_to_rows`][amos.shapers.ListsToRows] | Makes a row for each item of a list, such as each author of a book. |
 | [`long_to_wide`][amos.shapers.LongToWide] | Spreads the rows of each group into columns, such as one for each year. |
 | [`wide_to_long`][amos.shapers.WideToLong] | Stacks columns into rows, such as a row for each year. |
 
@@ -102,27 +105,27 @@ Every model has a pipeline of its own for each task that it can do. The
 
 | Name | Description |
 | --- | --- |
-| [`association_rules`][amos.describers.AssociationRules] | Rules of which values tend to appear in the same rows. |
-| [`correlations`][amos.describers.Correlations] | Correlations between the numeric columns (including the label). |
-| [`describe`][amos.describers.Describe] | The `pandas` description of every column, one row per column. |
-| [`distributions`][amos.describers.Distributions] | The distribution that fits each column best, and its skew. |
-| [`frequencies`][amos.describers.Frequencies] | The count and share of each value of the categorical columns. |
-| [`is_bernoulli`][amos.describers.IsBernoulli] | Whether each column is a Bernoulli distribution (0s and 1s). |
-| [`is_beta`][amos.describers.IsBeta] | Whether each column fits a beta distribution. |
-| [`is_bimodal`][amos.describers.IsBimodal] | Whether each column has more than one peak (Hartigan's dip test). |
-| [`is_binomial`][amos.describers.IsBinomial] | Whether each column fits a binomial distribution. |
-| [`is_exponential`][amos.describers.IsExponential] | Whether each column fits an exponential distribution. |
-| [`is_left_skewed`][amos.describers.IsLeftSkewed] | Whether each column is skewed to the left. |
-| [`is_log_normal`][amos.describers.IsLogNormal] | Whether each column fits a log-normal distribution. |
-| [`is_normal`][amos.describers.IsNormal] | Whether each column fits a normal distribution. |
-| [`is_poisson`][amos.describers.IsPoisson] | Whether each column fits a Poisson distribution. |
-| [`is_right_skewed`][amos.describers.IsRightSkewed] | Whether each column is skewed to the right. |
-| [`is_student`][amos.describers.IsStudent] | Whether each column fits a Student's t distribution. |
-| [`is_uniform`][amos.describers.IsUniform] | Whether each column fits a uniform distribution. |
-| [`kaplan_meier`][amos.describers.KaplanMeier] | The share of rows without an event over time (a survival curve). |
-| [`label_balance`][amos.describers.LabelBalance] | The count and share of each value of the label. |
-| [`missing_values`][amos.describers.MissingValues] | The count and share of missing values in each column. |
-| [`summarize`][amos.describers.Summarize] | Summary statistics of the numeric columns, as reported in papers. |
+| [`association_rules`][amos.describers.AssociationRules] | Finds rules of which values tend to appear in the same rows. |
+| [`correlations`][amos.describers.Correlations] | Tabulates the correlations between the numeric columns and the label. |
+| [`describe`][amos.describers.Describe] | Tabulates `pandas`' description of every column, one row per column. |
+| [`distributions`][amos.describers.Distributions] | Finds the distribution that fits each column best, and its skew. |
+| [`frequencies`][amos.describers.Frequencies] | Counts each value of the categorical columns, with its share. |
+| [`is_bernoulli`][amos.describers.IsBernoulli] | Tests whether each column is a Bernoulli distribution (0s and 1s). |
+| [`is_beta`][amos.describers.IsBeta] | Tests whether each column fits a beta distribution. |
+| [`is_bimodal`][amos.describers.IsBimodal] | Tests whether each column has more than one peak (Hartigan's dip test). |
+| [`is_binomial`][amos.describers.IsBinomial] | Tests whether each column fits a binomial distribution. |
+| [`is_exponential`][amos.describers.IsExponential] | Tests whether each column fits an exponential distribution. |
+| [`is_left_skewed`][amos.describers.IsLeftSkewed] | Tests whether each column is skewed to the left. |
+| [`is_log_normal`][amos.describers.IsLogNormal] | Tests whether each column fits a log-normal distribution. |
+| [`is_normal`][amos.describers.IsNormal] | Tests whether each column fits a normal distribution. |
+| [`is_poisson`][amos.describers.IsPoisson] | Tests whether each column fits a Poisson distribution. |
+| [`is_right_skewed`][amos.describers.IsRightSkewed] | Tests whether each column is skewed to the right. |
+| [`is_student`][amos.describers.IsStudent] | Tests whether each column fits a Student's t distribution. |
+| [`is_uniform`][amos.describers.IsUniform] | Tests whether each column fits a uniform distribution. |
+| [`kaplan_meier`][amos.describers.KaplanMeier] | Estimates the share of rows still without an event over time. |
+| [`label_balance`][amos.describers.LabelBalance] | Counts each value of the label, with its share. |
+| [`missing_values`][amos.describers.MissingValues] | Counts the missing values in each column, with their share. |
+| [`summarize`][amos.describers.Summarize] | Tabulates the summary statistics of numeric columns that papers report. |
 
 ## Splitters (analyst)
 
@@ -233,44 +236,44 @@ Every model has a pipeline of its own for each task that it can do. The
 
 | Name | Classify | Regress | Description |
 | --- | --- | --- | --- |
-| [`adaboost`][amos.models.Adaboost] | <code>sklearn.<wbr>ensemble.<wbr>AdaBoostClassifier</code> | <code>sklearn.<wbr>ensemble.<wbr>AdaBoostRegressor</code> | AdaBoost: a sequence of small trees, each fixing the last one's errors. |
+| [`adaboost`][amos.models.Adaboost] | <code>sklearn.<wbr>ensemble.<wbr>AdaBoostClassifier</code> | <code>sklearn.<wbr>ensemble.<wbr>AdaBoostRegressor</code> | Fits AdaBoost: small trees in sequence, each correcting the last. |
 | [`baseline`][amos.models.Baseline] | <code>sklearn.<wbr>dummy.<wbr>DummyClassifier</code> | <code>sklearn.<wbr>dummy.<wbr>DummyRegressor</code> | Predicts the most common class (or the mean) for every row. |
-| [`binomial_bayes_mixedglm`][amos.models.BinomialBayesMixedglm] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | A Bayesian logistic regression with a random intercept for each group. |
-| [`catboost`][amos.models.Catboost] | <code>catboost.<wbr>CatBoostClassifier</code> | <code>catboost.<wbr>CatBoostRegressor</code> | CatBoost gradient boosting, which uses categorical features directly. |
-| [`cox`][amos.models.Cox] |  | <code>amos.<wbr>models.<wbr>ProportionalHazards</code> | Cox proportional hazards regression of the time until an event. |
-| [`decision_tree`][amos.models.DecisionTree] | <code>sklearn.<wbr>tree.<wbr>DecisionTreeClassifier</code> | <code>sklearn.<wbr>tree.<wbr>DecisionTreeRegressor</code> | A single decision tree. |
-| [`elastic_net`][amos.models.ElasticNet] |  | <code>sklearn.<wbr>linear_model.<wbr>ElasticNet</code> | Linear regression with both lasso and ridge penalties. |
-| [`explainable_boosting`][amos.models.ExplainableBoosting] | <code>interpret.<wbr>glassbox.<wbr>ExplainableBoostingClassifier</code> | <code>interpret.<wbr>glassbox.<wbr>ExplainableBoostingRegressor</code> | An Explainable Boosting Machine from InterpretML. |
-| [`extra_trees`][amos.models.ExtraTrees] | <code>sklearn.<wbr>ensemble.<wbr>ExtraTreesClassifier</code> | <code>sklearn.<wbr>ensemble.<wbr>ExtraTreesRegressor</code> | An ensemble of extremely randomized trees. |
-| [`fixest`][amos.models.Fixest] | <code>amos.<wbr>models.<wbr>FixedEffects</code> | <code>amos.<wbr>models.<wbr>FixedEffects</code> | Regression with fixed effects and clustered standard errors (pyfixest). |
-| [`gee`][amos.models.GEE] | <code>amos.<wbr>models.<wbr>Statsmodel</code> | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Generalized estimating equations from statsmodels, with inference. |
-| [`generalized_poisson`][amos.models.GeneralizedPoisson] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Generalized Poisson regression of counts, with inference. |
-| [`glm`][amos.models.GLM] | <code>amos.<wbr>models.<wbr>Statsmodel</code> | <code>amos.<wbr>models.<wbr>Statsmodel</code> | A generalized linear model from statsmodels, with inference. |
-| [`gradient_boosting`][amos.models.GradientBoosting] | <code>sklearn.<wbr>ensemble.<wbr>HistGradientBoostingClassifier</code> | <code>sklearn.<wbr>ensemble.<wbr>HistGradientBoostingRegressor</code> | Histogram-based gradient boosting from scikit-learn. |
+| [`binomial_bayes_mixedglm`][amos.models.BinomialBayesMixedglm] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | Fits a Bayesian logistic regression with a random intercept per group. |
+| [`catboost`][amos.models.Catboost] | <code>catboost.<wbr>CatBoostClassifier</code> | <code>catboost.<wbr>CatBoostRegressor</code> | Fits CatBoost gradient boosting, which handles categorical features. |
+| [`cox`][amos.models.Cox] |  | <code>amos.<wbr>models.<wbr>ProportionalHazards</code> | Fits a Cox proportional hazards regression of the time until an event. |
+| [`decision_tree`][amos.models.DecisionTree] | <code>sklearn.<wbr>tree.<wbr>DecisionTreeClassifier</code> | <code>sklearn.<wbr>tree.<wbr>DecisionTreeRegressor</code> | Fits a single decision tree. |
+| [`elastic_net`][amos.models.ElasticNet] |  | <code>sklearn.<wbr>linear_model.<wbr>ElasticNet</code> | Fits a linear regression with both lasso and ridge penalties. |
+| [`explainable_boosting`][amos.models.ExplainableBoosting] | <code>interpret.<wbr>glassbox.<wbr>ExplainableBoostingClassifier</code> | <code>interpret.<wbr>glassbox.<wbr>ExplainableBoostingRegressor</code> | Fits an Explainable Boosting Machine from InterpretML. |
+| [`extra_trees`][amos.models.ExtraTrees] | <code>sklearn.<wbr>ensemble.<wbr>ExtraTreesClassifier</code> | <code>sklearn.<wbr>ensemble.<wbr>ExtraTreesRegressor</code> | Fits an ensemble of extremely randomized trees. |
+| [`fixest`][amos.models.Fixest] | <code>amos.<wbr>models.<wbr>FixedEffects</code> | <code>amos.<wbr>models.<wbr>FixedEffects</code> | Fits a regression with fixed effects and clustered standard errors. |
+| [`gee`][amos.models.GEE] | <code>amos.<wbr>models.<wbr>Statsmodel</code> | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits generalized estimating equations from statsmodels, with inference. |
+| [`generalized_poisson`][amos.models.GeneralizedPoisson] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits a generalized Poisson regression of counts, with inference. |
+| [`glm`][amos.models.GLM] | <code>amos.<wbr>models.<wbr>Statsmodel</code> | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits a generalized linear model from statsmodels, with inference. |
+| [`gradient_boosting`][amos.models.GradientBoosting] | <code>sklearn.<wbr>ensemble.<wbr>HistGradientBoostingClassifier</code> | <code>sklearn.<wbr>ensemble.<wbr>HistGradientBoostingRegressor</code> | Fits histogram-based gradient boosting from scikit-learn. |
 | [`knn`][amos.models.KNN] | <code>sklearn.<wbr>neighbors.<wbr>KNeighborsClassifier</code> | <code>sklearn.<wbr>neighbors.<wbr>KNeighborsRegressor</code> | Predicts from the k nearest training rows (5 by default). |
-| [`lasso`][amos.models.Lasso] |  | <code>sklearn.<wbr>linear_model.<wbr>Lasso</code> | Linear regression with a lasso (L1) penalty. |
-| [`lightgbm`][amos.models.Lightgbm] | <code>lightgbm.<wbr>LGBMClassifier</code> | <code>lightgbm.<wbr>LGBMRegressor</code> | LightGBM gradient boosting. |
-| [`linear`][amos.models.Linear] |  | <code>sklearn.<wbr>linear_model.<wbr>LinearRegression</code> | Ordinary least squares regression from scikit-learn. |
-| [`logit`][amos.models.Logit] | <code>sklearn.<wbr>linear_model.<wbr>LogisticRegression</code> |  | Logistic regression from scikit-learn. |
-| [`logit_sm`][amos.models.LogitSM] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | Logistic regression from statsmodels, with inference. |
-| [`mixedlm`][amos.models.Mixedlm] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | A linear mixed model from statsmodels, with inference. |
-| [`mnlogit`][amos.models.Mnlogit] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | Multinomial logistic regression from statsmodels, with inference. |
-| [`naive_bayes`][amos.models.NaiveBayes] | <code>sklearn.<wbr>naive_bayes.<wbr>GaussianNB</code> |  | Gaussian naive Bayes. |
-| [`negative_binomial`][amos.models.NegativeBinomial] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Negative binomial regression of counts, with inference. |
-| [`neural_network`][amos.models.NeuralNetwork] | <code>sklearn.<wbr>neural_network.<wbr>MLPClassifier</code> | <code>sklearn.<wbr>neural_network.<wbr>MLPRegressor</code> | A multi-layer perceptron (a simple neural network). |
-| [`ols`][amos.models.OLS] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Ordinary least squares regression from statsmodels, with inference. |
-| [`ordinal_regression`][amos.models.OrdinalRegression] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | Ordinal regression (ordered logit or probit) from statsmodels. |
-| [`poisson`][amos.models.Poisson] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Poisson regression of counts (such as the number of arrests). |
-| [`probit`][amos.models.Probit] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | Probit regression of two classes from statsmodels, with inference. |
-| [`quantile_regression`][amos.models.QuantileRegression] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Quantile regression from statsmodels, with inference. |
-| [`random_forest`][amos.models.RandomForest] | <code>sklearn.<wbr>ensemble.<wbr>RandomForestClassifier</code> | <code>sklearn.<wbr>ensemble.<wbr>RandomForestRegressor</code> | A random forest. |
-| [`ridge`][amos.models.Ridge] |  | <code>sklearn.<wbr>linear_model.<wbr>Ridge</code> | Linear regression with a ridge (L2) penalty. |
-| [`robust_regression`][amos.models.RobustRegression] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Robust linear regression from statsmodels, with inference. |
-| [`svm`][amos.models.SVM] | <code>sklearn.<wbr>svm.<wbr>SVC</code> | <code>sklearn.<wbr>svm.<wbr>SVR</code> | A support vector machine (with probabilities for classification). |
-| [`tabpfn`][amos.models.Tabpfn] | <code>tabpfn.<wbr>TabPFNClassifier</code> | <code>tabpfn.<wbr>TabPFNRegressor</code> | TabPFN, a pretrained model that is often the most accurate on small data. |
-| [`wls`][amos.models.WLS] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Weighted least squares regression from statsmodels, with inference. |
-| [`xgboost`][amos.models.Xgboost] | <code>xgboost.<wbr>XGBClassifier</code> | <code>xgboost.<wbr>XGBRegressor</code> | XGBoost gradient boosting. |
-| [`zero_inflated_poisson`][amos.models.ZeroInflatedPoisson] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Zero-inflated Poisson regression of counts, with inference. |
+| [`lasso`][amos.models.Lasso] |  | <code>sklearn.<wbr>linear_model.<wbr>Lasso</code> | Fits a linear regression with a lasso (L1) penalty. |
+| [`lightgbm`][amos.models.Lightgbm] | <code>lightgbm.<wbr>LGBMClassifier</code> | <code>lightgbm.<wbr>LGBMRegressor</code> | Fits LightGBM gradient boosting. |
+| [`linear`][amos.models.Linear] |  | <code>sklearn.<wbr>linear_model.<wbr>LinearRegression</code> | Fits an ordinary least squares regression from scikit-learn. |
+| [`logit`][amos.models.Logit] | <code>sklearn.<wbr>linear_model.<wbr>LogisticRegression</code> |  | Fits a logistic regression from scikit-learn. |
+| [`logit_sm`][amos.models.LogitSM] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | Fits a logistic regression from statsmodels, with inference. |
+| [`mixedlm`][amos.models.Mixedlm] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits a linear mixed model from statsmodels, with inference. |
+| [`mnlogit`][amos.models.Mnlogit] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | Fits a multinomial logistic regression from statsmodels, with inference. |
+| [`naive_bayes`][amos.models.NaiveBayes] | <code>sklearn.<wbr>naive_bayes.<wbr>GaussianNB</code> |  | Fits a Gaussian naive Bayes classifier. |
+| [`negative_binomial`][amos.models.NegativeBinomial] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits a negative binomial regression of counts, with inference. |
+| [`neural_network`][amos.models.NeuralNetwork] | <code>sklearn.<wbr>neural_network.<wbr>MLPClassifier</code> | <code>sklearn.<wbr>neural_network.<wbr>MLPRegressor</code> | Fits a multi-layer perceptron (a simple neural network). |
+| [`ols`][amos.models.OLS] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits ordinary least squares from statsmodels, with inference. |
+| [`ordinal_regression`][amos.models.OrdinalRegression] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | Fits an ordinal regression (ordered logit or probit) from statsmodels. |
+| [`poisson`][amos.models.Poisson] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits a Poisson regression of counts (such as the number of visits). |
+| [`probit`][amos.models.Probit] | <code>amos.<wbr>models.<wbr>Statsmodel</code> |  | Fits a probit regression of two classes from statsmodels, with inference. |
+| [`quantile_regression`][amos.models.QuantileRegression] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits a quantile regression from statsmodels, with inference. |
+| [`random_forest`][amos.models.RandomForest] | <code>sklearn.<wbr>ensemble.<wbr>RandomForestClassifier</code> | <code>sklearn.<wbr>ensemble.<wbr>RandomForestRegressor</code> | Fits a random forest. |
+| [`ridge`][amos.models.Ridge] |  | <code>sklearn.<wbr>linear_model.<wbr>Ridge</code> | Fits a linear regression with a ridge (L2) penalty. |
+| [`robust_regression`][amos.models.RobustRegression] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits a robust linear regression from statsmodels, with inference. |
+| [`svm`][amos.models.SVM] | <code>sklearn.<wbr>svm.<wbr>SVC</code> | <code>sklearn.<wbr>svm.<wbr>SVR</code> | Fits a support vector machine (with probabilities for classification). |
+| [`tabpfn`][amos.models.Tabpfn] | <code>tabpfn.<wbr>TabPFNClassifier</code> | <code>tabpfn.<wbr>TabPFNRegressor</code> | Fits TabPFN, a pretrained model that is often best on small data. |
+| [`wls`][amos.models.WLS] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits weighted least squares from statsmodels, with inference. |
+| [`xgboost`][amos.models.Xgboost] | <code>xgboost.<wbr>XGBClassifier</code> | <code>xgboost.<wbr>XGBRegressor</code> | Fits XGBoost gradient boosting. |
+| [`zero_inflated_poisson`][amos.models.ZeroInflatedPoisson] |  | <code>amos.<wbr>models.<wbr>Statsmodel</code> | Fits a zero-inflated Poisson regression of counts, with inference. |
 
 ## Validators (analyst)
 
@@ -293,114 +296,114 @@ Every model has a pipeline of its own for each task that it can do. The
 
 | Name | Description |
 | --- | --- |
-| [`bias_variance`][amos.evaluators.BiasVariance] | The model's expected error on the test rows, as its bias and variance. |
-| [`classification_report`][amos.evaluators.ClassificationReport] | Precision, recall, f1, and the number of rows of each class. |
-| [`conformal`][amos.evaluators.Conformal] | Prediction intervals (or sets) with a known rate of coverage. |
-| [`confusion`][amos.evaluators.Confusion] | How many rows of each class were predicted to be each class. |
-| [`explain_weights`][amos.evaluators.ExplainWeights] | eli5's explanation of the weights of the model's features. |
-| [`factor_analysis`][amos.evaluators.FactorAnalysis] | The hidden factors that explain the correlations of the features. |
-| [`fairness`][amos.evaluators.Fairness] | How the model does for each group, and the gaps between groups. |
-| [`feature_importance`][amos.evaluators.FeatureImportance] | The importance that the model itself gives each feature. |
-| [`pca`][amos.evaluators.PCA] | How much of the variance of the features each principal component has. |
-| [`permutation_importance`][amos.evaluators.PermutationImportance] | How much the model's score drops when each feature is shuffled. |
-| [`regression_table`][amos.evaluators.RegressionTable] | The estimates of every model side by side, ready to publish. |
-| [`scorecard`][amos.evaluators.Scorecard] | The results of every branch of an analysis, ready to publish. |
-| [`shap_importance`][amos.evaluators.ShapImportance] | The mean absolute SHAP value of each feature. |
+| [`bias_variance`][amos.evaluators.BiasVariance] | Splits the model's expected test error into bias and variance. |
+| [`classification_report`][amos.evaluators.ClassificationReport] | Tabulates the precision, recall, f1, and number of rows of each class. |
+| [`conformal`][amos.evaluators.Conformal] | Makes prediction intervals (or sets) with a known rate of coverage. |
+| [`confusion`][amos.evaluators.Confusion] | Counts how many rows of each class were predicted to be each class. |
+| [`explain_weights`][amos.evaluators.ExplainWeights] | Tabulates eli5's explanation of the weights of the model's features. |
+| [`factor_analysis`][amos.evaluators.FactorAnalysis] | Finds the hidden factors that explain the correlations of features. |
+| [`fairness`][amos.evaluators.Fairness] | Compares how the model does for each group, with the gaps between them. |
+| [`feature_importance`][amos.evaluators.FeatureImportance] | Tabulates the importance that the model itself gives each feature. |
+| [`pca`][amos.evaluators.PCA] | Measures how much of the features' variance each principal component has. |
+| [`permutation_importance`][amos.evaluators.PermutationImportance] | Measures how much the model's score drops when a feature is shuffled. |
+| [`regression_table`][amos.evaluators.RegressionTable] | Puts the estimates of every model side by side, ready to publish. |
+| [`scorecard`][amos.evaluators.Scorecard] | Tabulates the results of every branch of an analysis, ready to publish. |
+| [`shap_importance`][amos.evaluators.ShapImportance] | Tabulates the mean absolute SHAP value of each feature. |
 
 ## Inferers (critic)
 
 | Name | Tool | Description |
 | --- | --- | --- |
-| [`difference_in_differences`][amos.inferers.DifferenceInDifferences] | <code>doubleml.<wbr>did.<wbr>DoubleMLDIDMulti</code> | DoubleML's difference-in-differences: a treatment's effect over time. |
-| [`distance_matching`][amos.inferers.DistanceMatching] | <code>dowhy.<wbr>causal_estimators.<wbr>distance_matching_estimator.<wbr>DistanceMatchingEstimator</code> | DoWhy's matching of treated rows with the most similar untreated rows. |
-| [`doubly_robust`][amos.inferers.DoublyRobust] | <code>dowhy.<wbr>causal_estimators.<wbr>doubly_robust_estimator.<wbr>DoublyRobustEstimator</code> | DoWhy's doubly robust estimator (augmented inverse propensity weighting). |
-| [`dr_learner`][amos.inferers.DRLearner] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>BaseDRRegressor</code> | causalml's doubly robust learner of the effect of a treatment. |
-| [`glm_adjustment`][amos.inferers.GLMAdjustment] | <code>dowhy.<wbr>causal_estimators.<wbr>generalized_linear_model_estimator.<wbr>GeneralizedLinearModelEstimator</code> | DoWhy's generalized linear model of the label, adjusted for the features. |
-| [`instrumental_variable`][amos.inferers.InstrumentalVariable] | <code>dowhy.<wbr>causal_estimators.<wbr>instrumental_variable_estimator.<wbr>InstrumentalVariableEstimator</code> | DoWhy's estimate of an effect through an instrument. |
-| [`interactive_iv`][amos.inferers.InteractiveIV] | <code>doubleml.<wbr>DoubleMLIIVM</code> | DoubleML's effect for those whom an instrument moves to take a treatment. |
-| [`interactive_regression`][amos.inferers.InteractiveRegression] | <code>doubleml.<wbr>DoubleMLIRM</code> | DoubleML's average effect of a treatment with two values. |
-| [`lpcmci`][amos.inferers.LPCMCI] | <code>tigramite.<wbr>lpcmci.<wbr>LPCMCI</code> | tigramite's LPCMCI: causal discovery in time series with hidden causes. |
-| [`partially_linear`][amos.inferers.PartiallyLinear] | <code>doubleml.<wbr>DoubleMLPLR</code> | DoubleML's effect of a treatment that adds the same amount for every row. |
-| [`partially_linear_iv`][amos.inferers.PartiallyLinearIV] | <code>doubleml.<wbr>DoubleMLPLIV</code> | DoubleML's partially linear model of a treatment with an instrument. |
-| [`partially_linear_panel`][amos.inferers.PartiallyLinearPanel] | <code>doubleml.<wbr>DoubleMLPLPR</code> | DoubleML's partially linear model of a panel: units seen over time. |
-| [`partially_logistic`][amos.inferers.PartiallyLogistic] | <code>doubleml.<wbr>DoubleMLLPLR</code> | DoubleML's partially linear model of a label with two classes. |
-| [`pcmci`][amos.inferers.PCMCI] | <code>tigramite.<wbr>pcmci.<wbr>PCMCI</code> | tigramite's PCMCI: which variables cause which others at later times. |
-| [`pcmci_plus`][amos.inferers.PCMCIPlus] | <code>tigramite.<wbr>pcmci.<wbr>PCMCI</code> | tigramite's PCMCI+: causes at later times and at the same time. |
-| [`potential_outcomes`][amos.inferers.PotentialOutcomes] | <code>doubleml.<wbr>DoubleMLAPOS</code> | DoubleML's effects of each level of a treatment, compared to one of them. |
-| [`propensity_matching`][amos.inferers.PropensityMatching] | <code>dowhy.<wbr>causal_estimators.<wbr>propensity_score_matching_estimator.<wbr>PropensityScoreMatchingEstimator</code> | DoWhy's matching of treated and untreated rows by propensity score. |
-| [`propensity_stratification`][amos.inferers.PropensityStratification] | <code>dowhy.<wbr>causal_estimators.<wbr>propensity_score_stratification_estimator.<wbr>PropensityScoreStratificationEstimator</code> | DoWhy's comparison of the treated and untreated in strata of propensity. |
-| [`propensity_weighting`][amos.inferers.PropensityWeighting] | <code>dowhy.<wbr>causal_estimators.<wbr>propensity_score_weighting_estimator.<wbr>PropensityScoreWeightingEstimator</code> | DoWhy's inverse propensity weighting. |
-| [`quantile_effects`][amos.inferers.QuantileEffects] | <code>doubleml.<wbr>DoubleMLQTE</code> | DoubleML's effects of a treatment on quantiles of the label. |
-| [`regression_adjustment`][amos.inferers.RegressionAdjustment] | <code>dowhy.<wbr>causal_estimators.<wbr>linear_regression_estimator.<wbr>LinearRegressionEstimator</code> | DoWhy's linear regression of the label, which adjusts for the features. |
-| [`regression_discontinuity`][amos.inferers.RegressionDiscontinuity] | <code>doubleml.<wbr>rdd.<wbr>RDFlex</code> | DoubleML's regression discontinuity: the effect at a cutoff. |
-| [`s_learner`][amos.inferers.SLearner] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>BaseSRegressor</code> | causalml's S-learner: one model of the label, with the treatment in it. |
-| [`sample_selection`][amos.inferers.SampleSelection] | <code>doubleml.<wbr>DoubleMLSSM</code> | DoubleML's effect of a treatment when the label is only sometimes seen. |
-| [`t_learner`][amos.inferers.TLearner] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>BaseTRegressor</code> | causalml's T-learner: one model of the label for each group. |
-| [`time_series_effect`][amos.inferers.TimeSeriesEffect] | <code>tigramite.<wbr>models.<wbr>LinearMediation</code> | tigramite's causal effect of one series (the treatment) on the label. |
-| [`tmle`][amos.inferers.TMLE] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>TMLELearner</code> | causalml's targeted maximum likelihood estimation of an average effect. |
-| [`x_learner`][amos.inferers.XLearner] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>BaseXRegressor</code> | causalml's X-learner, which suits a treatment that few rows have. |
+| [`difference_in_differences`][amos.inferers.DifferenceInDifferences] | <code>doubleml.<wbr>did.<wbr>DoubleMLDIDMulti</code> | Estimates a treatment's effect over time by difference-in-differences. |
+| [`distance_matching`][amos.inferers.DistanceMatching] | <code>dowhy.<wbr>causal_estimators.<wbr>distance_matching_estimator.<wbr>DistanceMatchingEstimator</code> | Estimates an effect by matching treated rows with similar untreated ones. |
+| [`doubly_robust`][amos.inferers.DoublyRobust] | <code>dowhy.<wbr>causal_estimators.<wbr>doubly_robust_estimator.<wbr>DoublyRobustEstimator</code> | Estimates an effect with a doubly robust estimator (augmented IPW). |
+| [`dr_learner`][amos.inferers.DRLearner] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>BaseDRRegressor</code> | Estimates a treatment's effect with a doubly robust learner. |
+| [`glm_adjustment`][amos.inferers.GLMAdjustment] | <code>dowhy.<wbr>causal_estimators.<wbr>generalized_linear_model_estimator.<wbr>GeneralizedLinearModelEstimator</code> | Estimates an effect with a generalized linear model of the label. |
+| [`instrumental_variable`][amos.inferers.InstrumentalVariable] | <code>dowhy.<wbr>causal_estimators.<wbr>instrumental_variable_estimator.<wbr>InstrumentalVariableEstimator</code> | Estimates an effect through an instrumental variable. |
+| [`interactive_iv`][amos.inferers.InteractiveIV] | <code>doubleml.<wbr>DoubleMLIIVM</code> | Estimates a treatment's effect on compliers, with an instrument (LATE). |
+| [`interactive_regression`][amos.inferers.InteractiveRegression] | <code>doubleml.<wbr>DoubleMLIRM</code> | Estimates the average effect of a treatment with two values. |
+| [`lpcmci`][amos.inferers.LPCMCI] | <code>tigramite.<wbr>lpcmci.<wbr>LPCMCI</code> | Finds causes in time series, allowing for hidden causes (LPCMCI). |
+| [`partially_linear`][amos.inferers.PartiallyLinear] | <code>doubleml.<wbr>DoubleMLPLR</code> | Estimates a treatment effect that is the same for every row. |
+| [`partially_linear_iv`][amos.inferers.PartiallyLinearIV] | <code>doubleml.<wbr>DoubleMLPLIV</code> | Estimates a constant treatment effect with an instrument. |
+| [`partially_linear_panel`][amos.inferers.PartiallyLinearPanel] | <code>doubleml.<wbr>DoubleMLPLPR</code> | Estimates a constant treatment effect in a panel: units seen over time. |
+| [`partially_logistic`][amos.inferers.PartiallyLogistic] | <code>doubleml.<wbr>DoubleMLLPLR</code> | Estimates a treatment's effect on a label with two classes. |
+| [`pcmci`][amos.inferers.PCMCI] | <code>tigramite.<wbr>pcmci.<wbr>PCMCI</code> | Finds which variables cause which others at later times (PCMCI). |
+| [`pcmci_plus`][amos.inferers.PCMCIPlus] | <code>tigramite.<wbr>pcmci.<wbr>PCMCI</code> | Finds causes at later times and at the same time (PCMCI+). |
+| [`potential_outcomes`][amos.inferers.PotentialOutcomes] | <code>doubleml.<wbr>DoubleMLAPOS</code> | Estimates the effect of each level of a treatment, against one of them. |
+| [`propensity_matching`][amos.inferers.PropensityMatching] | <code>dowhy.<wbr>causal_estimators.<wbr>propensity_score_matching_estimator.<wbr>PropensityScoreMatchingEstimator</code> | Estimates an effect by matching rows on their propensity scores. |
+| [`propensity_stratification`][amos.inferers.PropensityStratification] | <code>dowhy.<wbr>causal_estimators.<wbr>propensity_score_stratification_estimator.<wbr>PropensityScoreStratificationEstimator</code> | Estimates an effect by comparing rows within strata of propensity. |
+| [`propensity_weighting`][amos.inferers.PropensityWeighting] | <code>dowhy.<wbr>causal_estimators.<wbr>propensity_score_weighting_estimator.<wbr>PropensityScoreWeightingEstimator</code> | Estimates an effect by inverse propensity weighting. |
+| [`quantile_effects`][amos.inferers.QuantileEffects] | <code>doubleml.<wbr>DoubleMLQTE</code> | Estimates a treatment's effects on quantiles of the label. |
+| [`regression_adjustment`][amos.inferers.RegressionAdjustment] | <code>dowhy.<wbr>causal_estimators.<wbr>linear_regression_estimator.<wbr>LinearRegressionEstimator</code> | Estimates an effect with a linear regression adjusted for the features. |
+| [`regression_discontinuity`][amos.inferers.RegressionDiscontinuity] | <code>doubleml.<wbr>rdd.<wbr>RDFlex</code> | Estimates a treatment's effect at a cutoff (regression discontinuity). |
+| [`s_learner`][amos.inferers.SLearner] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>BaseSRegressor</code> | Estimates effects with one model that includes the treatment (S-learner). |
+| [`sample_selection`][amos.inferers.SampleSelection] | <code>doubleml.<wbr>DoubleMLSSM</code> | Estimates a treatment's effect when the label is only sometimes seen. |
+| [`t_learner`][amos.inferers.TLearner] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>BaseTRegressor</code> | Estimates effects with a separate model for each group (T-learner). |
+| [`time_series_effect`][amos.inferers.TimeSeriesEffect] | <code>tigramite.<wbr>models.<wbr>LinearMediation</code> | Estimates the causal effect of one series (the treatment) on the label. |
+| [`tmle`][amos.inferers.TMLE] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>TMLELearner</code> | Estimates an average effect by targeted maximum likelihood (TMLE). |
+| [`x_learner`][amos.inferers.XLearner] | <code>causalml.<wbr>inference.<wbr>meta.<wbr>BaseXRegressor</code> | Estimates effects with an X-learner, which suits a rare treatment. |
 
 ## Plots (artist)
 
 | Name | Description |
 | --- | --- |
-| [`actual_vs_predicted`][amos.plots.ActualVsPredicted] | The label against the model's predictions (regression). |
-| [`association_rules_plot`][amos.plots.AssociationRulesPlot] | The support and confidence of each association rule, colored by lift. |
-| [`bias_variance_plot`][amos.plots.BiasVariancePlot] | The model's expected loss, beside its bias and variance, as bars. |
-| [`box_plots`][amos.plots.BoxPlots] | Each numeric feature as a box, split by class. |
-| [`calibration_curve`][amos.plots.CalibrationCurve] | The share of rows in each class against its predicted probability. |
-| [`causal_graph`][amos.plots.CausalGraph] | The causal links that tigramite found, as a graph of the variables. |
-| [`classification_report_heatmap`][amos.plots.ClassificationReportHeatmap] | The precision, recall, and f1 of each class, as a heatmap. |
-| [`coefficient_plot`][amos.plots.CoefficientPlot] | Coefficients with their confidence intervals (a forest plot). |
-| [`confusion_heatmap`][amos.plots.ConfusionHeatmap] | The confusion matrix as a heatmap (classification). |
-| [`correlation_heatmap`][amos.plots.CorrelationHeatmap] | The correlations between the numeric columns as a heatmap. |
-| [`count_plots`][amos.plots.CountPlots] | The count of each value of each categorical feature, split by class. |
-| [`decision_regions`][amos.plots.DecisionRegions] | The class that the model predicts across two features (classification). |
-| [`det_curve`][amos.plots.DetCurve] | The detection error tradeoff (DET) curve (classification). |
-| [`distribution_fits`][amos.plots.DistributionFits] | Each column's histogram with a fitted distribution laid over it. |
-| [`distribution_plots`][amos.plots.DistributionPlots] | The distribution of every column, in a grid. |
-| [`estimates_plot`][amos.plots.EstimatesPlot] | Every model's estimates with their confidence intervals. |
-| [`fairness_plot`][amos.plots.FairnessPlot] | The model's fairness metrics for each group, as bars. |
-| [`frequency_plots`][amos.plots.FrequencyPlots] | The share of the rows with each value of each column, in a grid. |
-| [`histograms`][amos.plots.Histograms] | The distribution of each numeric feature, in a grid. |
-| [`importance_plot`][amos.plots.ImportancePlot] | The most important features, as horizontal bars. |
-| [`influence_plot`][amos.plots.InfluencePlot] | The influence of each training row on a statsmodels regression. |
-| [`label_plot`][amos.plots.LabelPlot] | The distribution of the label: a bar for each class, or a histogram. |
-| [`learning_curve`][amos.plots.LearningCurve] | The model's score as it learns from more of the training rows. |
-| [`loadings_heatmap`][amos.plots.LoadingsHeatmap] | How strongly each feature loads on each factor, as a heatmap. |
-| [`missing_bars`][amos.plots.MissingBars] | The share of each column's values that are missing, as bars. |
-| [`missing_heatmap`][amos.plots.MissingHeatmap] | Where values are missing, as a heatmap of the rows and columns. |
-| [`pair_plot`][amos.plots.PairPlot] | Each pair of numeric features against each other, colored by class. |
-| [`partial_dependence`][amos.plots.PartialDependence] | The model's average prediction as features change (partial dependence). |
-| [`precision_recall_curve`][amos.plots.PrecisionRecallCurve] | Precision against recall at every threshold (classification). |
-| [`prediction_intervals`][amos.plots.PredictionIntervals] | Conformal prediction intervals of the test rows (or the set sizes). |
-| [`qq_plot`][amos.plots.QqPlot] | The quantiles of the residuals against a normal distribution's. |
-| [`residual_plot`][amos.plots.ResidualPlot] | The model's errors against its predictions (regression). |
-| [`roc_curve`][amos.plots.RocCurve] | The receiver operating characteristic (ROC) curve (classification). |
-| [`scorecard_plot`][amos.plots.ScorecardPlot] | Each branch's score on each metric of a scorecard, as dots. |
-| [`scree_plot`][amos.plots.ScreePlot] | The share of the variance that each principal component explains. |
-| [`search_plot`][amos.plots.SearchPlot] | The cross-validated score of each try in a hyperparameter search. |
-| [`shap_bar`][amos.plots.ShapBar] | The mean absolute SHAP value of the most important features. |
-| [`shap_beeswarm`][amos.plots.ShapBeeswarm] | The SHAP value of each row for the most important features. |
-| [`shap_decision`][amos.plots.ShapDecision] | How the features move each row's prediction, as lines. |
-| [`shap_embedding`][amos.plots.ShapEmbedding] | The rows placed by their SHAP values, colored by one feature's. |
-| [`shap_force`][amos.plots.ShapForce] | How each feature pushes one row's prediction up or down. |
-| [`shap_group_difference`][amos.plots.ShapGroupDifference] | How the SHAP values of the features differ between two groups. |
-| [`shap_heatmap`][amos.plots.ShapHeatmap] | The SHAP values of every explained row, as a heatmap. |
-| [`shap_partial_dependence`][amos.plots.ShapPartialDependence] | The model's prediction as one feature changes, with each row's. |
-| [`shap_scatter`][amos.plots.ShapScatter] | A feature's SHAP values against its values (a dependence plot). |
-| [`shap_violin`][amos.plots.ShapViolin] | The distribution of the SHAP values of the most important features. |
-| [`shap_waterfall`][amos.plots.ShapWaterfall] | How each feature moves one row's prediction (a waterfall plot). |
-| [`shape_functions`][amos.plots.ShapeFunctions] | An explainable boosting model's contribution from each feature. |
-| [`survival_curves`][amos.plots.SurvivalCurves] | The share of rows without an event over time (Kaplan-Meier curves). |
-| [`tree_feature_space`][amos.plots.TreeFeatureSpace] | How a decision tree divides one or two features. |
-| [`tree_leaf_distributions`][amos.plots.TreeLeafDistributions] | The label of the training rows in each leaf of a decision tree. |
-| [`tree_leaf_purity`][amos.plots.TreeLeafPurity] | The impurity of each leaf of a decision tree. |
-| [`tree_leaf_sizes`][amos.plots.TreeLeafSizes] | The number of training rows in each leaf of a decision tree. |
-| [`tree_plot`][amos.plots.TreePlot] | The splits of a decision tree (or of one tree of a forest). |
-| [`tree_prediction_path`][amos.plots.TreePredictionPath] | How much each feature decides one row's path down a decision tree. |
-| [`validation_curve`][amos.plots.ValidationCurve] | The model's score as one of its parameters changes. |
-| [`weights_plot`][amos.plots.WeightsPlot] | The weights of the features that eli5 explains, as bars. |
+| [`actual_vs_predicted`][amos.plots.ActualVsPredicted] | Plots the label against the model's predictions (regression). |
+| [`association_rules_plot`][amos.plots.AssociationRulesPlot] | Plots each association rule's support and confidence, colored by lift. |
+| [`bias_variance_plot`][amos.plots.BiasVariancePlot] | Plots the model's expected loss beside its bias and variance, as bars. |
+| [`box_plots`][amos.plots.BoxPlots] | Draws each numeric feature as a box, split by class. |
+| [`calibration_curve`][amos.plots.CalibrationCurve] | Plots the share of rows in each class against its predicted probability. |
+| [`causal_graph`][amos.plots.CausalGraph] | Draws the causal links that tigramite found, as a graph of the variables. |
+| [`classification_report_heatmap`][amos.plots.ClassificationReportHeatmap] | Draws the precision, recall, and f1 of each class as a heatmap. |
+| [`coefficient_plot`][amos.plots.CoefficientPlot] | Plots coefficients with their confidence intervals (a forest plot). |
+| [`confusion_heatmap`][amos.plots.ConfusionHeatmap] | Draws the confusion matrix as a heatmap (classification). |
+| [`correlation_heatmap`][amos.plots.CorrelationHeatmap] | Draws the correlations between the numeric columns as a heatmap. |
+| [`count_plots`][amos.plots.CountPlots] | Plots the count of each value of each categorical feature, by class. |
+| [`decision_regions`][amos.plots.DecisionRegions] | Shows the class that the model predicts across two features. |
+| [`det_curve`][amos.plots.DetCurve] | Plots the detection error tradeoff (DET) curve (classification). |
+| [`distribution_fits`][amos.plots.DistributionFits] | Draws each column's histogram with a fitted distribution over it. |
+| [`distribution_plots`][amos.plots.DistributionPlots] | Plots the distribution of every column, in a grid. |
+| [`estimates_plot`][amos.plots.EstimatesPlot] | Plots every model's estimates with their confidence intervals. |
+| [`fairness_plot`][amos.plots.FairnessPlot] | Plots the model's fairness metrics for each group, as bars. |
+| [`frequency_plots`][amos.plots.FrequencyPlots] | Plots the share of the rows with each value of each column, in a grid. |
+| [`histograms`][amos.plots.Histograms] | Plots the distribution of each numeric feature, in a grid. |
+| [`importance_plot`][amos.plots.ImportancePlot] | Plots the most important features, as horizontal bars. |
+| [`influence_plot`][amos.plots.InfluencePlot] | Plots the influence of each training row on a statsmodels regression. |
+| [`label_plot`][amos.plots.LabelPlot] | Plots the label's distribution: a bar for each class, or a histogram. |
+| [`learning_curve`][amos.plots.LearningCurve] | Plots the model's score as it learns from more of the training rows. |
+| [`loadings_heatmap`][amos.plots.LoadingsHeatmap] | Shows how strongly each feature loads on each factor, as a heatmap. |
+| [`missing_bars`][amos.plots.MissingBars] | Plots the share of each column's values that are missing, as bars. |
+| [`missing_heatmap`][amos.plots.MissingHeatmap] | Shows where values are missing, as a heatmap of the rows and columns. |
+| [`pair_plot`][amos.plots.PairPlot] | Plots each pair of numeric features against each other, by class. |
+| [`partial_dependence`][amos.plots.PartialDependence] | Plots the model's average prediction as features change. |
+| [`precision_recall_curve`][amos.plots.PrecisionRecallCurve] | Plots precision against recall at every threshold (classification). |
+| [`prediction_intervals`][amos.plots.PredictionIntervals] | Plots conformal prediction intervals of the test rows (or set sizes). |
+| [`qq_plot`][amos.plots.QqPlot] | Plots the quantiles of the residuals against a normal distribution's. |
+| [`residual_plot`][amos.plots.ResidualPlot] | Plots the model's errors against its predictions (regression). |
+| [`roc_curve`][amos.plots.RocCurve] | Plots the receiver operating characteristic (ROC) curve (classification). |
+| [`scorecard_plot`][amos.plots.ScorecardPlot] | Plots each branch's score on each metric of a scorecard, as dots. |
+| [`scree_plot`][amos.plots.ScreePlot] | Plots the share of the variance that each principal component explains. |
+| [`search_plot`][amos.plots.SearchPlot] | Plots the cross-validated score of each try in a hyperparameter search. |
+| [`shap_bar`][amos.plots.ShapBar] | Plots the mean absolute SHAP value of the most important features. |
+| [`shap_beeswarm`][amos.plots.ShapBeeswarm] | Plots the SHAP value of each row for the most important features. |
+| [`shap_decision`][amos.plots.ShapDecision] | Plots how the features move each row's prediction, as lines. |
+| [`shap_embedding`][amos.plots.ShapEmbedding] | Plots the rows by their SHAP values, colored by one feature's. |
+| [`shap_force`][amos.plots.ShapForce] | Shows how each feature pushes one row's prediction up or down. |
+| [`shap_group_difference`][amos.plots.ShapGroupDifference] | Plots how the SHAP values of the features differ between two groups. |
+| [`shap_heatmap`][amos.plots.ShapHeatmap] | Draws the SHAP values of every explained row as a heatmap. |
+| [`shap_partial_dependence`][amos.plots.ShapPartialDependence] | Plots the model's prediction as one feature changes, with each row's. |
+| [`shap_scatter`][amos.plots.ShapScatter] | Plots a feature's SHAP values against its values (a dependence plot). |
+| [`shap_violin`][amos.plots.ShapViolin] | Plots the distribution of the SHAP values of the most important features. |
+| [`shap_waterfall`][amos.plots.ShapWaterfall] | Shows how each feature moves one row's prediction (a waterfall plot). |
+| [`shape_functions`][amos.plots.ShapeFunctions] | Plots an explainable boosting model's contribution from each feature. |
+| [`survival_curves`][amos.plots.SurvivalCurves] | Plots the share of rows without an event over time (Kaplan-Meier). |
+| [`tree_feature_space`][amos.plots.TreeFeatureSpace] | Shows how a decision tree divides one or two features. |
+| [`tree_leaf_distributions`][amos.plots.TreeLeafDistributions] | Plots the label of the training rows in each leaf of a decision tree. |
+| [`tree_leaf_purity`][amos.plots.TreeLeafPurity] | Plots the impurity of each leaf of a decision tree. |
+| [`tree_leaf_sizes`][amos.plots.TreeLeafSizes] | Plots the number of training rows in each leaf of a decision tree. |
+| [`tree_plot`][amos.plots.TreePlot] | Draws the splits of a decision tree (or of one tree of a forest). |
+| [`tree_prediction_path`][amos.plots.TreePredictionPath] | Shows how much each feature decides one row's path down a decision tree. |
+| [`validation_curve`][amos.plots.ValidationCurve] | Plots the model's score as one of its parameters changes. |
+| [`weights_plot`][amos.plots.WeightsPlot] | Plots the weights of the features that eli5 explains, as bars. |
 
 ## Choosers (any stage)
 

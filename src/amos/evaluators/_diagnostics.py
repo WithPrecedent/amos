@@ -34,7 +34,7 @@ from ._base import Evaluator, _model
 
 @dataclasses.dataclass
 class BiasVariance(Evaluator):
-    """The model's expected error on the test rows, as its bias and variance.
+    """Splits the model's expected test error into bias and variance.
 
     mlxtend's bias-variance decomposition: copies of the model are fitted to
     `rounds` bootstrap samples of the training rows, and each predicts the
@@ -115,7 +115,7 @@ class BiasVariance(Evaluator):
 
 @dataclasses.dataclass
 class ClassificationReport(Evaluator):
-    """Precision, recall, f1, and the number of rows of each class.
+    """Tabulates the precision, recall, f1, and number of rows of each class.
 
     Wraps:
         [`sklearn.metrics.classification_report`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.classification_report.html)
@@ -145,7 +145,7 @@ class ClassificationReport(Evaluator):
 
 @dataclasses.dataclass
 class Confusion(Evaluator):
-    """How many rows of each class were predicted to be each class.
+    """Counts how many rows of each class were predicted to be each class.
 
     Wraps:
         [`sklearn.metrics.confusion_matrix`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html)
@@ -179,7 +179,7 @@ class Confusion(Evaluator):
 
 @dataclasses.dataclass
 class Conformal(Evaluator):
-    """Prediction intervals (or sets) with a known rate of coverage.
+    """Makes prediction intervals (or sets) with a known rate of coverage.
 
     Conformal prediction turns any model's predictions into intervals (for
     regression) or sets of classes (for classification) that contain the
@@ -296,7 +296,7 @@ class Conformal(Evaluator):
 
 @dataclasses.dataclass
 class ExplainWeights(Evaluator):
-    """eli5's explanation of the weights of the model's features.
+    """Tabulates eli5's explanation of the weights of the model's features.
 
     For a linear model, the weights are its coefficients (for each class);
     for trees and boosting, they are the importances and their spread across
@@ -347,7 +347,7 @@ class ExplainWeights(Evaluator):
 
 @dataclasses.dataclass
 class FactorAnalysis(Evaluator):
-    """The hidden factors that explain the correlations of the features.
+    """Finds the hidden factors that explain the correlations of features.
 
     statsmodels' factor analysis of the features that the model learned from
     (the real training rows). The table has a row for each feature, with its
@@ -410,7 +410,7 @@ class FactorAnalysis(Evaluator):
 
 @dataclasses.dataclass
 class Fairness(Evaluator):
-    """How the model does for each group, and the gaps between groups.
+    """Compares how the model does for each group, with the gaps between them.
 
     It compares the groups in the column named by the "group" parameter
     (the dataset's first `groups` column by default) with fairlearn's
@@ -469,7 +469,7 @@ class Fairness(Evaluator):
 
 @dataclasses.dataclass
 class FeatureImportance(Evaluator):
-    """The importance that the model itself gives each feature.
+    """Tabulates the importance that the model itself gives each feature.
 
     This is the model's `feature_importances_` (for trees and boosting), the
     importance of each term (for `explainable_boosting`), or the absolute
@@ -530,7 +530,7 @@ class FeatureImportance(Evaluator):
 
 @dataclasses.dataclass
 class PCA(Evaluator):
-    """How much of the variance of the features each principal component has.
+    """Measures how much of the features' variance each principal component has.
 
     statsmodels' principal component analysis of the features that the model
     learned from (the real training rows). Unlike the `pca_reduce` reducer, it
@@ -601,7 +601,7 @@ class PCA(Evaluator):
 
 @dataclasses.dataclass
 class PermutationImportance(Evaluator):
-    """How much the model's score drops when each feature is shuffled.
+    """Measures how much the model's score drops when a feature is shuffled.
 
     This works for any model. By default, the score is accuracy (for
     classification) or R squared (for regression), and each feature is
@@ -661,7 +661,7 @@ class PermutationImportance(Evaluator):
 
 @dataclasses.dataclass
 class ShapImportance(Evaluator):
-    """The mean absolute SHAP value of each feature.
+    """Tabulates the mean absolute SHAP value of each feature.
 
     SHAP values explain each prediction as the sum of the contributions of the
     features. The `shap.Explanation` is stored in the dataset's `fitted` for
@@ -774,7 +774,7 @@ def _explain_given(
     """Returns SHAP values for `x`, each with its own `given` columns held fixed.
 
     A model with fixed effects predicts a row from its features and its
-    fixed effects (such as its court), but only the features are explained.
+    fixed effects (such as its store), but only the features are explained.
     Each row is explained by its own explainer of the prediction function
     with that row's fixed effects, so its SHAP values are the effects of its
     features given its fixed effects.

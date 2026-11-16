@@ -40,7 +40,7 @@ _DISCRETE_BARS: int = 50
 
 @dataclasses.dataclass
 class AssociationRulesPlot(Plot):
-    """The support and confidence of each association rule, colored by lift.
+    """Plots each association rule's support and confidence, colored by lift.
 
     Draws the table made by `association_rules` (which is applied if it has
     not been, or the table named by "source"): a dot for each rule, at the
@@ -83,7 +83,7 @@ class AssociationRulesPlot(Plot):
 
 @dataclasses.dataclass
 class BoxPlots(Plot):
-    """Each numeric feature as a box, split by class.
+    """Draws each numeric feature as a box, split by class.
 
     Draws seaborn's box plot of each numeric feature (or of `columns`), in a
     grid. The boxes are split by the column `by`, or by the classes of the
@@ -139,7 +139,7 @@ class BoxPlots(Plot):
 
 @dataclasses.dataclass
 class CorrelationHeatmap(Plot):
-    """The correlations between the numeric columns as a heatmap.
+    """Draws the correlations between the numeric columns as a heatmap.
 
     Wraps:
         [`seaborn.heatmap`](https://seaborn.pydata.org/generated/seaborn.heatmap.html)
@@ -187,7 +187,7 @@ class CorrelationHeatmap(Plot):
 
 @dataclasses.dataclass
 class CountPlots(Plot):
-    """The count of each value of each categorical feature, split by class.
+    """Plots the count of each value of each categorical feature, by class.
 
     Draws seaborn's count plot of each categorical and boolean feature (or of
     `columns`), in a grid, with the `top` most common values of each. The
@@ -251,7 +251,7 @@ class CountPlots(Plot):
 
 @dataclasses.dataclass
 class DistributionFits(Plot):
-    """Each column's histogram with a fitted distribution laid over it.
+    """Draws each column's histogram with a fitted distribution over it.
 
     Each numeric or boolean column (or each of `columns`) is a panel: bars
     of the count of each value (for whole numbers with few values) or a
@@ -346,7 +346,7 @@ class DistributionFits(Plot):
 
 @dataclasses.dataclass
 class DistributionPlots(Plot):
-    """The distribution of every column, in a grid.
+    """Plots the distribution of every column, in a grid.
 
     Each column (or each of `columns`) is a panel: a histogram of a column of
     numbers or dates, and bars of the `top` most common values of any other
@@ -417,7 +417,7 @@ class DistributionPlots(Plot):
 
 @dataclasses.dataclass
 class FrequencyPlots(Plot):
-    """The share of the rows with each value of each column, in a grid.
+    """Plots the share of the rows with each value of each column, in a grid.
 
     Draws the table made by `frequencies` (which is applied if it has not
     been, or the table named by "source"): a panel for each column, with a
@@ -463,7 +463,7 @@ class FrequencyPlots(Plot):
 
 @dataclasses.dataclass
 class Histograms(Plot):
-    """The distribution of each numeric feature, in a grid.
+    """Plots the distribution of each numeric feature, in a grid.
 
     Wraps:
         [`matplotlib.axes.Axes.hist`](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.hist.html)
@@ -507,7 +507,7 @@ class Histograms(Plot):
 
 @dataclasses.dataclass
 class LabelPlot(Plot):
-    """The distribution of the label: a bar for each class, or a histogram.
+    """Plots the label's distribution: a bar for each class, or a histogram.
 
     Wraps:
         - [`seaborn.countplot`](https://seaborn.pydata.org/generated/seaborn.countplot.html)
@@ -551,7 +551,7 @@ class LabelPlot(Plot):
 
 @dataclasses.dataclass
 class MissingBars(Plot):
-    """The share of each column's values that are missing, as bars.
+    """Plots the share of each column's values that are missing, as bars.
 
     Draws the table made by `missing_values` (which is applied if it has not
     been, or the table named by "source"): a bar for each column with
@@ -596,7 +596,7 @@ class MissingBars(Plot):
 
 @dataclasses.dataclass
 class MissingHeatmap(Plot):
-    """Where values are missing, as a heatmap of the rows and columns.
+    """Shows where values are missing, as a heatmap of the rows and columns.
 
     Each column of the heatmap is a column of the data and each line a row
     (up to `rows` of them, evenly spaced, in order), dark where the value is
@@ -657,7 +657,7 @@ class MissingHeatmap(Plot):
 
 @dataclasses.dataclass
 class PairPlot(Plot):
-    """Each pair of numeric features against each other, colored by class.
+    """Plots each pair of numeric features against each other, by class.
 
     Like seaborn's pair plot: the distribution of each numeric feature (or of
     each of `columns`) is on the diagonal, and every other panel is a
@@ -737,7 +737,7 @@ class PairPlot(Plot):
 
 @dataclasses.dataclass
 class SurvivalCurves(Plot):
-    """The share of rows without an event over time (Kaplan-Meier curves).
+    """Plots the share of rows without an event over time (Kaplan-Meier).
 
     The label is the time until the event. Set "event" to the column that is
     1 if the event happened (by default, every event was observed) and

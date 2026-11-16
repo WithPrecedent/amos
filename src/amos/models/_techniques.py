@@ -54,7 +54,7 @@ class _Statsmodels:
 
 @dataclasses.dataclass
 class Adaboost(Model):
-    """AdaBoost: a sequence of small trees, each fixing the last one's errors.
+    """Fits AdaBoost: small trees in sequence, each correcting the last.
 
     Wraps:
         - [`sklearn.ensemble.AdaBoostClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.AdaBoostClassifier.html)
@@ -91,11 +91,11 @@ class Baseline(Model):
 
 @dataclasses.dataclass
 class BinomialBayesMixedglm(_Statsmodels, Model):
-    """A Bayesian logistic regression with a random intercept for each group.
+    """Fits a Bayesian logistic regression with a random intercept per group.
 
     statsmodels' `BinomialBayesMixedGLM`, fitted by variational Bayes, for a
     label of two classes and rows that are correlated within groups (such as
-    the decisions of each judge). Set "groups" to the column of groups (by
+    the patients of each doctor). Set "groups" to the column of groups (by
     default, the dataset's first group). Its table of coefficients has the
     mean and standard deviation of each coefficient's posterior, and its 95%
     credible interval. Predictions use the fixed effects only, so they suit
@@ -144,7 +144,7 @@ class BinomialBayesMixedglm(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class Catboost(Model):
-    """CatBoost gradient boosting, which uses categorical features directly.
+    """Fits CatBoost gradient boosting, which handles categorical features.
 
     Categorical features (the `pandas` "category" type) are passed to it as
     categories, so they need no encoder. With "use_gpu", it is fitted on the
@@ -209,12 +209,12 @@ class Catboost(Model):
 
 @dataclasses.dataclass
 class Cox(Model):
-    """Cox proportional hazards regression of the time until an event.
+    """Fits a Cox proportional hazards regression of the time until an event.
 
-    The label is the time until the event (such as rearrest) or until the row
-    stopped being observed. Set "event" to the column that is 1 if the event
-    happened and 0 if the row was censored (it is not used as a feature).
-    The coefficients, hazard ratios, standard errors, p-values, and
+    The label is the time until the event (such as a customer canceling) or
+    until the row stopped being observed. Set "event" to the column that is 1 if
+    the event happened and 0 if the row was censored (it is not used as a
+    feature). The coefficients, hazard ratios, standard errors, p-values, and
     confidence intervals are stored in the dataset's `tables` as
     "{name}_coefficients". The predictions are the expected times until the
     event.
@@ -231,7 +231,7 @@ class Cox(Model):
 
 @dataclasses.dataclass
 class DecisionTree(Model):
-    """A single decision tree.
+    """Fits a single decision tree.
 
     Wraps:
         - [`sklearn.tree.DecisionTreeClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html)
@@ -248,7 +248,7 @@ class DecisionTree(Model):
 
 @dataclasses.dataclass
 class ElasticNet(Model):
-    """Linear regression with both lasso and ridge penalties.
+    """Fits a linear regression with both lasso and ridge penalties.
 
     Wraps:
         [`sklearn.linear_model.ElasticNet`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html)
@@ -262,7 +262,7 @@ class ElasticNet(Model):
 
 @dataclasses.dataclass
 class ExplainableBoosting(Model):
-    """An Explainable Boosting Machine from InterpretML.
+    """Fits an Explainable Boosting Machine from InterpretML.
 
     It is nearly as accurate as gradient boosting, but it is a sum of one
     function of each feature (and of a few pairs), so the effect of every
@@ -284,7 +284,7 @@ class ExplainableBoosting(Model):
 
 @dataclasses.dataclass
 class ExtraTrees(Model):
-    """An ensemble of extremely randomized trees.
+    """Fits an ensemble of extremely randomized trees.
 
     Wraps:
         - [`sklearn.ensemble.ExtraTreesClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.ExtraTreesClassifier.html)
@@ -301,11 +301,11 @@ class ExtraTrees(Model):
 
 @dataclasses.dataclass
 class Fixest(Model):
-    """Regression with fixed effects and clustered standard errors (pyfixest).
+    """Fits a regression with fixed effects and clustered standard errors.
 
     Set "fixed_effects" to the columns whose levels each get their own
-    intercept (such as "judge" or "year") and "cluster" to the column to
-    cluster the standard errors by (such as "court"). Those columns are
+    intercept (such as "firm" or "year") and "cluster" to the column to
+    cluster the standard errors by (such as "industry"). Those columns are
     usually the dataset's `groups`; they are not used as features. The label
     is regressed by least squares, or by a logit model if it is classified.
     Set "family" to "poisson" for counts or "probit" for a probit model. The
@@ -347,10 +347,10 @@ class Fixest(Model):
 
 @dataclasses.dataclass
 class GEE(Model):
-    """Generalized estimating equations from statsmodels, with inference.
+    """Fits generalized estimating equations from statsmodels, with inference.
 
     A `glm` for rows that are correlated within groups (such as several
-    cases of one court): the coefficients are averages over the groups, and
+    students of one school): the coefficients are averages over the groups, and
     their standard errors allow for the correlation. Set "groups" to the
     column of groups (by default, the dataset's first group), "family" as
     for a `glm`, and "covariance" to "exchangeable" to model the correlation
@@ -417,7 +417,7 @@ class GEE(Model):
 
 @dataclasses.dataclass
 class GeneralizedPoisson(_Statsmodels, Model):
-    """Generalized Poisson regression of counts, with inference.
+    """Fits a generalized Poisson regression of counts, with inference.
 
     Like `poisson`, for counts that vary more (or less) than a Poisson
     distribution's.
@@ -435,7 +435,7 @@ class GeneralizedPoisson(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class GLM(Model):
-    """A generalized linear model from statsmodels, with inference.
+    """Fits a generalized linear model from statsmodels, with inference.
 
     By default, the family is "binomial" (logistic regression without a
     penalty) for classification and "gaussian" for regression. Set "family"
@@ -473,7 +473,7 @@ class GLM(Model):
 
 @dataclasses.dataclass
 class GradientBoosting(Model):
-    """Histogram-based gradient boosting from scikit-learn.
+    """Fits histogram-based gradient boosting from scikit-learn.
 
     It is fast on large data and handles missing values itself.
 
@@ -522,7 +522,7 @@ class KNN(Model):
 
 @dataclasses.dataclass
 class Lasso(Model):
-    """Linear regression with a lasso (L1) penalty.
+    """Fits a linear regression with a lasso (L1) penalty.
 
     Wraps:
         [`sklearn.linear_model.Lasso`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Lasso.html)
@@ -541,7 +541,7 @@ class Lasso(Model):
 
 @dataclasses.dataclass
 class Lightgbm(Model):
-    """LightGBM gradient boosting.
+    """Fits LightGBM gradient boosting.
 
     With "use_gpu", it is fitted on the GPU with OpenCL, which lightgbm's
     packages for Linux support (its packages for Windows and macOS do not, so
@@ -587,7 +587,7 @@ class Lightgbm(Model):
 
 @dataclasses.dataclass
 class Linear(Model):
-    """Ordinary least squares regression from scikit-learn.
+    """Fits an ordinary least squares regression from scikit-learn.
 
     Wraps:
         [`sklearn.linear_model.LinearRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html)
@@ -608,7 +608,7 @@ class Linear(Model):
 
 @dataclasses.dataclass
 class Logit(Model):
-    """Logistic regression from scikit-learn.
+    """Fits a logistic regression from scikit-learn.
 
     scikit-learn adds a ridge (L2) penalty by default. Use `logit_sm` for
     statsmodels' logistic regression, without a penalty and with p-values.
@@ -632,7 +632,7 @@ class Logit(Model):
 
 @dataclasses.dataclass
 class LogitSM(_Statsmodels, Model):
-    """Logistic regression from statsmodels, with inference.
+    """Fits a logistic regression from statsmodels, with inference.
 
     Unlike `logit` (scikit-learn's logistic regression), it has no penalty,
     so its coefficients have standard errors, p-values, and confidence
@@ -656,10 +656,10 @@ class LogitSM(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class Mixedlm(_Statsmodels, Model):
-    """A linear mixed model from statsmodels, with inference.
+    """Fits a linear mixed model from statsmodels, with inference.
 
     A linear regression with a random intercept for each group (such as each
-    judge), for rows that are correlated within groups. Set "groups" to the
+    hospital), for rows that are correlated within groups. Set "groups" to the
     column of groups (by default, the dataset's first group). Predictions use
     the fixed effects only, so they suit groups the model has not seen.
 
@@ -706,7 +706,7 @@ class Mixedlm(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class Mnlogit(_Statsmodels, Model):
-    """Multinomial logistic regression from statsmodels, with inference.
+    """Fits a multinomial logistic regression from statsmodels, with inference.
 
     For a label of any number of classes. Each class other than the
     reference has its own coefficients, compared with the reference. Set
@@ -731,7 +731,7 @@ class Mnlogit(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class NaiveBayes(Model):
-    """Gaussian naive Bayes.
+    """Fits a Gaussian naive Bayes classifier.
 
     Wraps:
         [`sklearn.naive_bayes.GaussianNB`](https://scikit-learn.org/stable/modules/generated/sklearn.naive_bayes.GaussianNB.html)
@@ -751,7 +751,7 @@ class NaiveBayes(Model):
 
 @dataclasses.dataclass
 class NegativeBinomial(_Statsmodels, Model):
-    """Negative binomial regression of counts, with inference.
+    """Fits a negative binomial regression of counts, with inference.
 
     Like `poisson`, for counts that vary more than a Poisson distribution's
     (which is common). The extra variance ("alpha") is estimated.
@@ -775,7 +775,7 @@ class NegativeBinomial(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class NeuralNetwork(Model):
-    """A multi-layer perceptron (a simple neural network).
+    """Fits a multi-layer perceptron (a simple neural network).
 
     Wraps:
         - [`sklearn.neural_network.MLPClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPClassifier.html)
@@ -800,7 +800,7 @@ class NeuralNetwork(Model):
 
 @dataclasses.dataclass
 class OLS(_Statsmodels, Model):
-    """Ordinary least squares regression from statsmodels, with inference.
+    """Fits ordinary least squares from statsmodels, with inference.
 
     The coefficients, standard errors, p-values, and confidence intervals are
     stored in the dataset's `tables` as "{name}_coefficients".
@@ -823,10 +823,10 @@ class OLS(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class OrdinalRegression(_Statsmodels, Model):
-    """Ordinal regression (ordered logit or probit) from statsmodels.
+    """Fits an ordinal regression (ordered logit or probit) from statsmodels.
 
-    For a label of ordered classes (such as a sentence that is lenient,
-    typical, or harsh). The classes are ordered as the categories of a label
+    For a label of ordered classes (such as a rating that is poor,
+    fair, or good). The classes are ordered as the categories of a label
     that is an ordered categorical, and otherwise sorted. Set "distribution"
     to "probit" for an ordered probit.
 
@@ -848,7 +848,7 @@ class OrdinalRegression(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class Poisson(_Statsmodels, Model):
-    """Poisson regression of counts (such as the number of arrests).
+    """Fits a Poisson regression of counts (such as the number of visits).
 
     The label must be whole numbers of 0 or more. amos classifies whole
     numbers with few values, so set "task" to "regress" for such counts.
@@ -872,7 +872,7 @@ class Poisson(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class Probit(_Statsmodels, Model):
-    """Probit regression of two classes from statsmodels, with inference.
+    """Fits a probit regression of two classes from statsmodels, with inference.
 
     Wraps:
         [`statsmodels.discrete.discrete_model.Probit`](https://www.statsmodels.org/stable/generated/statsmodels.discrete.discrete_model.Probit.html)
@@ -892,7 +892,7 @@ class Probit(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class QuantileRegression(_Statsmodels, Model):
-    """Quantile regression from statsmodels, with inference.
+    """Fits a quantile regression from statsmodels, with inference.
 
     Predicts a quantile of the label ("quantile", by default the median)
     rather than its mean, which outliers sway less.
@@ -909,7 +909,7 @@ class QuantileRegression(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class RandomForest(Model):
-    """A random forest.
+    """Fits a random forest.
 
     Wraps:
         - [`sklearn.ensemble.RandomForestClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)
@@ -931,7 +931,7 @@ class RandomForest(Model):
 
 @dataclasses.dataclass
 class Ridge(Model):
-    """Linear regression with a ridge (L2) penalty.
+    """Fits a linear regression with a ridge (L2) penalty.
 
     Wraps:
         [`sklearn.linear_model.Ridge`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html)
@@ -950,7 +950,7 @@ class Ridge(Model):
 
 @dataclasses.dataclass
 class RobustRegression(_Statsmodels, Model):
-    """Robust linear regression from statsmodels, with inference.
+    """Fits a robust linear regression from statsmodels, with inference.
 
     Gives less weight to rows with large errors (outliers), by "norm"
     (Huber's, by default).
@@ -973,7 +973,7 @@ class RobustRegression(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class SVM(Model):
-    """A support vector machine (with probabilities for classification).
+    """Fits a support vector machine (with probabilities for classification).
 
     Wraps:
         - [`sklearn.svm.SVC`](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html)
@@ -998,7 +998,7 @@ class SVM(Model):
 
 @dataclasses.dataclass
 class Tabpfn(Model):
-    """TabPFN, a pretrained model that is often the most accurate on small data.
+    """Fits TabPFN, a pretrained model that is often best on small data.
 
     TabPFN is a neural network trained in advance on millions of synthetic
     tables, so it is not trained on your data in the usual way. It works best
@@ -1035,7 +1035,7 @@ class Tabpfn(Model):
 
 @dataclasses.dataclass
 class WLS(_Statsmodels, Model):
-    """Weighted least squares regression from statsmodels, with inference.
+    """Fits weighted least squares from statsmodels, with inference.
 
     Set "weights" to the column with the weight of each row (such as the
     inverse of its variance). The weights are not a feature.
@@ -1053,7 +1053,7 @@ class WLS(_Statsmodels, Model):
 
 @dataclasses.dataclass
 class Xgboost(Model):
-    """XGBoost gradient boosting.
+    """Fits XGBoost gradient boosting.
 
     With "use_gpu", it is fitted on the GPU.
 
@@ -1090,7 +1090,7 @@ class Xgboost(Model):
 
 @dataclasses.dataclass
 class ZeroInflatedPoisson(_Statsmodels, Model):
-    """Zero-inflated Poisson regression of counts, with inference.
+    """Fits a zero-inflated Poisson regression of counts, with inference.
 
     Like `poisson`, for counts with more zeros than a Poisson distribution
     has (such as rows that could not have had any events).

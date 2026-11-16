@@ -57,7 +57,7 @@ class _Arrays:
 
 @dataclasses.dataclass
 class Causalml(Inferer, abc.ABC):
-    """Genre of causalml's estimators of effects.
+    """Base class for inferers that use causalml's estimators of effects.
 
     causalml's meta-learners combine models of the label (and of the
     probability of treatment, the propensity score) to estimate the effect of
@@ -231,7 +231,7 @@ class Causalml(Inferer, abc.ABC):
 
 @dataclasses.dataclass
 class DRLearner(Causalml):
-    """causalml's doubly robust learner of the effect of a treatment.
+    """Estimates a treatment's effect with a doubly robust learner.
 
     It combines models of the label for the treated and the untreated with
     weighting by the propensity score, so that its estimate is right if
@@ -265,7 +265,7 @@ class DRLearner(Causalml):
 
 @dataclasses.dataclass
 class SLearner(Causalml):
-    """causalml's S-learner: one model of the label, with the treatment in it.
+    """Estimates effects with one model that includes the treatment (S-learner).
 
     The effect of each row is the difference between the model's predictions
     with and without the treatment.
@@ -296,7 +296,7 @@ class SLearner(Causalml):
 
 @dataclasses.dataclass
 class TLearner(Causalml):
-    """causalml's T-learner: one model of the label for each group.
+    """Estimates effects with a separate model for each group (T-learner).
 
     The effect of each row is the difference between the predictions of the
     model of its treatment group and of the model of the control group.
@@ -326,7 +326,7 @@ class TLearner(Causalml):
 
 @dataclasses.dataclass
 class TMLE(Causalml):
-    """causalml's targeted maximum likelihood estimation of an average effect.
+    """Estimates an average effect by targeted maximum likelihood (TMLE).
 
     It updates a model of the label with the propensity scores so that the
     average effect has the least bias. The treatment must have two values,
@@ -364,7 +364,7 @@ class TMLE(Causalml):
 
 @dataclasses.dataclass
 class XLearner(Causalml):
-    """causalml's X-learner, which suits a treatment that few rows have.
+    """Estimates effects with an X-learner, which suits a rare treatment.
 
     It models the label in each group, imputes the effect for each row from
     the other group's model, and models those effects, weighting the two

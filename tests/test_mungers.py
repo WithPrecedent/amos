@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import warnings
 
 import numpy as np
 import pandas as pd
@@ -46,10 +45,11 @@ def test_a_munger_records_what_it_changed_and_created(
         'technique': 'strip_text',
         'changed': ['appealed'],
         'created': []}
-    mungers.FlagPatterns().apply(
-        cases, column = 'disposition', patterns = {'reversed': 'revers'})
+    mungers.DeriveColumns().apply(
+        cases, expressions = {'caption_length': 'caption.str.len()'})
     assert cases.history[-1] == {
-        'technique': 'flag_patterns', 'changed': [], 'created': ['reversed']}
+        'technique': 'derive_columns', 'changed': [],
+        'created': ['caption_length']}
 
 
 def test_a_munger_cannot_remove_rows_or_columns(cases: amos.Dataset) -> None:
@@ -71,130 +71,6 @@ def test_a_munger_cannot_remove_rows_or_columns(cases: amos.Dataset) -> None:
     with pytest.raises(ValueError, match = 'only changes and adds columns'):
         NoDamages().apply(cases)
     assert len(cases.data) == 4
-
-
-def test_flag_patterns(cases: amos.Dataset) -> None:
-    with warnings.catch_warnings():
-        warnings.simplefilter('error')
-        mungers.FlagPatterns().apply(
-            cases,
-            column = 'disposition',
-            patterns = {
-                'reversed': ['revers', 'vacat'],
-                'remanded': '(remand)'},
-            ignorecase = True)
-    assert cases.data['reversed'].tolist() == [True, False, True, False]
-    assert cases.data['remanded'].tolist() == [True, False, False, False]
-    assert cases.booleans == ['reversed', 'remanded']
-    mungers.FlagPatterns().apply(
-        cases, column = 'disposition', patterns = {'upper': 'REVERSED'})
-    assert cases.data['upper'].tolist() == [True, False, False, False]
-
-
-def test_flag_patterns_searches_categories(cases: amos.Dataset) -> None:
-    mungers.AutoCategorize().apply(cases, columns = ['court'])
-    mungers.FlagPatterns().apply(
-        cases, column = 'court', patterns = {'ninth': 'Ninth'})
-    assert cases.data['ninth'].tolist() == [False, False, True, True]
-
-
-def test_count_patterns(cases: amos.Dataset) -> None:
-    mungers.CountPatterns().apply(
-        cases,
-        column = 'caption',
-        patterns = {'words': r'\S+', 'versus': [r'\bv\.', r'\bin re\b']},
-        ignorecase = True)
-    assert cases.data['words'].tolist() == [4, 4, 3, 0]
-    assert cases.data['versus'].tolist() == [1, 1, 1, 0]
-    assert cases.data['words'].dtype == 'int64'
-
-
-def test_map_patterns(cases: amos.Dataset) -> None:
-    mungers.MapPatterns().apply(
-        cases,
-        column = 'court',
-        patterns = {'first': 1, 'second': 2, 'ninth circuit': 9},
-        name = 'circuit',
-        ignorecase = True)
-    assert cases.data['circuit'].tolist()[:3] == [1, 2, 9]
-    assert pd.isna(cases.data['circuit'].iloc[3])
-    mungers.MapPatterns().apply(
-        cases,
-        column = 'disposition',
-        patterns = {'revers|vacat': 'reversed', '.': 'other'},
-        default = 'unknown',
-        ignorecase = True)
-    assert cases.data['disposition'].tolist() == [
-        'reversed', 'other', 'reversed', 'unknown']
-
-
-def test_extract_pattern(cases: amos.Dataset) -> None:
-    mungers.ExtractPattern().apply(
-        cases, column = 'caption', pattern = r'(?i)\bv\.', name = 'versus')
-    assert cases.data['versus'].tolist()[:2] == ['v.', 'v.']
-    assert cases.data['versus'].isna().tolist() == [False, False, True, True]
-    mungers.ExtractPattern().apply(
-        cases, column = 'decided', pattern = r'(\d{4})-', name = 'year')
-    assert cases.data['year'].tolist()[:2] == ['2020', '2021']
-    mungers.ExtractPattern().apply(
-        cases,
-        column = 'decided',
-        pattern = r'(?P<month>\d{2})-(?P<day>\d{2})$')
-    assert cases.data['month'].tolist()[:2] == ['01', '03']
-    assert cases.data['day'].tolist()[:2] == ['05', '04']
-    with pytest.raises(ValueError, match = 'need names'):
-        mungers.ExtractPattern().apply(
-            cases, column = 'decided', pattern = r'(\d+)-(\d+)')
-
-
-def test_extract_all(cases: amos.Dataset) -> None:
-    mungers.ExtractAll().apply(
-        cases, column = 'caption', pattern = r'\b[A-Z]\w+', name = 'names')
-    assert cases.data['names'].tolist()[:3] == [
-        'United, States, Smith', 'Jones, Acme, Corp', 'In, Doe']
-    assert pd.isna(cases.data['names'].iloc[3])
-    mungers.ExtractAll().apply(
-        cases, column = 'damages', pattern = r'(\d+)', separator = '')
-    assert cases.data['damages'].iloc[0] == '1200'
-    assert pd.isna(cases.data['damages'].iloc[1])
-    with pytest.raises(ValueError, match = 'keep one'):
-        mungers.ExtractAll().apply(
-            cases, column = 'caption', pattern = r'(\w)(\w)')
-
-
-def test_split_text(cases: amos.Dataset) -> None:
-    mungers.SplitText().apply(
-        cases,
-        column = 'caption',
-        pattern = r'\s+v\.\s+',
-        names = ['party1', 'party2'])
-    assert cases.data['party1'].tolist()[:3] == [
-        'United States', 'Jones', 'In re Doe']
-    assert cases.data['party2'].tolist()[:2] == ['Smith', 'Acme Corp.']
-    assert cases.data['party2'].isna().tolist()[2:] == [True, True]
-    assert 'caption' in cases.data.columns
-    mungers.SplitText().apply(
-        cases, column = 'court', pattern = ';', names = 'a, b'.split(', '))
-    assert cases.data['b'].isna().all()
-    with pytest.raises(ValueError, match = 'has groups'):
-        mungers.SplitText().apply(
-            cases, column = 'caption', pattern = '(v)', names = ['a', 'b'])
-    with pytest.raises(ValueError, match = 'two or more'):
-        mungers.SplitText().apply(
-            cases, column = 'caption', pattern = 'v', names = 'a')
-
-
-def test_replace_text(cases: amos.Dataset) -> None:
-    mungers.ReplaceText().apply(
-        cases,
-        columns = ['caption'],
-        patterns = {r'\s+': ' ', r'(\w+) v\. (\w+)': r'\2 v. \1'})
-    assert cases.data['caption'].tolist()[:2] == [
-        'United Smith v. States', 'Acme v. Jones Corp.']
-    mungers.ReplaceText().apply(
-        cases, patterns = {'[$,]': None, 'circuit': 'Cir.'}, ignorecase = True)
-    assert cases.data['damages'].tolist()[0] == '1200'
-    assert cases.data['court'].tolist()[0] == 'First Cir.'
 
 
 def test_normalize_text(cases: amos.Dataset) -> None:
@@ -379,30 +255,20 @@ def test_map_values_uses_registered_maps() -> None:
         mungers.MapValues().apply(data, columns = 'state')
 
 
-def test_mungers_check_their_columns_and_patterns(
-    cases: amos.Dataset) -> None:
-    with pytest.raises(ValueError, match = 'is not valid'):
-        mungers.FlagPatterns().apply(
-            cases, column = 'caption', patterns = {'x': '(unclosed'})
-    with pytest.raises(ValueError, match = 'needs the name of a column'):
-        mungers.FlagPatterns().apply(cases, patterns = {'x': 'v'})
+def test_mungers_check_their_columns(cases: amos.Dataset) -> None:
     with pytest.raises(KeyError, match = 'not in the data'):
-        mungers.CountPatterns().apply(
-            cases, column = 'missing', patterns = {'x': 'v'})
+        mungers.NormalizeText().apply(cases, columns = ['missing'])
     cases.data['number'] = range(4)
     with pytest.raises(TypeError, match = 'is not text'):
-        mungers.ExtractPattern().apply(
-            cases, column = 'number', pattern = '1')
+        mungers.NormalizeText().apply(cases, columns = ['number'])
 
 
 def test_mungers_change_nothing_without_their_parameters(
     cases: amos.Dataset) -> None:
     before = cases.data.copy()
     for kind in (
-        mungers.Coalesce, mungers.CombineFlags, mungers.CountPatterns,
-        mungers.DeriveColumns, mungers.ExtractAll, mungers.ExtractPattern,
-        mungers.FlagPatterns, mungers.MapPatterns, mungers.MapValues,
-        mungers.ReplaceText, mungers.SplitText, mungers.ConvertTypes):
+        mungers.Coalesce, mungers.CombineFlags, mungers.DeriveColumns,
+        mungers.MapValues, mungers.ConvertTypes):
         kind().apply(cases)
         assert cases.history[-1]['changed'] == [], kind
     pd.testing.assert_frame_equal(cases.data, before)
@@ -410,16 +276,12 @@ def test_mungers_change_nothing_without_their_parameters(
 
 def test_mungers_keep_rows_with_repeated_labels(cases: amos.Dataset) -> None:
     cases.data.index = [0, 0, 1, 1]
-    mungers.FlagPatterns().apply(
-        cases, column = 'disposition', patterns = {'reversed': 'REVERSED'})
-    mungers.SplitText().apply(
-        cases, column = 'caption', pattern = r' v\. ', names = ['p1', 'p2'])
     mungers.MapValues().apply(cases, values = {'n/a': None})
-    mungers.ExtractPattern().apply(
-        cases, column = 'decided', pattern = r'\d{4}', name = 'year')
-    assert cases.data['reversed'].tolist() == [True, False, False, False]
-    assert cases.data['p2'].tolist()[:2] == ['Smith', 'Acme Corp.']
-    assert cases.data['year'].tolist()[:2] == ['2020', '2021']
+    mungers.NormalizeText().apply(
+        cases, columns = ['caption'], case = 'lower')
+    assert pd.isna(cases.data['damages'].tolist()[1])
+    assert cases.data['caption'].tolist()[:2] == [
+        'united states v. smith', 'jones v. acme corp.']
     assert list(cases.data.index) == [0, 0, 1, 1]
 
 
@@ -428,17 +290,14 @@ def test_mungers_work_in_a_project(cases: amos.Dataset) -> None:
         'general': {'label': 'won'},
         'cases_project': {'cases_workers': 'wrangler'},
         'wrangler': {
-            'techniques': 'flag_patterns, clean_numbers, auto_categorize'},
-        'flag_patterns_parameters': {
-            'column': 'disposition',
-            'patterns': {'reversed': 'revers|vacat'},
-            'ignorecase': True},
+            'techniques': 'strip_text, clean_numbers, auto_categorize'},
+        'strip_text_parameters': {'lowercase': True},
         'clean_numbers_parameters': {'columns': 'damages'},
         'auto_categorize_parameters': {'columns': ['court']}}
     project = amos.Project.create(settings, item = cases.data)
     result = project.result
-    assert result.data['reversed'].tolist() == [True, False, True, False]
+    assert result.data['disposition'].tolist()[0] == 'reversed and remanded'
     assert 'damages' in result.numerics
     assert [h['technique'] for h in result.history] == [
-        'flag_patterns', 'clean_numbers', 'auto_categorize']
-    assert amos.library.classify('flag_patterns') == 'munger'
+        'strip_text', 'clean_numbers', 'auto_categorize']
+    assert amos.library.classify('strip_text') == 'munger'

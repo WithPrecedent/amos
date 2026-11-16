@@ -8,15 +8,33 @@ All notable changes to this project will be documented in this file.
 
 * Parsers are a new genre of the wrangler (`amos.Parser`), for techniques
   that find information in the text of a dataset and make columns of it.
-  `parse_documents` (`amos.parsers.ParseDocuments`) applies a rulebook: an
-  ordered list of rules from CSV files (or `dict`s in settings), each of
-  which searches text for a regular expression and records what it finds.
-  The kinds of rules are `flag`, `count`, `map`, `map_all`, `extract`,
-  `extract_all`, `split`, `names`, `fields` (a column for each labeled
-  section, such as "JUDGES:"), and `replace`. Each rule searches every row
-  at once, and the columns that a rulebook makes are added all at once.
-  `amos.register_rulebook` names a rulebook so that settings can use it, and
-  CSV files in the layout of courtpy's rules are read as they are.
+  Each kind of search for a regular expression is a parser of its own, which
+  settings can name with a `pattern` (or a list of them), the `column` to
+  search, the `name` of the column to make, a `value`, and `flags`:
+  `parse_flags`, `parse_counts`, `parse_category`, `parse_categories`,
+  `parse_match`, `parse_matches`, `parse_split` (into any number of
+  columns), `parse_names`, `parse_fields` (a column for each labeled
+  section, such as "AUTHORS:"), and `parse_replace`. They are pattern
+  parsers (`amos.PatternParser`). A pattern with named groups (such as
+  "(?P<year>\d{4})") makes a column for each group in `parse_match` and
+  `parse_matches`. For the parsers that write a value, `pattern` can map
+  patterns to their values, and `parse_category` takes a `default` for text
+  that matches none. `column = "*"` searches every column of text, and
+  `separator` sets what separates several values in a cell (also a column
+  of rule files).
+* `parse_all` (`amos.parsers.ParseAll`) applies a rulebook: an ordered list
+  of rules from CSV files (or `dict`s in settings), each of which is one of
+  those searches, named by its kind (`flags`, `counts`, `category`,
+  `categories`, `match`, `matches`, `split`, `names`, `fields`, or
+  `replace`). Each rule searches every row at once, and the columns that a
+  rulebook makes are added all at once. `amos.register_rulebook` names a
+  rulebook so that settings can use it, and CSV files in an older layout of
+  rules are read as they are.
+* `amos.register_rule_kind` makes a pattern parser of your own a kind of
+  rule, so rulebooks can name it in their "kind" column.
+* The mungers that searched text for patterns (`flag_patterns`,
+  `count_patterns`, `map_patterns`, `extract_pattern`, `extract_all`,
+  `split_text`, and `replace_text`) are gone: use the parsers instead.
 * The regular-expression helpers that mungers and parsers share are in a
   private module, `amos._patterns`, and mungers and parsers share the check
   that they keep the rows and every column.
@@ -40,6 +58,20 @@ All notable changes to this project will be documented in this file.
   letters on Windows.
 * A cleaner's entry in `history` has "changed", the columns whose values or
   type it changed, when it keeps the rows and changes at least one column.
+* The API reference no longer shows the "Contents:" lists of module
+  docstrings (a griffe extension, `docs/scripts/hide_contents.py`, removes
+  them when the documentation is built). Each module's page starts with its
+  path and a table of its classes instead, and each heading and table of
+  contents entry is labeled with its kind.
+* Clearer docstrings: the summary of each technique says what it does (such
+  as "Fits a random forest." or "Plots the label against the model's
+  predictions."), genres are described as base classes, and public
+  docstrings no longer point to private names. The technique catalog is
+  regenerated from the new summaries.
+* The examples in the docstrings and the guides use a variety of subjects
+  (such as customers, patients, schools, stores, and research papers) rather
+  than mostly courts and judges, and the parsers describe the older layout
+  of rule files in general terms.
 
 ## 0.8.1
 

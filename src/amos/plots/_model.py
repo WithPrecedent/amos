@@ -85,7 +85,7 @@ _REVERSED_ENDS: dict[int, int] = str.maketrans('<>', '><')
 
 @dataclasses.dataclass
 class ActualVsPredicted(Plot):
-    """The label against the model's predictions (regression).
+    """Plots the label against the model's predictions (regression).
 
     Wraps:
         [`sklearn.metrics.PredictionErrorDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.PredictionErrorDisplay.html#sklearn.metrics.PredictionErrorDisplay.from_predictions)
@@ -109,7 +109,7 @@ class ActualVsPredicted(Plot):
 
 @dataclasses.dataclass
 class BiasVariancePlot(Plot):
-    """The model's expected loss, beside its bias and variance, as bars.
+    """Plots the model's expected loss beside its bias and variance, as bars.
 
     Draws the table made by `bias_variance` (which is applied if it has not
     been, or the table named by "source"). For the mean squared error of a
@@ -149,7 +149,7 @@ class BiasVariancePlot(Plot):
 
 @dataclasses.dataclass
 class CalibrationCurve(Plot):
-    """The share of rows in each class against its predicted probability.
+    """Plots the share of rows in each class against its predicted probability.
 
     A well calibrated classifier's probabilities are as often right as they
     say: of the rows given a probability of 0.8, 80% are in the class. The
@@ -201,7 +201,7 @@ class CalibrationCurve(Plot):
 
 @dataclasses.dataclass
 class CausalGraph(Plot):
-    """The causal links that tigramite found, as a graph of the variables.
+    """Draws the causal links that tigramite found, as a graph of the variables.
 
     Draws the table of links made by `pcmci`, `pcmci_plus`, or `lpcmci` (the
     table named by "source", or the last table of links made) with
@@ -288,7 +288,7 @@ class CausalGraph(Plot):
 
 @dataclasses.dataclass
 class ClassificationReportHeatmap(Plot):
-    """The precision, recall, and f1 of each class, as a heatmap.
+    """Draws the precision, recall, and f1 of each class as a heatmap.
 
     Draws the table made by `classification_report` (which is applied if it
     has not been, or the table named by "source"): a row for each class and
@@ -334,7 +334,7 @@ class ClassificationReportHeatmap(Plot):
 
 @dataclasses.dataclass
 class CoefficientPlot(Plot):
-    """Coefficients with their confidence intervals (a forest plot).
+    """Plots coefficients with their confidence intervals (a forest plot).
 
     Draws a table of coefficients made by `ols`, `glm`, `fixest`, or `cox`
     ("{model}_coefficients"), or of the effects that an inferer (such as
@@ -389,7 +389,7 @@ class CoefficientPlot(Plot):
 
 @dataclasses.dataclass
 class ConfusionHeatmap(Plot):
-    """The confusion matrix as a heatmap (classification).
+    """Draws the confusion matrix as a heatmap (classification).
 
     Wraps:
         [`seaborn.heatmap`](https://seaborn.pydata.org/generated/seaborn.heatmap.html)
@@ -427,7 +427,7 @@ class ConfusionHeatmap(Plot):
 
 @dataclasses.dataclass
 class DecisionRegions(Plot):
-    """The class that the model predicts across two features (classification).
+    """Shows the class that the model predicts across two features.
 
     mlxtend's plot of the decision regions of a classifier: the plane of two
     `features` (by default, the two most important) is shaded by the class
@@ -522,7 +522,7 @@ class DecisionRegions(Plot):
 
 @dataclasses.dataclass
 class DetCurve(Plot):
-    """The detection error tradeoff (DET) curve (classification).
+    """Plots the detection error tradeoff (DET) curve (classification).
 
     scikit-learn's DET curve: the false negative rate against the false
     positive rate at every threshold, on the scales of a normal
@@ -555,7 +555,7 @@ class DetCurve(Plot):
 
 @dataclasses.dataclass
 class EstimatesPlot(Plot):
-    """Every model's estimates with their confidence intervals.
+    """Plots every model's estimates with their confidence intervals.
 
     Draws the table made by `regression_table` (which is applied if it has
     not been, or the table named by "source") as a forest plot: a row for
@@ -626,7 +626,7 @@ class EstimatesPlot(Plot):
 
 @dataclasses.dataclass
 class FairnessPlot(Plot):
-    """The model's fairness metrics for each group, as bars.
+    """Plots the model's fairness metrics for each group, as bars.
 
     Draws the table made with fairlearn by the `fairness` evaluator (which is
     applied for `group` if it has not been): a panel for each metric (the
@@ -678,7 +678,7 @@ class FairnessPlot(Plot):
 
 @dataclasses.dataclass
 class ImportancePlot(Plot):
-    """The most important features, as horizontal bars.
+    """Plots the most important features, as horizontal bars.
 
     The importances come from a table made earlier by `shap_importance`,
     `permutation_importance`, or `feature_importance` (in that order), or are
@@ -713,7 +713,7 @@ class ImportancePlot(Plot):
 
 @dataclasses.dataclass
 class InfluencePlot(Plot):
-    """The influence of each training row on a statsmodels regression.
+    """Plots the influence of each training row on a statsmodels regression.
 
     statsmodels' influence plot for an `ols` or `glm` model: each training
     row's studentized residual against its leverage, with the size of its
@@ -766,7 +766,7 @@ class InfluencePlot(Plot):
 
 @dataclasses.dataclass
 class LearningCurve(Plot):
-    """The model's score as it learns from more of the training rows.
+    """Plots the model's score as it learns from more of the training rows.
 
     scikit-learn's learning curve: a copy of the model is fitted to growing
     shares (`sizes`) of the training rows in `cv`-fold cross-validation, and
@@ -819,7 +819,7 @@ class LearningCurve(Plot):
 
 @dataclasses.dataclass
 class LoadingsHeatmap(Plot):
-    """How strongly each feature loads on each factor, as a heatmap.
+    """Shows how strongly each feature loads on each factor, as a heatmap.
 
     Draws the loadings in the table made by `factor_analysis` (which is
     applied if it has not been, or the table named by "source"): a row for
@@ -872,7 +872,7 @@ class LoadingsHeatmap(Plot):
 
 @dataclasses.dataclass
 class PartialDependence(Plot):
-    """The model's average prediction as features change (partial dependence).
+    """Plots the model's average prediction as features change.
 
     scikit-learn's partial dependence plot of `features` (by default, the
     three most important): for each value of a feature, the model's average
@@ -954,7 +954,7 @@ class PartialDependence(Plot):
 
 @dataclasses.dataclass
 class PrecisionRecallCurve(Plot):
-    """Precision against recall at every threshold (classification).
+    """Plots precision against recall at every threshold (classification).
 
     Wraps:
         [`sklearn.metrics.PrecisionRecallDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.PrecisionRecallDisplay.html#sklearn.metrics.PrecisionRecallDisplay.from_predictions)
@@ -981,7 +981,7 @@ class PrecisionRecallCurve(Plot):
 
 @dataclasses.dataclass
 class PredictionIntervals(Plot):
-    """Conformal prediction intervals of the test rows (or the set sizes).
+    """Plots conformal prediction intervals of the test rows (or set sizes).
 
     Draws the table made with MAPIE by the `conformal` evaluator (which is
     applied if it has not been). For regression, each test row (up to
@@ -1056,7 +1056,7 @@ class PredictionIntervals(Plot):
 
 @dataclasses.dataclass
 class QqPlot(Plot):
-    """The quantiles of the residuals against a normal distribution's.
+    """Plots the quantiles of the residuals against a normal distribution's.
 
     statsmodels' Q-Q plot of the model's errors on the test rows (the label
     minus the prediction), standardized. If the errors are normal, as the
@@ -1106,7 +1106,7 @@ class QqPlot(Plot):
 
 @dataclasses.dataclass
 class ResidualPlot(Plot):
-    """The model's errors against its predictions (regression).
+    """Plots the model's errors against its predictions (regression).
 
     Wraps:
         [`sklearn.metrics.PredictionErrorDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.PredictionErrorDisplay.html#sklearn.metrics.PredictionErrorDisplay.from_predictions)
@@ -1130,7 +1130,7 @@ class ResidualPlot(Plot):
 
 @dataclasses.dataclass
 class RocCurve(Plot):
-    """The receiver operating characteristic (ROC) curve (classification).
+    """Plots the receiver operating characteristic (ROC) curve (classification).
 
     Wraps:
         [`sklearn.metrics.RocCurveDisplay.from_predictions`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.RocCurveDisplay.html#sklearn.metrics.RocCurveDisplay.from_predictions)
@@ -1158,7 +1158,7 @@ class RocCurve(Plot):
 
 @dataclasses.dataclass
 class ScorecardPlot(Plot):
-    """Each branch's score on each metric of a scorecard, as dots.
+    """Plots each branch's score on each metric of a scorecard, as dots.
 
     Draws the table made by `scorecard` (which is applied if it has not
     been, or the table named by "source"): a panel for each metric, with a
@@ -1211,7 +1211,7 @@ class ScorecardPlot(Plot):
 
 @dataclasses.dataclass
 class ScreePlot(Plot):
-    """The share of the variance that each principal component explains.
+    """Plots the share of the variance that each principal component explains.
 
     Draws the table made by `pca` (which is applied if it has not been, or
     the table named by "source"): a bar for each component's share of the
@@ -1254,7 +1254,7 @@ class ScreePlot(Plot):
 
 @dataclasses.dataclass
 class SearchPlot(Plot):
-    """The cross-validated score of each try in a hyperparameter search.
+    """Plots the cross-validated score of each try in a hyperparameter search.
 
     Draws the table that a model's search (grid, random, or Optuna) made,
     "{model}_search": a panel for each searched parameter, with the mean
@@ -1318,7 +1318,7 @@ class SearchPlot(Plot):
 
 @dataclasses.dataclass
 class ShapeFunctions(Plot):
-    """An explainable boosting model's contribution from each feature.
+    """Plots an explainable boosting model's contribution from each feature.
 
     InterpretML's explanation of an `explainable_boosting` model: for each of
     its most important features (up to `limit`), the feature's contribution
@@ -1400,7 +1400,7 @@ class ShapeFunctions(Plot):
 
 @dataclasses.dataclass
 class ValidationCurve(Plot):
-    """The model's score as one of its parameters changes.
+    """Plots the model's score as one of its parameters changes.
 
     scikit-learn's validation curve: a copy of the model is fitted with each
     of `values` for `parameter` (in `cv`-fold cross-validation on the
@@ -1464,7 +1464,7 @@ class ValidationCurve(Plot):
 
 @dataclasses.dataclass
 class WeightsPlot(Plot):
-    """The weights of the features that eli5 explains, as bars.
+    """Plots the weights of the features that eli5 explains, as bars.
 
     Draws the table made by `explain_weights` (which is applied if it has
     not been, or the table named by "source"): a bar for each of the `limit`

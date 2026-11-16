@@ -78,7 +78,7 @@ class Experiment(chrisjen.Contest):
         scores: the score of each path in the most recent call.
         outcomes: the outcome of each path that made a `Dataset` in the most
             recent call: its label and group columns, predictions,
-            probabilities, and metrics (see `_outcome`).
+            probabilities, and metrics.
         skipped: the entries of `history` of the techniques that each path
             skipped in the most recent call, for each path that skipped any.
             They are also in the experiment's entry in the winner's `history`

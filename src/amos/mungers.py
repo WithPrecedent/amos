@@ -9,14 +9,8 @@ with a lot of data. Like cleaners, mungers learn nothing from the data that
 could leak from the test rows into the training rows, so they are safe to use
 before the data is split.
 
-Many mungers search text for patterns. A pattern is a regular expression (see
-Python's `re` module), and it is found anywhere in the text, so "revers" is
-found in "Reversed and remanded". Characters with special meanings (such as
-"." and "(") need a backslash to stand for themselves, as in "F\.3d". Set the
-"ignorecase" parameter to ignore the difference between capital and
-lower-case letters, and start a pattern with an inline flag for other options
-(such as "(?s)", which lets "." match line breaks). Missing text matches
-nothing.
+Parsers (see the `parsers` module) search text for patterns and make
+columns of what they find.
 
 Contents:
     Munger: base class for techniques that change the values in columns.
@@ -25,19 +19,12 @@ Contents:
         columns.
     CombineFlags: combines flags into one.
     ConvertTypes: changes the data types of columns.
-    CountPatterns: counts the matches of patterns in text.
     DeriveColumns: makes columns from expressions of other columns.
-    ExtractAll: keeps every match of a pattern in text.
-    ExtractPattern: keeps the first match of a pattern in text.
-    FlagPatterns: makes columns that say whether text matches patterns.
-    MapPatterns: turns text into values by the first pattern it matches.
     MapValues: replaces values with others.
     NormalizeText: collapses spaces in text, and optionally changes its case
         and removes accents and punctuation.
-    ReplaceText: replaces the matches of patterns in text.
     SetKinds: sets the kind of each column (dummy, categorical, or
         numerical), with the smallest type that holds it.
-    SplitText: splits text into columns where a pattern matches.
     StripText: trims spaces from (and optionally lowercases) text.
     register_value_map: registers the values that `MapValues` gives columns.
 
@@ -47,7 +34,6 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -56,9 +42,6 @@ import numpy as np
 import pandas as pd
 
 from . import base, options, utilities
-from ._patterns import capture as _capture
-from ._patterns import compile_pattern as _compile
-from ._patterns import contains as _contains
 from ._patterns import text_columns as _text_columns
 from ._patterns import text_of as _text
 from ._patterns import tidy as _tidy
@@ -236,10 +219,10 @@ class Coalesce(Munger):
 class CombineFlags(Munger):
     """Combines flags into one: whether any or all are true, or how many are.
 
-    For example, a case is about any criminal issue if any of its flags of
-    criminal issues ("criminal_search", "criminal_sentence", and so on) are
-    true. Flags are boolean columns or numbers (where 0 is false), such as
-    those that `flag_patterns` makes. A missing value is false.
+    For example, a review mentions a problem if any of its flags of problems
+    ("problem_price", "problem_shipping", and so on) are true. Flags are boolean
+    columns or numbers (where 0 is false), such as those that `parse_flags`
+    makes. A missing value is false.
 
     """
 
@@ -324,56 +307,6 @@ class ConvertTypes(Munger):
 
 
 @dataclasses.dataclass
-class CountPatterns(Munger):
-    """Counts the matches of patterns in text.
-
-    Wraps:
-        [`pandas.Series.str.count`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.count.html)
-        from pandas.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        column: str | None = None,
-        patterns: Mapping[str, str | Sequence[str]] | None = None,
-        ignorecase: bool = False,
-        **kwargs: Any) -> pd.DataFrame:
-        r"""Makes a column with the number of matches of each pattern.
-
-        Args:
-            data: the data to change.
-            column: the column of text to search.
-            patterns: `dict` mapping the names of the columns to make to
-                patterns, or to lists of patterns whose matches are added
-                together. For example, {"words": "\S+"} counts the words.
-                Defaults to `None`, which changes nothing.
-            ignorecase: whether to ignore the difference between capital and
-                lower-case letters. Defaults to `False`.
-            **kwargs: not used.
-
-        Returns:
-            The data, with a column of counts (whole numbers) for each name in
-                `patterns`. Missing text has no matches.
-
-        """
-        if not patterns:
-            return data
-        text = _text(data, column, self.name)
-        flags = re.IGNORECASE if ignorecase else 0
-        for name, sources in dict(patterns).items():
-            counts = np.zeros(len(text), dtype = 'int64')
-            for source in camina.listify(sources):
-                pattern = _compile(source, flags).pattern
-                found = text.str.count(pattern, flags = flags)
-                counts += found.fillna(0).to_numpy(dtype = 'int64')
-            data[name] = counts
-        return data
-
-
-@dataclasses.dataclass
 class DeriveColumns(Munger):
     """Makes columns from expressions of other columns, such as "a / b".
 
@@ -401,8 +334,8 @@ class DeriveColumns(Munger):
         Args:
             data: the data to change.
             expressions: `dict` mapping the names of the columns to make to
-                `pandas` expressions of other columns, such as "damages /
-                judges" or "age >= 18" (see `pandas.DataFrame.eval`). Column
+                `pandas` expressions of other columns, such as "sales /
+                employees" or "age >= 18" (see `pandas.DataFrame.eval`). Column
                 names with spaces go inside backticks. An expression can use
                 the columns made before it. Defaults to `None`.
             **named: more expressions, by the names of the columns to make,
@@ -430,248 +363,11 @@ class DeriveColumns(Munger):
 
 
 @dataclasses.dataclass
-class ExtractAll(Munger):
-    """Keeps every match of a pattern in text.
-
-    Wraps:
-        [`pandas.Series.str.findall`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.findall.html)
-        from pandas.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        column: str | None = None,
-        pattern: str | None = None,
-        name: str | None = None,
-        separator: str = ', ',
-        ignorecase: bool = False,
-        **kwargs: Any) -> pd.DataFrame:
-        """Keeps every match of `pattern` in `column`, joined together.
-
-        Args:
-            data: the data to change.
-            column: the column of text to search.
-            pattern: the pattern to find. If it has a group, the text of the
-                group is kept rather than the whole match. Defaults to `None`,
-                which changes nothing.
-            name: name of the column to make. Defaults to `None`, which
-                replaces `column`.
-            separator: text put between the matches. Defaults to ", ".
-            ignorecase: whether to ignore the difference between capital and
-                lower-case letters. Defaults to `False`.
-            **kwargs: not used.
-
-        Raises:
-            ValueError: if `pattern` has more than one group.
-
-        Returns:
-            The data, with the matches. Text without a match is missing.
-
-        """
-        if pattern is None:
-            return data
-        text = _text(data, column, self.name)
-        flags = re.IGNORECASE if ignorecase else 0
-        compiled = _compile(pattern, flags)
-        if compiled.groups > 1:
-            message = (
-                f'the pattern {compiled.pattern!r} has {compiled.groups} '
-                f'groups: keep one, and make the others "(?:...)", which is '
-                f'not kept'
-            )
-            raise ValueError(message)
-        found = text.str.findall(compiled.pattern, flags = flags)
-        data[name or column] = _tidy(found.str.join(separator).astype('str'))
-        return data
-
-
-@dataclasses.dataclass
-class ExtractPattern(Munger):
-    r"""Keeps the first match of a pattern in text (or the groups of a match).
-
-    A pattern with named groups makes a column for each group. For example,
-    "(?P<volume>\d+) F\.3d (?P<page>\d+)" makes "volume" and "page"
-    columns from citations such as "512 F.3d 1093".
-
-    Wraps:
-        [`pandas.Series.str.extract`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.extract.html)
-        from pandas.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        column: str | None = None,
-        pattern: str | None = None,
-        name: str | None = None,
-        ignorecase: bool = False,
-        **kwargs: Any) -> pd.DataFrame:
-        """Keeps the first match of `pattern` in `column`.
-
-        Args:
-            data: the data to change.
-            column: the column of text to search.
-            pattern: the pattern to find. If it has one unnamed group, the
-                text of the group is kept rather than the whole match. If its
-                groups are named, each group makes a column of its name.
-                Defaults to `None`, which changes nothing.
-            name: name of the column to make (unless the groups are named).
-                Defaults to `None`, which replaces `column`.
-            ignorecase: whether to ignore the difference between capital and
-                lower-case letters. Defaults to `False`.
-            **kwargs: not used.
-
-        Raises:
-            ValueError: if `pattern` has several groups that are not all
-                named.
-
-        Returns:
-            The data, with the matches. Text without a match is missing.
-
-        """
-        if pattern is None:
-            return data
-        text = _text(data, column, self.name)
-        flags = re.IGNORECASE if ignorecase else 0
-        compiled = _compile(pattern, flags)
-        if compiled.groups > 1 or compiled.groupindex:
-            if len(compiled.groupindex) < compiled.groups:
-                message = (
-                    f'the groups of the pattern {compiled.pattern!r} need '
-                    f'names (as in "(?P<year>\\d{{4}})"), so that each makes '
-                    f'a column of its name'
-                )
-                raise ValueError(message)
-            found = text.str.extract(
-                compiled.pattern, flags = flags, expand = True)
-            for group in found.columns:
-                data[group] = _tidy(found[group])
-            return data
-        source = compiled.pattern if compiled.groups else _capture(
-            compiled.pattern)
-        match = text.str.extract(source, flags = flags, expand = False)
-        data[name or column] = _tidy(match)
-        return data
-
-
-@dataclasses.dataclass
-class FlagPatterns(Munger):
-    """Makes columns that say whether text matches patterns.
-
-    For example, {"reversed": "revers|vacat"} makes a "reversed" column that
-    is true for each row whose text mentions a reversal or vacatur.
-
-    Wraps:
-        [`pandas.Series.str.contains`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.contains.html)
-        from pandas.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        column: str | None = None,
-        patterns: Mapping[str, str | Sequence[str]] | None = None,
-        ignorecase: bool = False,
-        **kwargs: Any) -> pd.DataFrame:
-        """Makes a boolean column for each pattern.
-
-        Args:
-            data: the data to change.
-            column: the column of text to search.
-            patterns: `dict` mapping the names of the columns to make to
-                patterns, or to lists of patterns (any of which can match).
-                Defaults to `None`, which changes nothing.
-            ignorecase: whether to ignore the difference between capital and
-                lower-case letters. Defaults to `False`.
-            **kwargs: not used.
-
-        Returns:
-            The data, with a boolean column for each name in `patterns`.
-                Missing text is false.
-
-        """
-        if not patterns:
-            return data
-        text = _text(data, column, self.name)
-        flags = re.IGNORECASE if ignorecase else 0
-        for name, sources in dict(patterns).items():
-            found = np.zeros(len(text), dtype = bool)
-            for source in camina.listify(sources):
-                found |= _contains(text, _compile(source, flags).pattern, flags)
-            data[name] = found
-        return data
-
-
-@dataclasses.dataclass
-class MapPatterns(Munger):
-    """Turns text into values by the first pattern that it matches.
-
-    For example, {"first circuit": 1, "second circuit": 2} turns the names of
-    courts into their numbers. The patterns are tried in order, so put the
-    most specific first.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        column: str | None = None,
-        patterns: Mapping[str, Any] | None = None,
-        name: str | None = None,
-        default: Any = None,
-        ignorecase: bool = False,
-        **kwargs: Any) -> pd.DataFrame:
-        """Makes a column with the value of the first pattern that matches.
-
-        Args:
-            data: the data to change.
-            column: the column of text to search.
-            patterns: `dict` mapping patterns to values, in the order in which
-                they are tried. Defaults to `None`, which changes nothing.
-            name: name of the column to make. Defaults to `None`, which
-                replaces `column`.
-            default: the value of text that matches no pattern. Defaults to
-                `None`, which is missing.
-            ignorecase: whether to ignore the difference between capital and
-                lower-case letters. Defaults to `False`.
-            **kwargs: not used.
-
-        Returns:
-            The data, with the values. Their type is found from the values
-                (and `default`), as `pandas` does.
-
-        """
-        if not patterns:
-            return data
-        text = _text(data, column, self.name)
-        flags = re.IGNORECASE if ignorecase else 0
-        rules = list(dict(patterns).items())
-        # The position of the value of each row, which starts as the default
-        # (after the values). The patterns are tried from last to first, so
-        # that the first pattern that matches has the final word.
-        choices = np.full(len(text), len(rules))
-        for position in reversed(range(len(rules))):
-            pattern = _compile(rules[position][0], flags).pattern
-            choices[_contains(text, pattern, flags)] = position
-        values = pd.Series([value for _, value in rules] + [default])
-        data[name or column] = values.take(choices).set_axis(data.index)
-        return data
-
-
-@dataclasses.dataclass
 class MapValues(Munger):
     """Replaces values with others, such as "N/A" with a missing value.
 
     Only whole values that are the same as one in `values` are replaced (use
-    `replace_text` to change part of the text). Other values are kept. A
+    `parse_replace` to change part of the text). Other values are kept. A
     categorical column stays categorical.
 
     Without "values", each column in "columns" is changed by the map or
@@ -797,61 +493,6 @@ class NormalizeText(Munger):
 
 
 @dataclasses.dataclass
-class ReplaceText(Munger):
-    r"""Replaces the matches of patterns in text.
-
-    For example, {"\s*\(.*?\)": ""} removes everything in parentheses.
-
-    Wraps:
-        [`pandas.Series.str.replace`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.replace.html)
-        from pandas.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        columns: Sequence[str] | None = None,
-        patterns: Mapping[str, str | None] | None = None,
-        ignorecase: bool = False,
-        **kwargs: Any) -> pd.DataFrame:
-        r"""Replaces every match of each pattern, in order.
-
-        Args:
-            data: the data to change.
-            columns: columns to change. Defaults to `None`, which changes every
-                text column.
-            patterns: `dict` mapping patterns to the text that replaces them.
-                The text can include the groups of a match ("\1" is the
-                first). An empty text (or `None`) removes the matches.
-                Defaults to `None`, which changes nothing.
-            ignorecase: whether to ignore the difference between capital and
-                lower-case letters. Defaults to `False`.
-            **kwargs: not used.
-
-        Returns:
-            The data, with the text replaced.
-
-        """
-        if not patterns:
-            return data
-        flags = re.IGNORECASE if ignorecase else 0
-        rules = [
-            (_compile(p, flags).pattern, '' if r is None else str(r))
-            for p, r in dict(patterns).items()]
-        names = _text_columns(data) if columns is None else (
-            utilities.select_columns(data, columns))
-        for column in names:
-            text = _text(data, column, self.name)
-            for pattern, replacement in rules:
-                text = text.str.replace(
-                    pattern, replacement, regex = True, flags = flags)
-            data[column] = text
-        return data
-
-
-@dataclasses.dataclass
 class SetKinds(Munger):
     """Sets the kind of each column, with the smallest type that holds it.
 
@@ -931,81 +572,6 @@ class SetKinds(Munger):
         item = super().apply(item, kinds = kinds)
         item.kinds.update(kinds)
         return item
-
-
-@dataclasses.dataclass
-class SplitText(Munger):
-    r"""Splits text into columns where a pattern matches.
-
-    For example, the pattern " v\. " and the names "party1, party2" split a
-    caption such as "Smith v. Jones" into "Smith" and "Jones". The text is
-    split at the first matches, so the last column has the rest of the text.
-    The original column is kept.
-
-    Wraps:
-        [`pandas.Series.str.split`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.split.html)
-        from pandas.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        column: str | None = None,
-        pattern: str | None = None,
-        names: Sequence[str] | None = None,
-        ignorecase: bool = False,
-        **kwargs: Any) -> pd.DataFrame:
-        """Splits the text in `column` into the columns in `names`.
-
-        Args:
-            data: the data to change.
-            column: the column of text to split.
-            pattern: the pattern to split at. It cannot have groups (use
-                "(?:...)" to group without one). Defaults to `None`, which
-                changes nothing.
-            names: names of the columns to make, one for each piece of the
-                text. There must be at least two.
-            ignorecase: whether to ignore the difference between capital and
-                lower-case letters. Defaults to `False`.
-            **kwargs: not used.
-
-        Raises:
-            ValueError: if there are fewer than two `names` or `pattern` has
-                groups.
-
-        Returns:
-            The data, with a column for each piece, trimmed of spaces. A piece
-                that is empty (or that the text does not have) is missing.
-
-        """
-        if pattern is None:
-            return data
-        labels = [names] if isinstance(names, str) else list(names or [])
-        if len(labels) < 2:  # noqa: PLR2004
-            message = (
-                f'{self.name!r} needs the names of two or more columns to '
-                f'make, not {labels}')
-            raise ValueError(message)
-        text = _text(data, column, self.name)
-        compiled = _compile(pattern, re.IGNORECASE if ignorecase else 0)
-        if compiled.groups:
-            message = (
-                f'the pattern {compiled.pattern!r} has groups, which would be '
-                f'kept as pieces: use "(?:...)" to group without them'
-            )
-            raise ValueError(message)
-        pieces = text.str.split(
-            compiled, n = len(labels) - 1, expand = True, regex = True)
-        for position, label in enumerate(labels):
-            if position in pieces.columns:
-                piece = pieces[position].astype('str')
-            else:
-                # No text had this many pieces.
-                piece = pd.Series(np.nan, index = text.index, dtype = 'str')
-            data[label] = _tidy(piece)
-        return data
 
 
 @dataclasses.dataclass

@@ -32,7 +32,7 @@ from ._base import Plot, _classes, _do_nothing, _lent, _model
 
 @dataclasses.dataclass
 class ShapBar(Plot):
-    """The mean absolute SHAP value of the most important features.
+    """Plots the mean absolute SHAP value of the most important features.
 
     This is shap's bar plot. The SHAP values are the ones that
     `shap_importance` found, if it was applied, or are found as it finds them.
@@ -83,7 +83,7 @@ class ShapBar(Plot):
 
 @dataclasses.dataclass
 class ShapBeeswarm(Plot):
-    """The SHAP value of each row for the most important features.
+    """Plots the SHAP value of each row for the most important features.
 
     This is shap's beeswarm plot (once called its summary plot). Each dot is
     a row, placed by its SHAP value and colored by the value of the feature,
@@ -137,7 +137,7 @@ class ShapBeeswarm(Plot):
 
 @dataclasses.dataclass
 class ShapDecision(Plot):
-    """How the features move each row's prediction, as lines.
+    """Plots how the features move each row's prediction, as lines.
 
     This is shap's decision plot. Each line is a row: it starts at the
     model's average output at the bottom and moves by the SHAP value of each
@@ -197,7 +197,7 @@ class ShapDecision(Plot):
 
 @dataclasses.dataclass
 class ShapEmbedding(Plot):
-    """The rows placed by their SHAP values, colored by one feature's.
+    """Plots the rows by their SHAP values, colored by one feature's.
 
     This is shap's embedding plot. The SHAP values of all the features are
     reduced to two dimensions (with principal components), so that rows that
@@ -261,7 +261,7 @@ class ShapEmbedding(Plot):
 
 @dataclasses.dataclass
 class ShapForce(Plot):
-    """How each feature pushes one row's prediction up or down.
+    """Shows how each feature pushes one row's prediction up or down.
 
     This is shap's force plot (drawn with matplotlib). From the model's
     average output, the features that raise the row's output push from the
@@ -329,7 +329,7 @@ class ShapForce(Plot):
 
 @dataclasses.dataclass
 class ShapGroupDifference(Plot):
-    """How the SHAP values of the features differ between two groups.
+    """Plots how the SHAP values of the features differ between two groups.
 
     This is shap's group difference plot. For each feature, the bar is the
     mean SHAP value of the explained rows in a group minus that of the other
@@ -412,7 +412,7 @@ class ShapGroupDifference(Plot):
 
 @dataclasses.dataclass
 class ShapHeatmap(Plot):
-    """The SHAP values of every explained row, as a heatmap.
+    """Draws the SHAP values of every explained row as a heatmap.
 
     This is shap's heatmap plot. The rows are put in order so that rows that
     are explained alike are next to each other, and the line above the
@@ -465,7 +465,7 @@ class ShapHeatmap(Plot):
 
 @dataclasses.dataclass
 class ShapPartialDependence(Plot):
-    """The model's prediction as one feature changes, with each row's.
+    """Plots the model's prediction as one feature changes, with each row's.
 
     This is shap's partial dependence plot. The thick line is the model's
     average output over the explained rows when each of them is given each
@@ -534,7 +534,7 @@ class ShapPartialDependence(Plot):
 
 @dataclasses.dataclass
 class ShapScatter(Plot):
-    """A feature's SHAP values against its values (a dependence plot).
+    """Plots a feature's SHAP values against its values (a dependence plot).
 
     This is shap's scatter plot. Each dot is a row. The dots are colored by
     the feature that seems to interact with `feature` the most, or by
@@ -598,7 +598,7 @@ class ShapScatter(Plot):
 
 @dataclasses.dataclass
 class ShapViolin(Plot):
-    """The distribution of the SHAP values of the most important features.
+    """Plots the distribution of the SHAP values of the most important features.
 
     This is shap's violin plot: like the beeswarm plot, but each feature's
     SHAP values are drawn as a violin (their density), with dots colored by
@@ -651,7 +651,7 @@ class ShapViolin(Plot):
 
 @dataclasses.dataclass
 class ShapWaterfall(Plot):
-    """How each feature moves one row's prediction (a waterfall plot).
+    """Shows how each feature moves one row's prediction (a waterfall plot).
 
     This is shap's waterfall plot. It starts from the model's average output
     on the background data and adds the SHAP value of each feature, largest

@@ -280,31 +280,31 @@ shows which features explain the difference between the groups.
 
 ## Fixed effects and clustered standard errors
 
-Panel data, such as cases decided by many judges, often calls for fixed
+Panel data, such as students taught in many schools, often calls for fixed
 effects and standard errors clustered by group. `fixest` wraps pyfixest:
 
 ```python
 rng = np.random.default_rng(7)
-judges = rng.integers(0, 20, 1000)
-severity = rng.normal(0, 1, 1000)
-represented = rng.integers(0, 2, 1000)
-sentence = (
-    12 + 3 * severity - 2 * represented + judges / 4 + rng.normal(0, 2, 1000))
-cases = pd.DataFrame({
-    "severity": severity,
-    "represented": represented,
-    "judge": [f"judge {j}" for j in judges],
-    "sentence": sentence,
+schools = rng.integers(0, 20, 1000)
+hours = rng.normal(0, 1, 1000)
+absent = rng.integers(0, 2, 1000)
+score = (
+    12 + 3 * hours - 2 * absent + schools / 4 + rng.normal(0, 2, 1000))
+students = pd.DataFrame({
+    "hours": hours,
+    "absent": absent,
+    "school": [f"school {s}" for s in schools],
+    "score": score,
 })
 settings = {
-    "general": {"label": "sentence", "seed": 43, "groups": "judge"},
-    "sentencing_project": {"techniques": "train_test, fixest"},
-    "fixest_parameters": {"fixed_effects": "judge", "cluster": "judge"},
+    "general": {"label": "score", "seed": 43, "groups": "school"},
+    "scores_project": {"techniques": "train_test, fixest"},
+    "fixest_parameters": {"fixed_effects": "school", "cluster": "school"},
 }
-project = amos.Project.create(settings, item = cases)
+project = amos.Project.create(settings, item = students)
 coefficients = project.result.tables["fixest_coefficients"]
 print(coefficients["coefficient"].round().to_dict())
-# {'severity': 3.0, 'represented': -2.0}
+# {'hours': 3.0, 'absent': -2.0}
 ```
 
 The table also has the standard errors, p-values, and confidence intervals.

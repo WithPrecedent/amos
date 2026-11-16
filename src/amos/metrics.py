@@ -226,7 +226,7 @@ class Metric(chrisjen.Criteria, abc.ABC):
 
 @dataclasses.dataclass
 class GroupMetric(Metric, abc.ABC):
-    """Genre of fairness metrics, which compare a model across groups of rows.
+    """Base class for fairness metrics, which compare a model across groups.
 
     Each wraps a fairlearn metric. It compares the model's predictions for
     the groups in the column named by the "group" parameter, which defaults

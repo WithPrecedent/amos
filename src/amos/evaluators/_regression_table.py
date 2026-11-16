@@ -60,7 +60,7 @@ _STATA_NAMES: dict[str, str] = {
 
 @dataclasses.dataclass
 class RegressionTable(_Published, Evaluator):
-    """The estimates of every model side by side, ready to publish.
+    """Puts the estimates of every model side by side, ready to publish.
 
     Like the regression tables of Stata, R, and statsmodels, it has a column
     for each model and two rows for each feature: its estimate, with stars
@@ -269,8 +269,8 @@ class RegressionTable(_Published, Evaluator):
         Args:
             item: the dataset with a fitted model. If it came from an
                 experiment, each branch is a model in the table.
-            **kwargs: parameters of the estimates and metrics (see
-                `_tabulate`).
+            **kwargs: parameters of the estimates and metrics (such as
+                "marginal" and "simulations", described above).
 
         Returns:
             One row for each model and term, with the "estimate",

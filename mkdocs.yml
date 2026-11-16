@@ -140,6 +140,10 @@ plugins:
       python:
         options:
           docstring_section_style: table
+          # Leaves the "Contents:" lists of module docstrings out of the pages
+          # (the summary tables list a module's members instead).
+          extensions:
+            - docs/scripts/hide_contents.py:HideContents
           # Leaves out private and dunder members (names that start with "_").
           filters:
             - "!^_"
@@ -149,7 +153,18 @@ plugins:
           # Lets griffe see the fields that amos classes inherit.
           preload_modules: [chrisjen, holden]
           separate_signature: false
+          # Heads each API page with its module path (e.g. amos.cleaners).
+          show_root_heading: true
           show_signature_annotations: false
+          # Labels each heading and table of contents entry with its kind
+          # (class, function, attribute, and so on).
+          show_symbol_type_heading: true
+          show_symbol_type_toc: true
+          # Starts each module's page with a table of its classes (methods are
+          # not summarized, since their classes already list them below).
+          summary:
+            classes: true
+            modules: true
         paths: [src]
 - search:
 

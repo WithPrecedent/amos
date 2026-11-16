@@ -67,7 +67,7 @@ _ROW: str = '_amos_row'
 
 @dataclasses.dataclass
 class Doubleml(Inferer, abc.ABC):
-    """Genre of DoubleML's models (double machine learning).
+    """Base class for inferers that use DoubleML (double machine learning).
 
     Double (or debiased) machine learning fits a model of the label and one
     of the treatment (and of any instrument), each to some folds of the rows
@@ -224,7 +224,7 @@ class Doubleml(Inferer, abc.ABC):
 
 @dataclasses.dataclass
 class DifferenceInDifferences(Doubleml):
-    """DoubleML's difference-in-differences: a treatment's effect over time.
+    """Estimates a treatment's effect over time by difference-in-differences.
 
     It compares how the label changed, from before a treatment to after it,
     in the units that were treated and in those that were not, adjusting for
@@ -357,7 +357,7 @@ class DifferenceInDifferences(Doubleml):
 
 @dataclasses.dataclass
 class InteractiveIV(Doubleml):
-    """DoubleML's effect for those whom an instrument moves to take a treatment.
+    """Estimates a treatment's effect on compliers, with an instrument (LATE).
 
     It estimates the local average treatment effect with DoubleML's
     interactive IV model. The treatment and the instrument ("instrument")
@@ -398,7 +398,7 @@ class InteractiveIV(Doubleml):
 
 @dataclasses.dataclass
 class InteractiveRegression(Doubleml):
-    """DoubleML's average effect of a treatment with two values.
+    """Estimates the average effect of a treatment with two values.
 
     It allows the effect to differ from row to row, and estimates its average
     over every row (the average treatment effect) with DoubleML's interactive
@@ -437,7 +437,7 @@ class InteractiveRegression(Doubleml):
 
 @dataclasses.dataclass
 class PartiallyLinear(Doubleml):
-    """DoubleML's effect of a treatment that adds the same amount for every row.
+    """Estimates a treatment effect that is the same for every row.
 
     It assumes that the treatment changes the label by the same amount for
     every row, while the features may affect both in any way, with DoubleML's
@@ -473,7 +473,7 @@ class PartiallyLinear(Doubleml):
 
 @dataclasses.dataclass
 class PartiallyLinearIV(Doubleml):
-    """DoubleML's partially linear model of a treatment with an instrument.
+    """Estimates a constant treatment effect with an instrument.
 
     Like `partially_linear`, but the treatment may share causes with the
     label that are not among the features, so its effect is found through an
@@ -514,7 +514,7 @@ class PartiallyLinearIV(Doubleml):
 
 @dataclasses.dataclass
 class PartiallyLinearPanel(Doubleml):
-    """DoubleML's partially linear model of a panel: units seen over time.
+    """Estimates a constant treatment effect in a panel: units seen over time.
 
     Each row is one unit ("unit", a column that identifies it) in one period
     ("time", a column of numbered periods). Like `partially_linear`, it
@@ -592,7 +592,7 @@ class PartiallyLinearPanel(Doubleml):
 
 @dataclasses.dataclass
 class PartiallyLogistic(Doubleml):
-    """DoubleML's partially linear model of a label with two classes.
+    """Estimates a treatment's effect on a label with two classes.
 
     Like `partially_linear`, but for a label with two classes: the treatment
     changes the log-odds of the second class by the same amount for every
@@ -637,7 +637,7 @@ class PartiallyLogistic(Doubleml):
 
 @dataclasses.dataclass
 class PotentialOutcomes(Doubleml):
-    """DoubleML's effects of each level of a treatment, compared to one of them.
+    """Estimates the effect of each level of a treatment, against one of them.
 
     For a treatment with several levels (such as kinds of programs), it
     estimates the average label if every row had each level (the average
@@ -717,7 +717,7 @@ class PotentialOutcomes(Doubleml):
 
 @dataclasses.dataclass
 class QuantileEffects(Doubleml):
-    """DoubleML's effects of a treatment on quantiles of the label.
+    """Estimates a treatment's effects on quantiles of the label.
 
     For a treatment with two values, it estimates how the treatment changes
     each of "quantiles" of the label (by default, the quartiles 0.25, 0.5,
@@ -797,7 +797,7 @@ class QuantileEffects(Doubleml):
 
 @dataclasses.dataclass
 class RegressionDiscontinuity(Doubleml):
-    """DoubleML's regression discontinuity: the effect at a cutoff.
+    """Estimates a treatment's effect at a cutoff (regression discontinuity).
 
     A treatment given to the rows whose "running" column (such as a score or
     an age) is at or above "cutoff" (0 by default) is estimated from the rows
@@ -878,7 +878,7 @@ class RegressionDiscontinuity(Doubleml):
 
 @dataclasses.dataclass
 class SampleSelection(Doubleml):
-    """DoubleML's effect of a treatment when the label is only sometimes seen.
+    """Estimates a treatment's effect when the label is only sometimes seen.
 
     "selected" names a column that is 1 for the rows whose label was seen
     and 0 for the others (whose labels are not used and can be missing). The

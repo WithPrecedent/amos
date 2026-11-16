@@ -33,17 +33,9 @@ keywords = [
     "statistics",
     "workflow"]
 dependencies = [
-    # bobbie (which chrisjen uses to read settings) reads ini lists that span
-    # several lines and comments after values from 0.3.3, writes settings
-    # files from 0.4.0, and looks up the type of a settings file publicly
-    # (`options.file_type`) from 0.5.0.
     "bobbie>=0.5.0",
     "camina>=0.2.4",
-    # chrisjen makes public the helpers that amos uses (such as
-    # `utilities.listify_names`) from 0.5.0.
     "chrisjen>=0.5.0",
-    # Experiments and validators use joblib (which scikit-learn requires) to
-    # apply their paths and fit their folds at once.
     "joblib>=1.3",
     "nagata>=0.2.1",
     "numpy>=1.26",

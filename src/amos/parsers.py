@@ -3,78 +3,99 @@ r"""Techniques that turn the text in a dataset into data.
 These are techniques of the "wrangler" stage of a project. A loader brings
 documents into a dataset as they are (`load_files` makes a row for each file,
 with its text in a "text" column), and parsers then find information in that
-text and make columns of it, such as whether an opinion reversed, the court
-that decided it, or the judges on its panel. Like a munger, a parser keeps
-the rows and every column. Where a munger does one thing to a column, a
-parser applies a rulebook: an ordered list of rules, each of which searches
-text for a pattern and records what it finds. Each rule searches every row
-at once with the vectorized methods of `pandas` (such as those of
-`Series.str`), so a rulebook is fast even with many documents.
+text and make columns of it, such as whether a contract can be renewed, the
+city in an address, or the authors of a paper. Like a munger, a parser keeps
+the rows and every column. Each search covers every row at once with the
+vectorized methods of `pandas` (such as those of `Series.str`), so parsing is
+fast even with many documents.
 
-Rules are usually rows of CSV files (spreadsheets), so they can be read and
-changed without knowing Python. They can also be `dict`s in settings, with
-the same keys. The columns are:
+Each kind of search is a parser of its own, which a workflow can name in its
+settings with a pattern and the columns to search and make (see
+`PatternParser.parse`). Several values in one cell are separated by a comma
+and a space unless the `separator` is set:
+
+| Parser | Kind | Makes |
+| --- | --- | --- |
+| `parse_flags` | `flags` | True if the pattern appears, and otherwise false. |
+| `parse_counts` | `counts` | The number of times the pattern appears. |
+| `parse_category` | `category` | The `value` if the pattern appears. With several patterns (or rules), the first that matches wins, so they can turn text into categories (such as the name of a state into its abbreviation). |
+| `parse_categories` | `categories` | The `value` of every pattern (or rule) that appears, once each, in order. A value cannot have the separator in it. |
+| `parse_match` | `match` | The first match, or a column for each named group of the pattern (such as "(?P<year>\d{4})"), named for the group after the `name` if there is one. |
+| `parse_matches` | `matches` | Every match, or a column for each named group as `parse_match` makes. |
+| `parse_split` | `split` | A column for each name: the text before the first match, between the first and second, and so on, with the rest of the text in the last. Text without a match is all in the first. |
+| `parse_names` | `names` | The names in the text, found by splitting the text wherever the pattern matches. The pattern should match the words and punctuation between names (such as "AUTHORS", "BY", "AND", and commas). The names are made upper-case without periods or apostrophes (so "O'Brien" is "OBRIEN"), line breaks always separate them, and pieces without two letters are left out. |
+| `parse_fields` | `fields` | A column for each label that the pattern matches (such as "MEDICAL HISTORY:"), with the text after the label, up to the next label. The columns are named for the labels in snake case ("medical_history"), after the `name` if there is one. |
+| `parse_replace` | `replace` | The text with every match replaced by the `value`, which can include the groups of the match ("\1" is the first). A blank `value` removes the matches. Without a `name`, the text it searches is changed. |
+
+`parse_all` applies a rulebook: an ordered list of rules, each of which is
+one of these searches, named by its kind. Rules are usually rows of CSV files
+(spreadsheets), so they can be read and changed without knowing Python. They
+can also be `dict`s in settings, with the same keys. The columns are:
 
 | Column | Meaning |
 | --- | --- |
 | `column` | The columns of text to search, separated by commas. Defaults to the parser's "column" (such as "text") if blank. |
-| `name` | The column that the rule makes (or adds to). A `split` rule names two, separated by a comma. It is blank for a `replace` rule that changes the text it searches, and optional for a `fields` rule, whose columns are named for the labels in the text. |
-| `kind` | What the rule does (see below). |
+| `name` | The column that the rule makes (or adds to). A `split` rule names two or more, separated by commas. It is blank for a `replace` rule that changes the text it searches, and optional for a `fields` rule (whose columns are named for the labels in the text) and for a `match` or `matches` rule whose pattern has named groups. |
+| `kind` | What the rule does: one of the kinds above, or one registered with `register_rule_kind`. |
 | `pattern` | A regular expression to search for. |
-| `value` | What a `map`, `map_all`, or `replace` rule writes. Otherwise blank. |
+| `value` | What a `category`, `categories`, or `replace` rule writes. Otherwise blank. |
 | `flags` | Any of "ignorecase", "dotall" (so "." also matches line breaks), "multiline" (so "^" and "$" match at each line), and "verbose", separated by commas. Optional. |
+| `separator` | What separates several values in one cell, for `categories`, `matches`, and `names` rules. Optional: a comma and a space if blank. |
 | `note` | Anything you want to say about the rule. It is not used. Optional. |
-
-The kinds of rules:
-
-| Kind | Makes |
-| --- | --- |
-| `flag` | True if the pattern appears, and otherwise false. |
-| `count` | The number of times the pattern appears. |
-| `map` | The rule's `value` if the pattern appears. The first rule for a column that matches wins, so rules can turn text into categories (such as the name of a court into its number). |
-| `map_all` | The `value` of every rule for the column whose pattern appears, once each, in the order of the rules and separated by commas. A value cannot have a comma. |
-| `extract` | The first match. |
-| `extract_all` | Every match, separated by commas. |
-| `split` | Two columns: the text before the first match and the text after it. Text without a match is all before. |
-| `names` | The names in the text, separated by commas, found by splitting the text wherever the pattern matches. The pattern should match the words and punctuation between names (such as "JUDGES", "BEFORE", and commas). The names are made upper-case without periods or apostrophes (so "O'Scannlain" is "OSCANNLAIN"), line breaks always separate them, and pieces without two letters are left out. |
-| `fields` | A column for each label that the pattern matches (such as "PRIOR HISTORY:"), with the text after the label, up to the next label. The columns are named for the labels in snake case ("prior_history"), after the rule's `name` if it has one. |
-| `replace` | The text with every match replaced by the `value`, which can include the groups of the match ("\1" is the first). A blank `value` removes the matches. |
 
 Rules are applied from top to bottom, and every column that a rule makes can
 be searched by the rules after it, so a rule can find a section of a
-document (with `extract`, `split`, or `fields`) for later rules to search.
+document (with `match`, `split`, or `fields`) for later rules to search.
 Rules that make the same column are combined: flags are true if any rule
-matches, counts are added, the first `map` or `extract` that matches is
-kept, and the results of `map_all`, `extract_all`, and `names` rules are
-joined. A text that is missing matches nothing.
+matches, counts are added, the first `category` or `match` that matches is
+kept, and the results of `categories`, `matches`, and `names` rules are
+joined. A text that is missing matches nothing. A parser given several
+patterns combines them in the same way, as rules of the same name.
 
-CSV files in the layout of courtpy (with "target" for `column`, "variable"
-for `name`, TRUE or FALSE in "ignorecase" and "dotall" columns, and the kinds
-"label", "labels", "section", "matches", "excerpts", and "remove") are read
-too, as the rules they stand for.
+The kinds that this module first used (`flag`, `count`, `map`, `map_all`,
+`extract`, and `extract_all`) are read as the kinds they became. CSV files in
+an older layout of rules (with "target" for `column`, "variable" for `name`,
+TRUE or FALSE in "ignorecase" and "dotall" columns, and the kinds "label",
+"labels", "section", "matches", "excerpts", and "remove") are read too, as
+the rules they stand for.
+
+To write a parser, subclass `Parser` and write `parse`. To write a parser
+that can also be a kind of rule, subclass `PatternParser`, write `find`, and
+name the kind with `register_rule_kind`.
 
 Contents:
-    KINDS: the kinds of rules.
     Parser: base class for techniques that turn text into data.
-    ParseDocuments: finds information in text with a rulebook.
-    Rule: one rule.
+    PatternParser: base class for parsers that search text for a pattern,
+        each of which can be a kind of rule.
+    ParseAll: finds information in text with a rulebook.
+    ParseCategories: makes the values of every pattern that text matches.
+    ParseCategory: makes the value of the first pattern that text matches.
+    ParseCounts: counts the matches of a pattern in text.
+    ParseFields: makes a column for each labeled section of text.
+    ParseFlags: flags whether text matches a pattern.
+    ParseMatch: keeps the first match of a pattern in text.
+    ParseMatches: keeps every match of a pattern in text.
+    ParseNames: finds the names in text.
+    ParseReplace: replaces the matches of a pattern in text.
+    ParseSplit: splits text into columns where a pattern matches.
+    Rule: one search of text, as a row of a rulebook.
     Rulebook: an ordered collection of rules.
+    register_rule_kind: names a pattern parser as a kind of rule.
     register_rulebook: registers the rules of a rulebook under a name.
-    _COLUMN_ALIASES: names of the columns of rules in courtpy's layout (and
+    _COLUMN_ALIASES: names of the columns of rules in the older layout (and
         of keys that settings may use), mapped to the names of this layout.
     _FLAGS: the flags that a rule can have, by their names.
-    _KIND_ALIASES: kinds of rules in courtpy's layout, mapped to the kinds
-        they stand for.
-    _NAMELESS_KINDS: kinds of rules that need no name.
+    _KIND_ALIASES: kinds of rules in the older layout and the first layout
+        of this module, mapped to the kinds they stand for.
     _NAME_PUNCTUATION: the periods and apostrophes (straight and curly) that
         `names` rules remove from names.
-    _OLD_FLAGS: columns of flags in courtpy's layout, which hold TRUE or
+    _OLD_FLAGS: columns of flags in the older layout, which hold TRUE or
         FALSE.
     _REQUIRED: columns that every file of rules must have.
     _RULEBOOKS: the sources of each registered rulebook, by its name.
+    _RULE_KINDS: the pattern parser of each kind of rule, by the kind.
     _SEPARATOR: what separates several values in one cell of the data.
-    _TRUE: words (in lower case) that mean true in courtpy's flag columns.
-    _VALUE_KINDS: kinds of rules that use a value.
+    _TRUE: words (in lower case) that mean true in the older flag columns.
 
 """
 
@@ -86,16 +107,14 @@ import dataclasses
 import pathlib
 import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from typing import Any
+from typing import Any, ClassVar
 
+import camina
 import numpy as np
 import pandas as pd
 
 from . import _patterns, base
 
-KINDS: tuple[str, ...] = (
-    'count', 'extract', 'extract_all', 'fields', 'flag', 'map', 'map_all',
-    'names', 'replace', 'split')
 _COLUMN_ALIASES: dict[str, str] = {
     'columns': 'column',
     'names': 'name',
@@ -107,22 +126,27 @@ _FLAGS: dict[str, re.RegexFlag] = {
     'multiline': re.MULTILINE,
     'verbose': re.VERBOSE}
 _KIND_ALIASES: dict[str, str] = {
-    'excerpts': 'extract_all',
-    'label': 'map',
-    'labels': 'map_all',
-    'matches': 'extract_all',
+    'count': 'counts',
+    'excerpts': 'matches',
+    'extract': 'match',
+    'extract_all': 'matches',
+    'flag': 'flags',
+    'label': 'category',
+    'labels': 'categories',
+    'map': 'category',
+    'map_all': 'categories',
     'remove': 'replace',
-    'section': 'extract'}
-_NAMELESS_KINDS: frozenset[str] = frozenset({'fields', 'replace'})
+    'section': 'match'}
 # The curly apostrophe (U+2019) is added with `chr` so that the source file
 # has only plain characters.
 _NAME_PUNCTUATION: re.Pattern[str] = re.compile("[.'" + chr(0x2019) + ']')
 _OLD_FLAGS: tuple[str, ...] = ('dotall', 'ignorecase')
 _REQUIRED: tuple[str, ...] = ('kind', 'pattern')
 _RULEBOOKS: dict[str, tuple[Any, ...]] = {}
+# The built-in kinds are added after their parsers are defined.
+_RULE_KINDS: dict[str, type[PatternParser]] = {}
 _SEPARATOR: str = ', '
 _TRUE: frozenset[str] = frozenset({'true', 't', 'yes', 'y', '1'})
-_VALUE_KINDS: frozenset[str] = frozenset({'map', 'map_all', 'replace'})
 
 
 @dataclasses.dataclass
@@ -179,13 +203,265 @@ class Parser(base.Operation, abc.ABC):
 
 
 @dataclasses.dataclass
-class ParseDocuments(Parser):
+class PatternParser(Parser, abc.ABC):
+    """Base class for parsers that search text for a pattern.
+
+    Each pattern parser is one kind of search, which a workflow can apply on
+    its own (with the parameters of `parse`) or name as the kind of a rule in
+    a rulebook (see `ParseAll` and `register_rule_kind`). Either way, the
+    search is described by a `Rule`, which `find` applies.
+
+    A subclass writes `find`. It can also change what a rule needs: set
+    `nameless` if the search can make columns without a name, and override
+    `check_names`, `check_pattern`, or `check_value` to check the names or
+    pattern of a rule, or to check (and convert) its value.
+
+    Args:
+        name: name used to refer to the technique in a workflow. Defaults to
+            an empty `str`, which uses the snake case name of the class.
+        contents: not used. Defaults to `None`.
+        parameters: keyword arguments for `parse`. Defaults to an empty
+            `dict`.
+
+    """
+
+    # Whether a rule of this kind can leave its name blank.
+    nameless: ClassVar[bool] = False
+
+    """ Required Methods """
+
+    @abc.abstractmethod
+    def find(
+        self,
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
+        made: dict[str, pd.Series],
+        index: pd.Index) -> None:
+        """Applies `rule` to every row of `texts`.
+
+        The columns that the search makes are put in `made`, rather than in
+        the data, so that every column can be added at once. A column of the
+        same name that an earlier rule made is in `made` too, and the search
+        can add to it (as flags and counts do) or replace it.
+
+        Args:
+            rule: the search: its `pattern`, the `names` of the columns to
+                make, its `value`, and the `separator` of several values.
+            texts: the columns of text to search, by name, in order. Their
+                index is that of the data.
+            made: the columns that earlier rules made (or changed), by name.
+                It is changed in place.
+            index: the labels of the rows, for the columns that are made.
+
+        """
+
+    """ Class Methods """
+
+    @classmethod
+    def check_names(cls, rule: Rule) -> None:
+        """Checks that a rule has as many names as the search needs.
+
+        By default, a rule makes one column, so it needs one name (or none,
+        if the class is `nameless`).
+
+        Args:
+            rule: the rule, whose value is not yet checked.
+
+        Raises:
+            ValueError: if the rule has too many or too few names.
+
+        """
+        if not rule.names and not cls.nameless:
+            message = 'the name is blank'
+            raise ValueError(message)
+        if len(rule.names) > 1:
+            message = (
+                f'a {cls.kind()} rule makes one column, not '
+                f'{list(rule.names)}')
+            raise ValueError(message)
+
+    @classmethod
+    def check_pattern(cls, rule: Rule) -> None:
+        """Checks that the search can use the pattern of `rule`.
+
+        By default, any valid pattern can be used.
+
+        Args:
+            rule: the rule, whose value is not yet checked.
+
+        """
+
+    @classmethod
+    def check_value(cls, rule: Rule) -> Any:
+        """Returns the value of a rule, checked for the search.
+
+        By default, the search uses no value.
+
+        Args:
+            rule: the rule, with its value as it was given (from a cell of a
+                CSV file, settings, or a parameter), or `None`.
+
+        Raises:
+            ValueError: if the rule has a value.
+
+        Returns:
+            `None`.
+
+        """
+        if not _is_blank(rule.value):
+            message = (
+                f'a {cls.kind()} rule does not use a value, but it has '
+                f'{rule.value!r} (is its kind right?)'
+            )
+            raise ValueError(message)
+        return None
+
+    @classmethod
+    def kind(cls) -> str:
+        """Returns the kind of rule that this parser is.
+
+        Returns:
+            The kind that the class is registered as (see
+                `register_rule_kind`), or the snake case name of the class
+                without "parse_" if it is not registered.
+
+        """
+        for kind, parser in _RULE_KINDS.items():
+            if parser is cls:
+                return kind
+        return str(camina.snakify(cls.__name__)).removeprefix('parse_')
+
+    @classmethod
+    def make_rule(
+        cls,
+        pattern: Any,
+        *,
+        columns: Any = None,
+        names: Any = None,
+        value: Any = None,
+        flags: Any = None,
+        separator: str | None = None,
+        note: str = '',
+        origin: str = '',
+        kind: str = '') -> Rule:
+        """Returns a rule that this parser applies, checked for it.
+
+        Args:
+            pattern: a regular expression, as text or compiled (in which case
+                its flags are kept).
+            columns: the columns of text to search: a name, names separated
+                by commas, or a sequence of names. Defaults to `None`, in
+                which case the rule searches the column it is given.
+            names: the columns to make, in the same forms as `columns`.
+                Defaults to `None`.
+            value: what the rule writes, if it uses a value. Defaults to
+                `None`.
+            flags: names of flags (such as "ignorecase, dotall"), as text or
+                a sequence, or flags of the `re` module. Defaults to `None`.
+            separator: what separates several values in one cell. Defaults
+                to `None`, which is a comma and a space.
+            note: a description of the rule. Defaults to an empty `str`.
+            origin: where the rule came from, for messages. Defaults to an
+                empty `str`.
+            kind: the kind of the rule. Defaults to an empty `str`, which
+                uses `kind`.
+
+        Raises:
+            ValueError: if the pattern is blank or not a valid regular
+                expression, a flag is not known, or the names, pattern, or
+                value do not suit the search.
+
+        Returns:
+            The rule.
+
+        """
+        rule = Rule(
+            kind = kind or cls.kind(),
+            pattern = _compile(pattern, _flags_of(flags)),
+            columns = _cell_names(columns),
+            names = _cell_names(names),
+            value = value,
+            separator = _SEPARATOR if separator is None else str(separator),
+            note = note,
+            origin = origin,
+            parser = cls)
+        cls.check_names(rule)
+        cls.check_pattern(rule)
+        return dataclasses.replace(rule, value = cls.check_value(rule))
+
+    """ Public Methods """
+
+    def parse(
+        self,
+        data: pd.DataFrame,
+        *,
+        pattern: Any = None,
+        column: str | Sequence[str] | None = 'text',
+        name: str | Sequence[str] | None = None,
+        value: Any = None,
+        flags: str | Sequence[str] | int | None = None,
+        separator: str | None = None,
+        **kwargs: Any) -> pd.DataFrame:
+        """Searches the text of `data` for `pattern`.
+
+        Args:
+            data: the data to parse.
+            pattern: a regular expression, a sequence of them, or a mapping
+                of them to their values (for the kinds that use a value).
+                Several patterns are applied in order as rules of the same
+                name, and so combined as rules are. Defaults to `None`, which
+                changes nothing.
+            column: the columns of text to search, as a name, names separated
+                by commas, or a sequence of names, or `None` (or "*") to
+                search every column of text that is not categorical. Defaults
+                to "text", the column of text that `load_files` makes.
+            name: the columns to make, in the same forms as `column`.
+                Defaults to `None`, which suits only the kinds that need no
+                name.
+            value: what the search writes, for the kinds that use a value,
+                if `pattern` does not map patterns to values. Defaults to
+                `None`.
+            flags: names of flags (such as "ignorecase, dotall"), as text or
+                a sequence, or flags of the `re` module. Defaults to `None`.
+            separator: what separates several values in one cell, for the
+                kinds that make them. Defaults to `None`, which is a comma
+                and a space.
+            **kwargs: not used.
+
+        Raises:
+            KeyError: if a column to search is not in the data.
+            TypeError: if a column to search is not text.
+            ValueError: if a pattern is not valid, `pattern` maps patterns
+                to values and `value` is given too, or the names or value do
+                not suit the search.
+
+        Returns:
+            The data, with the columns that the search makes.
+
+        """
+        if pattern is None:
+            return data
+        if column is None or column == '*':
+            column = _patterns.text_columns(data)
+            if not column:
+                return data
+        rules = [
+            self.make_rule(
+                source, columns = column, names = name, value = written,
+                flags = flags, separator = separator)
+            for source, written in _pattern_values(pattern, value)]
+        return _apply_rules(data, rules, parser = self)
+
+
+@dataclasses.dataclass
+class ParseAll(Parser):
     """Finds information in text with a rulebook.
 
     The rules can be the name of a registered rulebook (see
     `register_rulebook`), the path of a CSV file of rules or of a folder of
     them, a list of rules (as `dict`s, with the columns of a CSV file as
-    keys), or a list of any of these, which are applied in order.
+    keys), or a list of any of these, which are applied in order. Each rule
+    is applied by the pattern parser of its kind (see `register_rule_kind`).
 
     """
 
@@ -218,228 +494,263 @@ class ParseDocuments(Parser):
         return Rulebook.create(rules).apply(data, column = column)
 
 
-@dataclasses.dataclass(frozen = True)
-class Rule:
-    """One rule.
+@dataclasses.dataclass
+class ParseCategories(PatternParser):
+    """Lists the value of every pattern that text matches, in order.
 
-    Args:
-        kind: one of `KINDS`.
-        pattern: the compiled regular expression, with its flags.
-        columns: names of the columns of text to search, in order. Defaults
-            to an empty `tuple`, in which case the parser's "column" is
-            searched.
-        names: names of the columns that the rule makes. Only a `split` rule
-            has two. Defaults to an empty `tuple` (for a `replace` rule that
-            changes the text it searches, or a `fields` rule without a
-            prefix).
-        value: for a `map`, `map_all`, or `replace` rule, what it writes.
-            Defaults to `None`.
-        note: a description of the rule. Defaults to an empty `str`.
-        origin: where the rule came from (such as a file and row), for
-            messages. Defaults to an empty `str`.
+    Each value is added once, after the values of earlier patterns (or
+    rules), separated by the rule's separator (a comma and a space unless it
+    is set), so a value cannot have the separator in it. For example, rules
+    that write "refund" and "complaint" make "refund, complaint" for an email
+    that asks for a refund and complains.
 
     """
-
-    kind: str
-    pattern: re.Pattern[str]
-    columns: tuple[str, ...] = ()
-    names: tuple[str, ...] = ()
-    value: Any = None
-    note: str = ''
-    origin: str = ''
 
     """ Class Methods """
 
     @classmethod
-    def create(cls, row: Mapping[str, Any], origin: str = '') -> Rule:
-        """Returns a rule made from a row of a CSV file (or a `dict`).
+    def check_value(cls, rule: Rule) -> str:
+        """Returns the value of a rule, which cannot have its separator.
 
         Args:
-            row: the cells of the row, by the names of the columns, in this
-                module's layout or courtpy's.
-            origin: where the row came from, for messages. Defaults to an
-                empty `str`.
+            rule: the rule, with its value as it was given.
 
         Raises:
-            ValueError: if the kind or a flag is not known, the pattern is
-                blank or not a valid regular expression, the rule has too
-                many or too few names, or it has a value that it does not
-                use (or lacks one that it needs).
+            ValueError: if the value is blank or has the separator in it
+                (without the spaces around it, such as a comma).
 
         Returns:
-            The rule.
+            The value, as text trimmed of spaces.
 
         """
-        cells = _translate(row)
-        kind = str(cells.get('kind') or '').strip().lower()
-        if kind not in KINDS:
-            message = f'the kind {kind!r} is not one of {list(KINDS)}'
-            raise ValueError(message)
-        columns = _cell_names(cells.get('column'))
-        names = _cell_names(cells.get('name'))
-        _check_names(kind, columns, names)
-        source = cells.get('pattern')
-        if source is None or not str(source):
-            message = 'the pattern is blank'
-            raise ValueError(message)
-        pattern = _patterns.compile_pattern(
-            source, _flags_of(cells.get('flags')))
-        if kind == 'fields' and pattern.groupindex:
+        if _is_blank(rule.value):
             message = (
-                'the pattern of a fields rule cannot have named groups, since '
-                'it is used twice'
+                f'a {cls.kind()} rule needs a value to write when it matches')
+            raise ValueError(message)
+        text = str(rule.value).strip()
+        mark = rule.separator.strip() or rule.separator
+        if mark and mark in text:
+            message = (
+                f'the value {text!r} has {mark!r}, which separates the values '
+                f'of {cls.kind()} rules'
             )
             raise ValueError(message)
-        return cls(
-            kind = kind,
-            pattern = pattern,
-            columns = columns,
-            names = names,
-            value = _value_of(kind, cells.get('value')),
-            note = str(cells.get('note') or ''),
-            origin = origin)
-
-    """ Properties """
-
-    @property
-    def description(self) -> str:
-        """Returns a short description of the rule, for messages.
-
-        Returns:
-            The kind of the rule, the columns it makes, and where it came
-                from.
-
-        """
-        text = f'the {self.kind} rule'
-        if self.names:
-            text += f' for {_SEPARATOR.join(self.names)}'
-        if self.origin:
-            text += f' ({self.origin})'
         return text
 
     """ Public Methods """
 
-    def apply(
+    def find(
         self,
-        data: pd.DataFrame,
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
         made: dict[str, pd.Series],
-        *,
-        column: str = 'text') -> None:
-        """Applies the rule to every row of `data`.
-
-        The columns that the rule makes are put in `made`, rather than in
-        `data`, so that a rulebook can add them all at once (see
-        `Rulebook.apply`).
+        index: pd.Index) -> None:
+        """Adds the rule's value to each row where the pattern appears.
 
         Args:
-            data: the data, which is not changed.
-            made: the columns that earlier rules made (or changed), by name,
-                which this rule searches, adds to, or replaces. It is changed
-                in place.
-            column: the column of text to search if the rule has no
-                `columns`. Defaults to "text".
+            rule: the search.
+            texts: the columns of text to search, by name.
+            made: the columns that earlier rules made, by name.
+            index: the labels of the rows.
 
         """
-        columns = self.columns or (column,)
-        texts = [_text(data, made, c, self.description) for c in columns]
-        if self.kind == 'replace':
-            self._replace(texts, columns, made)
-            return
-        method = getattr(self, f'_{self.kind}')
-        method(texts, made, data.index)
+        name = rule.names[0]
+        found = _missing(len(index))
+        found[_matches(rule, texts)] = str(rule.value)
+        if name in made:
+            before = pd.Series(
+                made[name].to_numpy(dtype = object), dtype = 'str').fillna('')
+            mark = rule.separator
+            item = f'{mark}{rule.value}{mark}'
+            listed = (mark + before + mark).str.contains(
+                item, regex = False).to_numpy(dtype = bool)
+            found[listed] = None
+        _add_to(made, name, found, index, rule.separator)
 
-    """ Private Methods """
 
-    def _count(
+@dataclasses.dataclass
+class ParseCategory(PatternParser):
+    """Gives each text the value of the first pattern that it matches.
+
+    With several patterns (or rules of the same name), the first that matches
+    wins, so they can turn text into categories, such as the name of a state
+    into its abbreviation. Text that matches none is missing, unless the parser
+    is given a `default`. The type of the column is found from its values, as
+    `pandas` does.
+
+    """
+
+    """ Class Methods """
+
+    @classmethod
+    def check_value(cls, rule: Rule) -> Any:
+        """Returns the value of a rule, as a number if it is one.
+
+        Args:
+            rule: the rule, with its value as it was given.
+
+        Raises:
+            ValueError: if the value is blank.
+
+        Returns:
+            The value: an `int` or `float` if it is text of a number, and
+                otherwise the value itself.
+
+        """
+        if _is_blank(rule.value):
+            message = (
+                f'a {cls.kind()} rule needs a value to write when it matches')
+            raise ValueError(message)
+        return _convert(rule.value)
+
+    """ Public Methods """
+
+    def find(
         self,
-        texts: list[pd.Series],
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
+        made: dict[str, pd.Series],
+        index: pd.Index) -> None:
+        """Makes the rule's value in each row where the pattern appears.
+
+        Args:
+            rule: the search.
+            texts: the columns of text to search, by name.
+            made: the columns that earlier rules made, by name.
+            index: the labels of the rows.
+
+        """
+        found = _missing(len(index))
+        found[_matches(rule, texts)] = rule.value
+        _keep_first(made, rule.names[0], found, index)
+
+    def parse(
+        self,
+        data: pd.DataFrame,
+        *,
+        default: Any = None,
+        **kwargs: Any) -> pd.DataFrame:
+        """Makes the value of the first pattern that the text matches.
+
+        Args:
+            data: the data to parse.
+            default: the value of text that matches no pattern (including
+                missing text). Defaults to `None`, which is missing.
+            **kwargs: the parameters of `PatternParser.parse`.
+
+        Returns:
+            The data, with the values. Their type is found from the values
+                (and `default`), as `pandas` does.
+
+        """
+        data = super().parse(data, **kwargs)
+        if default is None or kwargs.get('pattern') is None:
+            return data
+        name = _cell_names(kwargs.get('name'))[0]
+        values = data[name].to_numpy(dtype = object).copy()
+        values[pd.isna(values)] = default
+        data[name] = _settle(values, data.index)
+        return data
+
+
+@dataclasses.dataclass
+class ParseCounts(PatternParser):
+    """Counts the matches of a pattern in text.
+
+    The counts of several columns, patterns, or rules of the same name are
+    added together. Missing text has no matches.
+
+    Wraps:
+        [`pandas.Series.str.count`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.count.html)
+        from pandas.
+
+    """
+
+    def find(
+        self,
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
         made: dict[str, pd.Series],
         index: pd.Index) -> None:
         """Makes the number of matches in each row (whole numbers).
 
         Args:
-            texts: the columns of text to search.
+            rule: the search.
+            texts: the columns of text to search, by name.
             made: the columns that earlier rules made, by name.
             index: the labels of the rows.
 
         """
-        name = self.names[0]
+        name = rule.names[0]
         counts = np.zeros(len(index), dtype = 'int64')
-        for text in texts:
-            found = text.str.count(self.pattern.pattern, flags = self._flags)
+        for text in texts.values():
+            found = text.str.count(rule.pattern.pattern, flags = rule.flags)
             counts += found.fillna(0).to_numpy(dtype = 'int64')
         if name in made:
             counts += made[name].to_numpy(dtype = 'int64')
         made[name] = pd.Series(counts, index = index)
 
-    def _extract(
-        self,
-        texts: list[pd.Series],
-        made: dict[str, pd.Series],
-        index: pd.Index) -> None:
-        """Makes the first match in each row (text).
+
+@dataclasses.dataclass
+class ParseFields(PatternParser):
+    """Makes a column for each labeled section of text.
+
+    The pattern matches the labels (such as "MEDICAL HISTORY:"), and each
+    column has the text after a label, up to the next label. The columns are
+    named for the labels in snake case ("medical_history"), after the `name`
+    and an underscore if there is one. A label of only punctuation is left
+    out. The first text of each label in each row is kept.
+
+    """
+
+    nameless: ClassVar[bool] = True
+
+    """ Class Methods """
+
+    @classmethod
+    def check_pattern(cls, rule: Rule) -> None:
+        """Checks that the pattern has no named groups, since it is used twice.
 
         Args:
-            texts: the columns of text to search, in order.
-            made: the columns that earlier rules made, by name.
-            index: the labels of the rows.
+            rule: the rule, whose value is not yet checked.
+
+        Raises:
+            ValueError: if the pattern has named groups.
 
         """
-        source = _wrap(self.pattern, '(', ')')
-        found = _missing(len(index))
-        for text in texts:
-            matches = text.str.extract(source, flags = self._flags)
-            _fill(found, _strings(matches.iloc[:, 0]))
-        _keep_first(made, self.names[0], found, index)
+        if rule.pattern.groupindex:
+            message = (
+                f'the pattern of a {cls.kind()} rule cannot have named '
+                f'groups, since it is used twice'
+            )
+            raise ValueError(message)
 
-    def _extract_all(
+    """ Public Methods """
+
+    def find(
         self,
-        texts: list[pd.Series],
-        made: dict[str, pd.Series],
-        index: pd.Index) -> None:
-        """Makes every match in each row, separated by commas (text).
-
-        Args:
-            texts: the columns of text to search, in order.
-            made: the columns that earlier rules made, by name.
-            index: the labels of the rows.
-
-        """
-        source = _wrap(self.pattern, '(', ')')
-        found = _missing(len(index))
-        for text in texts:
-            plain = text.reset_index(drop = True)
-            matches = plain.str.extractall(source, flags = self._flags)
-            if matches.empty:
-                continue
-            kept = _patterns.tidy(matches.iloc[:, 0].astype('str')).dropna()
-            joined = kept.groupby(level = 0).agg(_SEPARATOR.join)
-            found = _join(found, joined.reindex(range(len(plain))).to_numpy(
-                dtype = object))
-        _add_to(made, self.names[0], found, index)
-
-    def _fields(
-        self,
-        texts: list[pd.Series],
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
         made: dict[str, pd.Series],
         index: pd.Index) -> None:
         """Makes a column for each label, with the text after it (text).
 
         Args:
-            texts: the columns of text to search, in order.
+            rule: the search.
+            texts: the columns of text to search, by name, in order.
             made: the columns that earlier rules made, by name.
             index: the labels of the rows.
 
         """
-        label = _body(self.pattern)
+        label = _body(rule.pattern)
         source = _wrap(
-            self.pattern,
+            rule.pattern,
             '(?P<_label>',
             f')(?P<_text>(?s:.*?))(?=(?:{label})|\\Z)')
-        prefix = f'{self.names[0]}_' if self.names else ''
-        for text in texts:
+        prefix = f'{rule.names[0]}_' if rule.names else ''
+        for text in texts.values():
             plain = text.reset_index(drop = True)
-            matches = plain.str.extractall(source, flags = self._flags)
+            matches = plain.str.extractall(source, flags = rule.flags)
             if matches.empty:
                 continue
             keys = [_field_name(str(k)) for k in matches['_label']]
@@ -463,178 +774,491 @@ class Rule:
                 _keep_first(
                     made, field, wide[field].to_numpy(dtype = object), index)
 
-    def _flag(
+
+@dataclasses.dataclass
+class ParseFlags(PatternParser):
+    """Flags whether text matches a pattern.
+
+    For example, the pattern "revers|vacat" makes a column that is true for
+    each row whose text mentions a reversal or vacatur. With several columns,
+    patterns, or rules of the same name, it is true if any matches. Missing
+    text is false.
+
+    Wraps:
+        [`pandas.Series.str.contains`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.contains.html)
+        from pandas.
+
+    """
+
+    def find(
         self,
-        texts: list[pd.Series],
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
         made: dict[str, pd.Series],
         index: pd.Index) -> None:
         """Makes whether the pattern appears in each row (booleans).
 
         Args:
-            texts: the columns of text to search.
+            rule: the search.
+            texts: the columns of text to search, by name.
             made: the columns that earlier rules made, by name.
             index: the labels of the rows.
 
         """
-        name = self.names[0]
-        found = self._matches(texts)
+        name = rule.names[0]
+        found = _matches(rule, texts)
         if name in made:
             found |= made[name].to_numpy(dtype = bool)
         made[name] = pd.Series(found, index = index)
 
-    def _map(
-        self,
-        texts: list[pd.Series],
-        made: dict[str, pd.Series],
-        index: pd.Index) -> None:
-        """Makes the rule's value in each row where the pattern appears.
 
-        The type of the column is found from its values, as `pandas` does.
+@dataclasses.dataclass
+class ParseMatch(PatternParser):
+    r"""Keeps the first match of a pattern in text (or the groups of a match).
+
+    The whole match is kept, even if the pattern has groups (which often just
+    group alternatives, as in "(F|U\.S)\."). A pattern with named groups
+    makes a column for each named group instead, named for the group after
+    the `name` and an underscore if there is one. For example,
+    "(?P<volume>\d+) F\.3d (?P<page>\d+)" makes "volume" and "page" columns
+    from citations such as "512 F.3d 1093". With several columns, the first
+    that matches in a row is used, and with several patterns (or rules of the
+    same name), the first that matches wins. Text without a match is missing.
+
+    Wraps:
+        [`pandas.Series.str.extract`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.extract.html)
+        from pandas.
+
+    """
+
+    """ Class Methods """
+
+    @classmethod
+    def check_names(cls, rule: Rule) -> None:
+        """Checks the names of a rule, which are optional with named groups.
 
         Args:
-            texts: the columns of text to search.
+            rule: the rule, whose value is not yet checked.
+
+        Raises:
+            ValueError: if the rule has several names, or none and a pattern
+                without named groups.
+
+        """
+        _check_group_names(cls, rule)
+
+    """ Public Methods """
+
+    def find(
+        self,
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
+        made: dict[str, pd.Series],
+        index: pd.Index) -> None:
+        """Makes the first match (or its named groups) in each row (text).
+
+        Args:
+            rule: the search.
+            texts: the columns of text to search, by name, in order.
             made: the columns that earlier rules made, by name.
             index: the labels of the rows.
 
         """
-        found = _missing(len(index))
-        found[self._matches(texts)] = self.value
-        _keep_first(made, self.names[0], found, index)
+        source, targets = _extract_targets(rule)
+        found = {key: _missing(len(index)) for key in targets}
+        for text in texts.values():
+            matches = text.str.extract(source, flags = rule.flags)
+            # Rows that an earlier column matched keep all of its groups.
+            empty = np.ones(len(index), dtype = bool)
+            for values in found.values():
+                empty &= pd.isna(values)
+            for key, values in found.items():
+                values[empty] = _strings(matches[key])[empty]
+        for key, column in targets.items():
+            _keep_first(made, column, found[key], index)
 
-    def _map_all(
-        self,
-        texts: list[pd.Series],
-        made: dict[str, pd.Series],
-        index: pd.Index) -> None:
-        """Adds the rule's value to each row where the pattern appears.
 
-        Each value is added once, after the values of earlier rules,
-        separated by commas (text).
+@dataclasses.dataclass
+class ParseMatches(PatternParser):
+    """Keeps every match of a pattern in text (or the groups of each match).
+
+    The whole matches are kept, even if the pattern has groups, and they are
+    separated by the rule's separator (a comma and a space unless it is set).
+    A pattern with named groups makes a column for each named group instead,
+    as `parse_match` does. The matches of several columns, patterns, or rules
+    of the same name are joined in order. Text without a match is missing.
+
+    Wraps:
+        [`pandas.Series.str.extractall`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.extractall.html)
+        from pandas.
+
+    """
+
+    """ Class Methods """
+
+    @classmethod
+    def check_names(cls, rule: Rule) -> None:
+        """Checks the names of a rule, which are optional with named groups.
 
         Args:
-            texts: the columns of text to search.
+            rule: the rule, whose value is not yet checked.
+
+        Raises:
+            ValueError: if the rule has several names, or none and a pattern
+                without named groups.
+
+        """
+        _check_group_names(cls, rule)
+
+    """ Public Methods """
+
+    def find(
+        self,
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
+        made: dict[str, pd.Series],
+        index: pd.Index) -> None:
+        """Makes every match (or its named groups) in each row (text).
+
+        Args:
+            rule: the search.
+            texts: the columns of text to search, by name, in order.
             made: the columns that earlier rules made, by name.
             index: the labels of the rows.
 
         """
-        name = self.names[0]
-        found = _missing(len(index))
-        found[self._matches(texts)] = str(self.value)
-        if name in made:
-            before = pd.Series(
-                made[name].to_numpy(dtype = object), dtype = 'str').fillna('')
-            item = f'{_SEPARATOR}{self.value}{_SEPARATOR}'
-            listed = (_SEPARATOR + before + _SEPARATOR).str.contains(
-                item, regex = False).to_numpy(dtype = bool)
-            found[listed] = None
-        _add_to(made, name, found, index)
+        source, targets = _extract_targets(rule)
+        found = {key: _missing(len(index)) for key in targets}
+        for text in texts.values():
+            plain = text.reset_index(drop = True)
+            matches = plain.str.extractall(source, flags = rule.flags)
+            if matches.empty:
+                continue
+            for key in targets:
+                kept = _patterns.tidy(matches[key].astype('str')).dropna()
+                joined = kept.groupby(level = 0).agg(rule.separator.join)
+                found[key] = _join(
+                    found[key],
+                    joined.reindex(range(len(plain))).to_numpy(dtype = object),
+                    rule.separator)
+        for key, column in targets.items():
+            _add_to(made, column, found[key], index, rule.separator)
 
-    def _matches(self, texts: list[pd.Series]) -> np.ndarray:
-        """Returns whether the pattern appears in any of `texts` in each row.
 
-        Args:
-            texts: the columns of text to search.
+@dataclasses.dataclass
+class ParseNames(PatternParser):
+    """Finds the names in text.
 
-        Returns:
-            A boolean array, which is false where every text is missing.
+    The text is split wherever the pattern matches, so the pattern should
+    match the words and punctuation between names (such as "AUTHORS", "BY",
+    "AND", and commas). The names are made upper-case without periods or
+    apostrophes (so "O'Brien" is "OBRIEN"), line breaks always
+    separate them, and pieces without two letters are left out. Each name is
+    kept once, and the names are separated by the rule's separator (a comma
+    and a space unless it is set).
 
-        """
-        found = np.zeros(len(texts[0]), dtype = bool)
-        for text in texts:
-            found |= _patterns.contains(text, self.pattern.pattern, self._flags)
-        return found
+    """
 
-    def _names(
+    def find(
         self,
-        texts: list[pd.Series],
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
         made: dict[str, pd.Series],
         index: pd.Index) -> None:
-        """Makes the names in each row, once each, separated by commas.
+        """Makes the names in each row, once each, with the separator.
 
-        The names are found row by row, since `_split_names` cleans each
-        piece of text.
+        The names are found row by row, since each piece of text is
+        cleaned on its own.
 
         Args:
-            texts: the columns of text to search, in order.
+            rule: the search.
+            texts: the columns of text to search, by name, in order.
             made: the columns that earlier rules made, by name.
             index: the labels of the rows.
 
         """
-        name = self.names[0]
+        name = rule.names[0]
         lists: list[list[str]] = [[] for _ in range(len(index))]
         if name in made:
             earlier = made[name].to_numpy(dtype = object)
             for position, before in enumerate(earlier):
                 if not pd.isna(before):
-                    lists[position] = str(before).split(_SEPARATOR)
-        for text in texts:
+                    lists[position] = str(before).split(rule.separator)
+        for text in texts.values():
             for position, value in enumerate(text.to_numpy(dtype = object)):
                 if pd.isna(value):
                     continue
                 listed = lists[position]
                 listed.extend(
-                    n for n in _split_names(str(value), self.pattern)
+                    n for n in _split_names(str(value), rule.pattern)
                     if n not in listed)
         joined = np.array(
-            [_SEPARATOR.join(n) if n else None for n in lists], dtype = object)
+            [rule.separator.join(n) if n else None for n in lists],
+            dtype = object)
         made[name] = _text_column(joined, index)
 
-    def _replace(
+
+@dataclasses.dataclass
+class ParseReplace(PatternParser):
+    r"""Replaces the matches of a pattern in text.
+
+    The value replaces every match, and it can include the groups of the
+    match ("\1" is the first). A blank value removes the matches. With a
+    name, the changed text is a new column (so only one column can be
+    searched); without one, the text that is searched is changed.
+
+    Wraps:
+        [`pandas.Series.str.replace`](https://pandas.pydata.org/docs/reference/api/pandas.Series.str.replace.html)
+        from pandas.
+
+    """
+
+    nameless: ClassVar[bool] = True
+
+    """ Class Methods """
+
+    @classmethod
+    def check_names(cls, rule: Rule) -> None:
+        """Checks that a rule with a name changes only one column.
+
+        Args:
+            rule: the rule, whose value is not yet checked.
+
+        Raises:
+            ValueError: if the rule has several names, or a name and several
+                columns.
+
+        """
+        super().check_names(rule)
+        if rule.names and len(rule.columns) > 1:
+            message = (
+                f'a {cls.kind()} rule with a name changes one column: leave '
+                f'the name blank to change each column in place'
+            )
+            raise ValueError(message)
+
+    @classmethod
+    def check_value(cls, rule: Rule) -> str:
+        """Returns the text that replaces the matches.
+
+        Args:
+            rule: the rule, with its value as it was given.
+
+        Returns:
+            The value as text, which is empty if it is `None`.
+
+        """
+        return '' if rule.value is None else str(rule.value)
+
+    """ Public Methods """
+
+    def find(
         self,
-        texts: list[pd.Series],
-        columns: Sequence[str],
-        made: dict[str, pd.Series]) -> None:
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
+        made: dict[str, pd.Series],
+        index: pd.Index) -> None:  # noqa: ARG002
         """Replaces every match in the text with the rule's value.
 
         The changed text goes in the rule's name, if it has one, and
         otherwise replaces the text it searched.
 
         Args:
-            texts: the columns of text to change.
-            columns: their names.
+            rule: the search.
+            texts: the columns of text to change, by name.
             made: the columns that earlier rules made, by name.
+            index: the labels of the rows (not used, since the changed text
+                keeps the index of the text).
 
         """
-        for column, text in zip(columns, texts, strict = True):
+        for column, text in texts.items():
             changed = text.str.replace(
-                self.pattern.pattern,
-                str(self.value),
+                rule.pattern.pattern,
+                str(rule.value),
                 regex = True,
-                flags = self._flags)
-            made[self.names[0] if self.names else column] = changed
+                flags = rule.flags)
+            made[rule.names[0] if rule.names else column] = changed
 
-    def _split(
-        self,
-        texts: list[pd.Series],
-        made: dict[str, pd.Series],
-        index: pd.Index) -> None:
-        """Makes the text before and after the first match (text).
 
-        The first column of `texts` with text in a row is split. Text without
-        a match is all in the first part.
+@dataclasses.dataclass
+class ParseSplit(PatternParser):
+    r"""Splits text into columns where a pattern matches.
+
+    For example, the pattern "\sv\.\s" and the names "party1, party2" split
+    a caption such as "Smith v. Jones" into "Smith" and "Jones". With more
+    names, the text is split at the first matches, so the last column has the
+    rest of the text. Text without a match is all in the first column. With
+    several columns, the first with text in a row is split. Each piece is
+    trimmed of spaces, and an empty piece is missing.
+
+    """
+
+    """ Class Methods """
+
+    @classmethod
+    def check_names(cls, rule: Rule) -> None:
+        """Checks that a rule names at least two columns.
 
         Args:
-            texts: the columns of text, in order.
+            rule: the rule, whose value is not yet checked.
+
+        Raises:
+            ValueError: if the rule has fewer than two names.
+
+        """
+        if len(rule.names) < 2:  # noqa: PLR2004
+            message = (
+                f'a {cls.kind()} rule needs two or more names, separated by '
+                f'commas (such as "party1, party2")'
+            )
+            raise ValueError(message)
+
+    """ Public Methods """
+
+    def find(
+        self,
+        rule: Rule,
+        texts: Mapping[str, pd.Series],
+        made: dict[str, pd.Series],
+        index: pd.Index) -> None:
+        """Makes the pieces of the text between matches (text).
+
+        Args:
+            rule: the search.
+            texts: the columns of text, by name, in order.
             made: the columns that earlier rules made, by name.
             index: the labels of the rows.
 
         """
-        whole = _missing(len(index))
-        for text in texts:
-            _fill(whole, text.to_numpy(dtype = object))
-        plain = pd.Series(whole, dtype = 'str')
-        source = _wrap(self.pattern, r'(?s:\A(.*?))(?:', r')(?s:(.*)\Z)')
-        parts = plain.str.extract(source, flags = self._flags)
-        before = parts.iloc[:, 0].to_numpy(dtype = object)
-        after = parts.iloc[:, -1].to_numpy(dtype = object)
-        unmatched = pd.isna(before) & ~pd.isna(whole)
-        before[unmatched] = whole[unmatched]
-        for name, part in zip(self.names, (before, after), strict = True):
-            tidied = _patterns.tidy(pd.Series(part, dtype = 'str'))
+        rest = _missing(len(index))
+        for text in texts.values():
+            _fill(rest, text.to_numpy(dtype = object))
+        source = _wrap(rule.pattern, r'(?s:\A(.*?))(?:', r')(?s:(.*)\Z)')
+        pieces = []
+        # Each pass splits the rest of the text at its first match.
+        for _ in rule.names[:-1]:
+            parts = pd.Series(rest, dtype = 'str').str.extract(
+                source, flags = rule.flags)
+            before = parts.iloc[:, 0].to_numpy(dtype = object)
+            after = parts.iloc[:, -1].to_numpy(dtype = object)
+            unmatched = pd.isna(before) & ~pd.isna(rest)
+            before[unmatched] = rest[unmatched]
+            pieces.append(before)
+            rest = after
+        pieces.append(rest)
+        for name, piece in zip(rule.names, pieces, strict = True):
+            tidied = _patterns.tidy(pd.Series(piece, dtype = 'str'))
             _keep_first(made, name, tidied.to_numpy(dtype = object), index)
 
+
+_RULE_KINDS.update({
+    'categories': ParseCategories,
+    'category': ParseCategory,
+    'counts': ParseCounts,
+    'fields': ParseFields,
+    'flags': ParseFlags,
+    'match': ParseMatch,
+    'matches': ParseMatches,
+    'names': ParseNames,
+    'replace': ParseReplace,
+    'split': ParseSplit})
+
+
+@dataclasses.dataclass(frozen = True)
+class Rule:
+    """One search of text, as a row of a rulebook.
+
+    Args:
+        kind: the kind of the rule, such as "flags".
+        pattern: the compiled regular expression, with its flags.
+        columns: names of the columns of text to search, in order. Defaults
+            to an empty `tuple`, in which case the parser's "column" is
+            searched.
+        names: names of the columns that the rule makes. Defaults to an
+            empty `tuple` (for a `replace` rule that changes the text it
+            searches, or a `fields` rule without a prefix).
+        value: for a kind that uses a value (such as `category`), what it
+            writes. Defaults to `None`.
+        separator: what separates several values in one cell, for the kinds
+            that make them (such as `matches`). Defaults to a comma and a
+            space.
+        note: a description of the rule. Defaults to an empty `str`.
+        origin: where the rule came from (such as a file and row), for
+            messages. Defaults to an empty `str`.
+        parser: the pattern parser that applies the rule. Defaults to `None`,
+            in which case it is the parser registered for `kind`.
+
+    """
+
+    kind: str
+    pattern: re.Pattern[str]
+    columns: tuple[str, ...] = ()
+    names: tuple[str, ...] = ()
+    value: Any = None
+    separator: str = _SEPARATOR
+    note: str = ''
+    origin: str = ''
+    parser: type[PatternParser] | None = None
+
+    """ Class Methods """
+
+    @classmethod
+    def create(cls, row: Mapping[str, Any], origin: str = '') -> Rule:
+        """Returns a rule made from a row of a CSV file (or a `dict`).
+
+        Args:
+            row: the cells of the row, by the names of the columns, in this
+                module's layout or the older one.
+            origin: where the row came from, for messages. Defaults to an
+                empty `str`.
+
+        Raises:
+            ValueError: if the kind or a flag is not known, the pattern is
+                blank or not a valid regular expression, the rule has too
+                many or too few names, or it has a value that it does not
+                use (or lacks one that it needs).
+
+        Returns:
+            The rule.
+
+        """
+        cells = _translate(row)
+        kind = str(cells.get('kind') or '').strip().lower()
+        if kind not in _RULE_KINDS:
+            message = f'the kind {kind!r} is not one of {sorted(_RULE_KINDS)}'
+            raise ValueError(message)
+        return _RULE_KINDS[kind].make_rule(
+            cells.get('pattern'),
+            columns = cells.get('column'),
+            names = cells.get('name'),
+            value = cells.get('value'),
+            flags = cells.get('flags'),
+            # A blank cell is the usual separator.
+            separator = cells.get('separator') or None,
+            note = str(cells.get('note') or ''),
+            origin = origin,
+            kind = kind)
+
+    """ Properties """
+
     @property
-    def _flags(self) -> int:
+    def description(self) -> str:
+        """Returns a short description of the rule, for messages.
+
+        Returns:
+            The kind of the rule, the columns it makes, and where it came
+                from.
+
+        """
+        text = f'the {self.kind} rule'
+        if self.names:
+            text += f' for {_SEPARATOR.join(self.names)}'
+        if self.origin:
+            text += f' ({self.origin})'
+        return text
+
+    @property
+    def flags(self) -> int:
         """Returns the flags of the pattern, for the methods of `pandas`.
 
         Returns:
@@ -642,6 +1266,48 @@ class Rule:
 
         """
         return self.pattern.flags & ~re.UNICODE
+
+    """ Public Methods """
+
+    def apply(
+        self,
+        data: pd.DataFrame,
+        made: dict[str, pd.Series],
+        *,
+        column: str = 'text',
+        parser: PatternParser | None = None) -> None:
+        """Applies the rule to every row of `data`.
+
+        The columns that the rule makes are put in `made`, rather than in
+        `data`, so that they can all be added at once (see `Rulebook.apply`).
+
+        Args:
+            data: the data, which is not changed.
+            made: the columns that earlier rules made (or changed), by name,
+                which this rule searches, adds to, or replaces. It is changed
+                in place.
+            column: the column of text to search if the rule has no
+                `columns`. Defaults to "text".
+            parser: the parser that applies the rule. Defaults to `None`, in
+                which case it is an instance of `parser` or of the parser
+                registered for `kind`.
+
+        Raises:
+            ValueError: if no parser applies the rule.
+
+        """
+        if parser is None:
+            kind = self.parser or _RULE_KINDS.get(self.kind)
+            if kind is None:
+                message = (
+                    f'{self.description}: no parser is registered for the '
+                    f'kind {self.kind!r}'
+                )
+                raise ValueError(message)
+            parser = kind()
+        columns = self.columns or (column,)
+        texts = {c: _text(data, made, c, self.description) for c in columns}
+        parser.find(self, texts, made, data.index)
 
 
 @dataclasses.dataclass
@@ -738,15 +1404,7 @@ class Rulebook:
                 changed.
 
         """
-        made: dict[str, pd.Series] = {}
-        for rule in self.rules:
-            try:
-                rule.apply(data, made, column = column)
-            except (KeyError, TypeError) as error:
-                detail = error.args[0] if error.args else str(error)
-                message = f'{rule.description}: {detail}'
-                raise type(error)(message) from error
-        return _assemble(data, made)
+        return _apply_rules(data, self.rules, column = column)
 
     """ Dunder Methods """
 
@@ -786,13 +1444,43 @@ class Rulebook:
 """ Public Functions """
 
 
+def register_rule_kind(kind: str, parser: type[PatternParser]) -> None:
+    """Names a pattern parser as a kind of rule.
+
+    Rulebooks (see `parse_all`) can then name `kind` in the "kind" column of
+    a rule, and the rule is applied by `parser`. A kind that is registered
+    again gets the new parser, and a kind that has the name of an old kind
+    (such as "map") takes its place.
+
+    Args:
+        kind: the name of the kind, which is made lower-case.
+        parser: a subclass of `PatternParser`.
+
+    Raises:
+        TypeError: if `parser` is not a subclass of `PatternParser`.
+        ValueError: if `kind` is blank.
+
+    """
+    name = str(kind).strip().lower()
+    if not name:
+        message = 'a kind of rule needs a name'
+        raise ValueError(message)
+    if not (isinstance(parser, type) and issubclass(parser, PatternParser)):
+        message = (
+            f'a kind of rule needs a subclass of PatternParser, not '
+            f'{parser!r}'
+        )
+        raise TypeError(message)
+    _RULE_KINDS[name] = parser
+
+
 def register_rulebook(name: str, sources: Any) -> None:
     """Registers the rules of a rulebook under `name`.
 
-    `parse_documents` (and `Rulebook.create`) then accept `name` in place of
-    its sources, so a package built on `amos` can keep its rules in its own
-    CSV files and every project can name them in its settings (as in "rules
-    = federal"). The sources are read each time the rulebook is used, so
+    `parse_all` (and `Rulebook.create`) then accept `name` in place of its
+    sources, so a package built on `amos` can keep its rules in its own CSV
+    files and every project can name them in its settings (as in "rules =
+    federal"). The sources are read each time the rulebook is used, so
     changes to its files take effect at once. A name that is registered
     again gets the new sources.
 
@@ -821,7 +1509,8 @@ def _add_to(
     made: dict[str, pd.Series],
     name: str,
     found: np.ndarray,
-    index: pd.Index) -> None:
+    index: pd.Index,
+    separator: str = _SEPARATOR) -> None:
     """Puts text in a column, after any that earlier rules put there.
 
     Args:
@@ -829,11 +1518,49 @@ def _add_to(
         name: the column.
         found: the text of each row (or `None`).
         index: the labels of the rows.
+        separator: what goes between the earlier text and the new. Defaults
+            to a comma and a space.
 
     """
     if name in made:
-        found = _join(made[name].to_numpy(dtype = object), found)
+        found = _join(made[name].to_numpy(dtype = object), found, separator)
     made[name] = _text_column(found, index)
+
+
+def _apply_rules(
+    data: pd.DataFrame,
+    rules: Iterable[Rule],
+    *,
+    column: str = 'text',
+    parser: PatternParser | None = None) -> pd.DataFrame:
+    """Applies `rules`, in order, to every row of `data`.
+
+    Args:
+        data: the data, which is not changed.
+        rules: the rules.
+        column: the column of text that rules with no `columns` search.
+            Defaults to "text".
+        parser: the parser that applies every rule. Defaults to `None`, in
+            which case each rule is applied by its own parser.
+
+    Raises:
+        KeyError: if a rule searches a column that is not in the data.
+        TypeError: if a rule searches a column that is not text.
+
+    Returns:
+        The data, with the columns that the rules make (in the order they
+            were first made) and the text that they changed.
+
+    """
+    made: dict[str, pd.Series] = {}
+    for rule in rules:
+        try:
+            rule.apply(data, made, column = column, parser = parser)
+        except (KeyError, TypeError) as error:
+            detail = error.args[0] if error.args else str(error)
+            message = f'{rule.description}: {detail}'
+            raise type(error)(message) from error
+    return _assemble(data, made)
 
 
 def _assemble(
@@ -910,41 +1637,58 @@ def _cell_names(cell: Any) -> tuple[str, ...]:
     return tuple(n for n in names if n)
 
 
-def _check_names(
-    kind: str,
-    columns: tuple[str, ...],
-    names: tuple[str, ...]) -> None:
-    """Checks that a rule has as many names as its kind needs.
+def _check_group_names(kind: type[PatternParser], rule: Rule) -> None:
+    """Checks the names of a rule that keeps matches or their named groups.
+
+    A pattern with named groups makes a column for each group, so the rule
+    needs no name (but can have one, which starts the names of the columns).
 
     Args:
-        kind: the kind of the rule.
-        columns: the columns it searches.
-        names: the columns it makes.
+        kind: the parser of the rule, for messages.
+        rule: the rule.
 
     Raises:
-        ValueError: if the rule has too many or too few names.
+        ValueError: if the rule has several names, or none and a pattern
+            without named groups.
 
     """
-    if kind == 'split':
-        if len(names) != 2:  # noqa: PLR2004
-            message = (
-                'a split rule needs two names, separated by a comma (such as '
-                '"party1, party2")'
-            )
-            raise ValueError(message)
-        return
-    if not names and kind not in _NAMELESS_KINDS:
-        message = 'the name is blank'
-        raise ValueError(message)
-    if len(names) > 1:
-        message = f'a {kind} rule makes one column, not {list(names)}'
-        raise ValueError(message)
-    if kind == 'replace' and names and len(columns) > 1:
+    if len(rule.names) > 1:
         message = (
-            'a replace rule with a name changes one column: leave the name '
-            'blank to change each column in place'
+            f'a {kind.kind()} rule makes one column (or one for each named '
+            f'group), not {list(rule.names)}'
         )
         raise ValueError(message)
+    if not rule.names and not rule.pattern.groupindex:
+        message = (
+            'the name is blank (only a pattern with named groups, such as '
+            '"(?P<year>\\d{4})", needs none)'
+        )
+        raise ValueError(message)
+
+
+def _compile(pattern: Any, flags: int) -> re.Pattern[str]:
+    """Returns a pattern of a rule compiled with `flags`.
+
+    Args:
+        pattern: a regular expression, as text or compiled (in which case
+            its own flags are added to `flags`).
+        flags: flags of the `re` module.
+
+    Raises:
+        ValueError: if the pattern is blank or not a valid regular
+            expression.
+
+    Returns:
+        The compiled pattern.
+
+    """
+    if isinstance(pattern, re.Pattern):
+        flags |= pattern.flags & ~re.UNICODE
+        pattern = pattern.pattern
+    if pattern is None or not str(pattern):
+        message = 'the pattern is blank'
+        raise ValueError(message)
+    return _patterns.compile_pattern(pattern, flags)
 
 
 def _convert(value: Any) -> Any:
@@ -969,14 +1713,36 @@ def _convert(value: Any) -> Any:
     return text
 
 
+def _extract_targets(rule: Rule) -> tuple[str, dict[str | int, str]]:
+    """Returns the pattern to extract for a rule and the columns it makes.
+
+    Args:
+        rule: a rule that keeps matches, or the named groups of matches.
+
+    Returns:
+        The pattern for `Series.str.extract`, and the column that each of
+            its groups makes, by the key of the group in what `pandas`
+            extracts: the whole match (0) as the rule's name, or each named
+            group as its name, after the rule's name and an underscore if it
+            has one.
+
+    """
+    groups = rule.pattern.groupindex
+    if not groups:
+        return _wrap(rule.pattern, '(', ')'), {0: rule.names[0]}
+    prefix = f'{rule.names[0]}_' if rule.names else ''
+    targets: dict[str | int, str] = {g: f'{prefix}{g}' for g in groups}
+    return _wrap(rule.pattern, '(?:', ')'), targets
+
+
 def _field_name(label: str) -> str:
     """Returns the name of the column of a label that a `fields` rule found.
 
     Args:
-        label: the label, such as "PRIOR HISTORY:".
+        label: the label, such as "MEDICAL HISTORY:".
 
     Returns:
-        The label in snake case, such as "prior_history", or an empty `str`
+        The label in snake case, such as "medical_history", or an empty `str`
             if it has no letters or digits.
 
     """
@@ -1000,7 +1766,8 @@ def _flags_of(cell: Any) -> int:
 
     Args:
         cell: names of flags (such as "ignorecase, dotall"), separated by
-            commas or spaces, or blank.
+            commas or spaces, a sequence of names, flags of the `re` module,
+            or blank.
 
     Raises:
         ValueError: if a name is not one of `_FLAGS`.
@@ -1009,6 +1776,8 @@ def _flags_of(cell: Any) -> int:
         The flags, combined.
 
     """
+    if isinstance(cell, int) and not isinstance(cell, bool):
+        return cell
     flags = 0
     for item in _cell_names(cell):
         for word in item.lower().split():
@@ -1076,12 +1845,29 @@ def _gather(
     return rules, names
 
 
-def _join(first: np.ndarray, second: np.ndarray) -> np.ndarray:
-    """Returns two columns of text joined in each row, with commas.
+def _is_blank(cell: Any) -> bool:
+    """Returns whether a cell is blank.
+
+    Args:
+        cell: the cell.
+
+    Returns:
+        Whether the cell is `None` or text of only spaces.
+
+    """
+    return cell is None or (isinstance(cell, str) and not cell.strip())
+
+
+def _join(
+    first: np.ndarray,
+    second: np.ndarray,
+    separator: str = _SEPARATOR) -> np.ndarray:
+    """Returns two columns of text joined in each row, with `separator`.
 
     Args:
         first: text (or `None`) for each row.
         second: text (or `None`) for the same rows.
+        separator: what goes between them. Defaults to a comma and a space.
 
     Returns:
         The text of both where both have text, and otherwise the text of
@@ -1095,7 +1881,7 @@ def _join(first: np.ndarray, second: np.ndarray) -> np.ndarray:
     both = has_first & has_second
     if both.any():
         joined = (
-            pd.Series(first[both], dtype = 'str') + _SEPARATOR
+            pd.Series(first[both], dtype = 'str') + separator
             + pd.Series(second[both], dtype = 'str'))
         result[both] = joined.to_numpy(dtype = object)
     return result
@@ -1125,6 +1911,25 @@ def _keep_first(
     made[name] = _settle(found, index)
 
 
+def _matches(rule: Rule, texts: Mapping[str, pd.Series]) -> np.ndarray:
+    """Returns whether the rule's pattern appears in any of `texts`.
+
+    Args:
+        rule: the rule.
+        texts: the columns of text to search, by name.
+
+    Returns:
+        A boolean array, with a value for each row, which is false where
+            every text is missing.
+
+    """
+    columns = list(texts.values())
+    found = np.zeros(len(columns[0]), dtype = bool)
+    for text in columns:
+        found |= _patterns.contains(text, rule.pattern.pattern, rule.flags)
+    return found
+
+
 def _missing(count: int) -> np.ndarray:
     """Returns an array of `count` missing values.
 
@@ -1136,6 +1941,34 @@ def _missing(count: int) -> np.ndarray:
 
     """
     return np.full(count, None, dtype = object)
+
+
+def _pattern_values(pattern: Any, value: Any) -> list[tuple[Any, Any]]:
+    """Returns the patterns that a parser is given, with their values.
+
+    Args:
+        pattern: a pattern, a sequence of them, or a mapping of them to their
+            values.
+        value: the value of every pattern, unless `pattern` is a mapping.
+
+    Raises:
+        ValueError: if `pattern` is a mapping and `value` is given too.
+
+    Returns:
+        Each pattern and its value, in order.
+
+    """
+    if isinstance(pattern, Mapping):
+        if value is not None:
+            message = (
+                'the values are given twice: in the mapping of patterns and '
+                'in "value"'
+            )
+            raise ValueError(message)
+        return list(pattern.items())
+    if isinstance(pattern, str | re.Pattern):
+        return [(pattern, value)]
+    return [(p, value) for p in pattern]
 
 
 def _read_rules(
@@ -1262,12 +2095,12 @@ def _split_names(text: str, separators: re.Pattern[str]) -> list[str]:
     """Splits `text` into names wherever `separators` matches.
 
     The text is made upper-case and periods and apostrophes are removed first
-    (so "O'Scannlain" becomes "OSCANNLAIN"), and line breaks always separate
+    (so "O'Brien" becomes "OBRIEN"), and line breaks always separate
     names. Pieces without at least two letters are dropped.
 
     Args:
-        text: text with names, such as "Before SMITH, JONES, and BROWN,
-            Circuit Judges."
+        text: text with names, such as "Written by SMITH, JONES, and
+            BROWN."
         separators: a pattern that matches the words and punctuation between
             the names. It is matched against the upper-case text.
 
@@ -1349,11 +2182,11 @@ def _text(
 def _translate(row: Mapping[str, Any]) -> dict[str, Any]:
     """Returns the cells of a rule in this module's layout.
 
-    The columns of courtpy's layout ("target", "variable", and TRUE or FALSE
-    in "ignorecase" and "dotall") and its kinds ("label", "labels",
-    "section", "matches", "excerpts", and "remove") become those they stand
-    for. A "remove" rule replaces its matches with a space, as courtpy's
-    did.
+    The columns of the older layout ("target", "variable", and TRUE or FALSE
+    in "ignorecase" and "dotall") become those they stand for, and old kinds
+    (see `_KIND_ALIASES`) become the kinds they stand for, unless a kind of
+    the same name is registered. A "remove" rule replaces its matches with a
+    space, as the older layout did.
 
     Args:
         row: the cells of a rule, by the names of their columns.
@@ -1372,54 +2205,11 @@ def _translate(row: Mapping[str, Any]) -> dict[str, Any]:
             flags.append(name)
     cells['flags'] = flags
     kind = str(cells.get('kind') or '').strip().lower()
-    if kind in _KIND_ALIASES:
+    if kind in _KIND_ALIASES and kind not in _RULE_KINDS:
         cells['kind'] = _KIND_ALIASES[kind]
         if kind == 'remove' and not str(cells.get('value') or ''):
             cells['value'] = ' '
     return cells
-
-
-def _value_of(kind: str, cell: Any) -> Any:
-    """Returns the value of a rule, checked for its kind.
-
-    Args:
-        kind: the kind of the rule.
-        cell: the cell of its value.
-
-    Raises:
-        ValueError: if a `map` or `map_all` rule has no value, a `map_all`
-            value has a comma, or a rule of another kind (other than
-            `replace`) has a value.
-
-    Returns:
-        The value: a number or text for a `map` rule, text for a `map_all`
-            or `replace` rule (which is empty if blank), or `None`.
-
-    """
-    blank = cell is None or (isinstance(cell, str) and not cell.strip())
-    if kind == 'replace':
-        return '' if cell is None else str(cell)
-    if kind not in _VALUE_KINDS:
-        if not blank:
-            message = (
-                f'a {kind} rule does not use a value, but it has {cell!r} '
-                f'(is its kind right?)'
-            )
-            raise ValueError(message)
-        return None
-    if blank:
-        message = f'a {kind} rule needs a value to write when it matches'
-        raise ValueError(message)
-    if kind == 'map_all':
-        text = str(cell).strip()
-        if ',' in text:
-            message = (
-                f'the value {text!r} has a comma, which separates the values '
-                f'of map_all rules'
-            )
-            raise ValueError(message)
-        return text
-    return _convert(cell)
 
 
 def _wrap(pattern: re.Pattern[str], before: str, after: str) -> str:

@@ -350,8 +350,8 @@ the same models fitted on a CPU; see
 
 ### groups
 
-The names of columns that identify groups of rows, such as race, court, or
-judge. Groups stay in the data, but they are not features, so transformers
+The names of columns that identify groups of rows, such as race, school, or
+region. Groups stay in the data, but they are not features, so transformers
 and models do not use them. They are used by:
 
 * the fairness metrics (`demographic_parity`, `equalized_odds`, and

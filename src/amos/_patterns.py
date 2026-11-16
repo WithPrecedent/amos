@@ -6,7 +6,6 @@ methods of `Series.str`. These helpers check the patterns and the columns
 they search.
 
 Contents:
-    capture: returns a pattern as one group, so that `pandas` can extract it.
     compile_pattern: returns a pattern compiled, to check it and count its
         groups.
     contains: returns whether each value of a column of text matches a
@@ -41,22 +40,6 @@ GROUPS_WARNING: str = 'This pattern is interpreted as a regular expression'
 
 
 """ Public Functions """
-
-
-def capture(pattern: str) -> str:
-    """Returns `pattern` as one group, so that `pandas` can extract it.
-
-    Args:
-        pattern: a regular expression without groups.
-
-    Returns:
-        The pattern inside a group, after any inline flags at its start (which
-            must stay at the start).
-
-    """
-    match = LEADING_FLAGS.match(pattern)
-    start = match.end() if match else 0
-    return f'{pattern[:start]}({pattern[start:]})'
 
 
 def compile_pattern(pattern: Any, flags: int) -> re.Pattern[str]:

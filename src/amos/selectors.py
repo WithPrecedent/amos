@@ -7,6 +7,16 @@ some of the features and removes the rest. Most are transformers (see the
 training rows only, choose from the numeric and boolean features by default,
 and can be limited to some `columns`.
 
+Some selectors choose features with a model, which is their "estimator"
+parameter: the name of a model in the library (such as "random_forest"),
+which is built for the task with its default parameters, or an estimator,
+its class, or its import path. By default, it is a logistic regression (to
+classify) or a linear regression, so scale the features first. Those that
+compare sets of features score each set by cross-validation on the training
+rows, with "scoring" (the name of a scikit-learn scorer, by default accuracy
+or R²) and "cv" folds (5 by default) that keep the rows of each of the
+dataset's first groups together.
+
 `feature_group` instead keeps the features that the settings list, so an
 experiment can compare groups of features that you chose. Name each group
 in a "feature_groups" section of the settings, and then name the groups as
@@ -15,12 +25,12 @@ the techniques of a step:
 ```ini
 [analyst]
 steps = split, select, model
-select_techniques = demographics, case_facts
+select_techniques = demographics, medical
 model_techniques = logit
 
 [feature_groups]
 demographics = age, sex, race
-case_facts = court, year, claims
+medical = visits, diagnoses, insured
 ```
 
 Features listed as "always_use" in that section are not a group of their
@@ -90,7 +100,7 @@ _GROUP_TECHNIQUE: re.Pattern[str] = re.compile(r'feature_group\d*')
 
 @dataclasses.dataclass
 class Selector(transformers.Transformer, abc.ABC):
-    """Genre of techniques that keep some of the features.
+    """Base class for techniques that keep some of the features.
 
     A selector chooses from the numeric and boolean features by default, and
     the features it does not choose from are kept. A selector that would keep
@@ -247,9 +257,9 @@ class ExhaustiveSelection(_MlxtendSearch, Selector):
 
     mlxtend's exhaustive search tries every set of `min_features` to
     `max_features` features (1 to 3 by default), so it is slow for many
-    features. See `_ModelBased` and `_ModelSearch` for the model, score, and
-    folds. The score of each set is a table in the dataset's `tables` as
-    "{name}_search".
+    features. The model ("estimator"), score ("scoring"), and folds ("cv") are
+    described in the introduction of the module. The score of each set is a
+    table in the dataset's `tables` as "{name}_search".
 
     Wraps:
         [`mlxtend.feature_selection.ExhaustiveFeatureSelector`](https://rasbt.github.io/mlxtend/user_guide/feature_selection/ExhaustiveFeatureSelector/)
@@ -312,12 +322,12 @@ class FeatureGroup(Selector):
 
     The features are "columns": by default, those that the "feature_groups"
     section of the settings lists for the technique's name (see
-    `register_feature_groups`). If that section lists features as
-    "always_use", a group built for a project keeps them too, whatever its
-    other features are, so every group shares them. A listed name that is not a feature keeps the
-    features made from it by an encoder or other transformer, whose names
-    start with it and an underscore (so "court" keeps "court_federal" and
-    "court_state" after `one_hot`). The label and groups are not features, so
+    `register_feature_groups`). If that section lists features as "always_use",
+    a group built for a project keeps them too, whatever its other features are,
+    so every group shares them. A listed name that is not a feature keeps the
+    features made from it by an encoder or other transformer, whose names start
+    with it and an underscore (so "region" keeps "region_north" and
+    "region_south" after `one_hot`). The label and groups are not features, so
     they are always kept and cannot be listed.
 
     Unlike other selectors, it learns nothing from the data, and it chooses
@@ -510,9 +520,10 @@ class KBest(Selector):
 class RecursiveElimination(_ModelBased, Selector):
     """Removes the least important feature of a model, again and again.
 
-    It fits the model to the features, removes the "step" least important
-    (1 by default), and fits it again, until `n_features_to_select` are left
-    (half of the features by default). See `_ModelBased` for the model.
+    It fits the model to the features, removes the "step" least important (1 by
+    default), and fits it again, until `n_features_to_select` are left (half of
+    the features by default). The model ("estimator") is described in the
+    introduction of the module.
 
     Wraps:
         [`sklearn.feature_selection.RFE`](https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.RFE.html)
@@ -548,12 +559,13 @@ class RecursiveEliminationCV(_ModelSearch, Selector):
     """Removes features as `recursive_elimination` does, keeping the best.
 
     It removes the least important feature of the model again and again, in
-    cross-validation on the training rows, and keeps the number of features
-    that scored best (at least `min_features_to_select`, 1 by default). See
-    `_ModelBased` and `_ModelSearch` for the model, score, and folds. The
-    score of each number of features is a table in the dataset's `tables` as
-    "{name}_search", with a row for each number ("size") and the mean and
-    standard deviation of its scores ("score" and "std"), best first.
+    cross-validation on the training rows, and keeps the number of features that
+    scored best (at least `min_features_to_select`, 1 by default). The model
+    ("estimator"), score ("scoring"), and folds ("cv") are described in the
+    introduction of the module. The score of each number of features is a table
+    in the dataset's `tables` as "{name}_search", with a row for each number
+    ("size") and the mean and standard deviation of its scores ("score" and
+    "std"), best first.
 
     Wraps:
         [`sklearn.feature_selection.RFECV`](https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.RFECV.html)
@@ -672,9 +684,10 @@ class SelectFpr(Selector):
 class SelectFromModel(_ModelBased, Selector):
     """Keeps the features that a model finds most important.
 
-    It fits the model and keeps the features whose importance (the size of
-    their coefficients, or `feature_importances_`) is at least "threshold"
-    (by default, the mean importance). See `_ModelBased` for the model.
+    It fits the model and keeps the features whose importance (the size of their
+    coefficients, or `feature_importances_`) is at least "threshold" (by
+    default, the mean importance). The model ("estimator") is described in the
+    introduction of the module.
 
     Wraps:
         [`sklearn.feature_selection.SelectFromModel`](https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.SelectFromModel.html)
@@ -761,15 +774,15 @@ class SelectPercentile(Selector):
 class SequentialSelection(_MlxtendSearch, Selector):
     """Adds (or removes) features one at a time while the score improves.
 
-    mlxtend's sequential search starts with no features and adds the one
-    that most improves the score of the model, again and again (or, if
-    "forward" is false, starts with every feature and removes them). If
-    "floating" is true, it also tries to remove (or add back) a feature after
-    each step. It keeps `k_features` features, or by default ("best") the
-    number with the best score. See `_ModelBased` and `_ModelSearch` for the
-    model, score, and folds. The score of the set of each size is a table in
-    the dataset's `tables` as "{name}_search". `sequential_selection_sk`
-    does much the same without mlxtend.
+    mlxtend's sequential search starts with no features and adds the one that
+    most improves the score of the model, again and again (or, if "forward" is
+    false, starts with every feature and removes them). If "floating" is true,
+    it also tries to remove (or add back) a feature after each step. It keeps
+    `k_features` features, or by default ("best") the number with the best
+    score. The model ("estimator"), score ("scoring"), and folds ("cv") are
+    described in the introduction of the module. The score of the set of each
+    size is a table in the dataset's `tables` as "{name}_search".
+    `sequential_selection_sk` does much the same without mlxtend.
 
     Wraps:
         [`mlxtend.feature_selection.SequentialFeatureSelector`](https://rasbt.github.io/mlxtend/user_guide/feature_selection/SequentialFeatureSelector/)
@@ -831,11 +844,11 @@ class SequentialSelectionSK(_ModelSearch, Selector):
     scikit-learn's sequential search adds the feature that most improves the
     score of the model, again and again (or, if "direction" is "backward",
     removes the feature whose removal least lowers it). It keeps
-    `n_features_to_select` features, or by default ("auto") half of them, or
-    if "tol" is set, stops when the score improves by less than "tol". See
-    `_ModelBased` and `_ModelSearch` for the model, score, and folds.
-    Unlike `sequential_selection`, it needs no optional package, but it does
-    not report the score of each set.
+    `n_features_to_select` features, or by default ("auto") half of them, or if
+    "tol" is set, stops when the score improves by less than "tol". The model
+    ("estimator"), score ("scoring"), and folds ("cv") are described in the
+    introduction of the module. Unlike `sequential_selection`, it needs no
+    optional package, but it does not report the score of each set.
 
     Wraps:
         [`sklearn.feature_selection.SequentialFeatureSelector`](https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.SequentialFeatureSelector.html)

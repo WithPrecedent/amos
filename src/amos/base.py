@@ -179,8 +179,7 @@ def using_model_specific_techniques(
     in its `history`) names techniques for a genre, the first technique of
     that genre that the workflow applies after the model was fitted applies
     them instead of itself, and every later one is left out. Each records in
-    `history` the techniques that replaced it (see
-    `Operation._replace_with_model_specific`).
+    `history` the techniques that replaced it.
 
     Args:
         techniques: the techniques (built nodes) that replace those of the
@@ -262,7 +261,7 @@ class Dataset:
             reproducible. It is passed as `random_state` to every tool that
             accepts one. Defaults to `None`.
         groups: names of columns that identify groups of rows (such as race,
-            court, or judge). They stay in the data but are not features, so
+            school, or region). They stay in the data but are not features, so
             transformers and models do not use them directly. Fairness metrics
             compare predictions across them, `fixest` can use them as fixed
             effects or clusters, and `group_split` can keep each group in one
@@ -962,15 +961,17 @@ class Branch:
 
 @dataclasses.dataclass
 class Operation(chrisjen.Technique, abc.ABC):
-    """Base class for amos techniques, which work on a `Dataset`.
+    """Base class for every amos technique: one step that changes a `Dataset`.
 
-    An operation is a `chrisjen.Technique`, so it is stored in the
-    `chrisjen.library` under its snake case name and can be named in the
-    settings of any worker or step. Each technique writes `apply`, and every
-    call to it makes the item into a `Dataset` (if it is not one already),
-    passes it to `apply` with the technique's parameters, and returns it (see
-    `_call_apply`). The dataset is changed in place. Every operation adds an
-    entry to the dataset's `history`.
+    A technique takes a dataset, does one thing to it (loads data, cleans a
+    column, fits a model, draws a figure, and so on), and returns it. The
+    dataset is changed in place, and the technique adds an entry to its
+    `history`. Calling a technique on something that is not yet a `Dataset`
+    (such as a `pandas.DataFrame`) makes it into one first.
+
+    Every subclass is registered in the `chrisjen.library` under its name in
+    snake case (`CleanBooleans` is "clean_booleans"), which is the name that
+    settings use for it.
 
     A technique that does not suit the dataset's model raises an
     `IncompatibleTechniqueError` before it changes anything. In a workflow,
@@ -979,16 +980,17 @@ class Operation(chrisjen.Technique, abc.ABC):
     (see `skipping_incompatible_techniques`). A direct call to `apply` raises
     the error.
 
-    `Operation` is a genre: its abstract subclasses (`Loader`, `Parser`,
-    `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`,
-    `Transformer`, `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`,
-    and `Plot`) are genres within it. In a project, a plot, evaluator, or inferer can be
-    replaced by the techniques that the dataset's model names in its
-    parameters (see `using_model_specific_techniques`). To add a technique,
-    subclass the genre that fits and write the method it requires, or set
-    `contents` to the tool to wrap. To add a new kind of technique, subclass
-    `Operation` and write `apply`.
-    (Metrics are not operations: see `amos.metrics.Metric`.)
+    Techniques are grouped into kinds, called genres, each with an abstract
+    base class: `Loader`, `Parser`, `Cleaner`, `Munger`, `Merger`, `Shaper`,
+    `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`,
+    `Evaluator`, `Inferer`, and `Plot`. To add a technique, subclass the
+    genre that fits and write the method it requires, or set `contents` to
+    the tool to wrap. To add a new genre, subclass `Operation` and write
+    `apply`. (Metrics are not techniques: see `amos.metrics.Metric`.)
+
+    In a project, a plot, evaluator, or inferer can be replaced by the
+    techniques that the dataset's model names in its parameters (see
+    `using_model_specific_techniques`).
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -1018,7 +1020,7 @@ class Operation(chrisjen.Technique, abc.ABC):
 
         Args:
             item: the dataset to work on. A caller can pass anything that
-                `Dataset.create` accepts (see `_call_apply`).
+                `Dataset.create` accepts.
             **kwargs: parameters for the operation, which take precedence
                 over `parameters`.
 
