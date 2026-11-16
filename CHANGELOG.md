@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+* A test that runs for more than 10 minutes now fails (with pytest-timeout,
+  a new development dependency) and prints the stack of every thread, and a
+  CI test job stops after 30 minutes. Some macOS jobs had deadlocked near the
+  end of the tests and held their runner for GitHub's limit of 6 hours.
+* CI's macOS jobs make every package load Homebrew's OpenMP, by linking the
+  copies that scikit-learn and diptest bring to it. With scikit-learn's copy
+  and Homebrew's (which lightgbm and xgboost use) in one test process,
+  lightgbm sometimes deadlocked or crashed. The new timeout named the test.
 * `amos` requires chrisjen 0.5.0 and bobbie 0.5.0, and calls their public
   helpers (such as `chrisjen.utilities.listify_names` and
   `bobbie.options.file_type`) directly. The wrappers of them in

@@ -23,6 +23,9 @@ jobs:
 
   build_and_test:
     runs-on: ${{ matrix.os }}
+    # Every job finishes in about 10 minutes. A test that deadlocks (as some
+    # have on macOS) would otherwise hold the runner for GitHub's 6 hours.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -53,6 +56,17 @@ jobs:
 
     - name: install dependencies
       run: uv sync
+
+    # scikit-learn (and diptest) bring their own copy of OpenMP, while
+    # xgboost and lightgbm load Homebrew's. Two copies in one process made
+    # lightgbm deadlock or crash in some test runs, so every package's copy
+    # becomes a link to Homebrew's, and the process loads only one.
+    - name: share one OpenMP on macOS
+      if: runner.os == 'macOS'
+      run: |
+        omp="$(brew --prefix libomp)/lib/libomp.dylib"
+        find .venv -path '*/.dylibs/libomp.dylib' -print \
+          -exec ln -sf "$omp" {} \;
 
     - name: run pre-commit
       run: uv run pre-commit run -a --show-diff-on-failure
