@@ -34,9 +34,6 @@ Contents:
     MapValues: replaces values with others.
     NormalizeText: collapses spaces in text, and optionally changes its case
         and removes accents and punctuation.
-    ParseBooleans: turns text such as "yes" and "no" into booleans.
-    ParseDates: turns text into dates.
-    ParseNumbers: turns text such as "$1,234.50" into numbers.
     ReplaceText: replaces the matches of patterns in text.
     SetKinds: sets the kind of each column (dummy, categorical, or
         numerical), with the smallest type that holds it.
@@ -51,8 +48,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import re
-import warnings
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import camina
@@ -60,6 +56,12 @@ import numpy as np
 import pandas as pd
 
 from . import base, options, utilities
+from ._patterns import capture as _capture
+from ._patterns import compile_pattern as _compile
+from ._patterns import contains as _contains
+from ._patterns import text_columns as _text_columns
+from ._patterns import text_of as _text
+from ._patterns import tidy as _tidy
 
 # Combining accents (such as the accent of "é" once it is split into "e" and
 # the accent), which `NormalizeText` removes. The string is not raw, so that
@@ -69,9 +71,6 @@ _ACCENTS: str = '[\u0300-\u036f]'
 # The cases that `NormalizeText` can change text to, which are the names of
 # methods of `Series.str`.
 _CASES: frozenset[str] = frozenset({'lower', 'title', 'upper'})
-# Words (in lower case) that `ParseBooleans` reads as false and as true.
-_FALSE: tuple[str, ...] = ('false', 'f', 'no', 'n', '0')
-_TRUE: tuple[str, ...] = ('true', 't', 'yes', 'y', '1')
 # The ways that `CombineFlags` can combine flags.
 _HOWS: frozenset[str] = frozenset({'all', 'any', 'count'})
 # The kinds that `SetKinds` sets, and the kind of `Dataset` column that each
@@ -89,14 +88,8 @@ _LARGEST_INTEGER: float = 2.0 ** 63
 # Columns of data mapped to the values or function that `MapValues` uses for
 # them when it is not given "values" (see `register_value_map`).
 _VALUE_MAPS: dict[str, Mapping[Any, Any] | Callable[[Any], Any]] = {}
-# Inline flags (such as "(?i)") at the start of a pattern, which must stay at
-# the start when the rest of the pattern is put in a group.
-_LEADING_FLAGS: re.Pattern[str] = re.compile(r'(?:\(\?[aiLmsux]+\))*')
 # Anything that is not a letter, digit, underscore, or space.
 _PUNCTUATION: str = r'[^\w\s]'
-# The message that `pandas` gives when a pattern with groups is only used to
-# find whether text matches, which is all that `_contains` needs.
-_GROUPS_WARNING: str = 'This pattern is interpreted as a regular expression'
 _WHITESPACE: str = r'\s+'
 
 
@@ -149,23 +142,8 @@ class Munger(base.Operation, abc.ABC):
             The changed dataset.
 
         """
-        before = item.data
-        after = self.munge(before.copy(), **kwargs)
-        removed = [c for c in before.columns if c not in after.columns]
-        if removed or not after.index.equals(before.index):
-            message = (
-                f'a munger only changes and adds columns, but {self.name!r} '
-                f'changed the rows or removed columns of the data (use a '
-                f'cleaner to remove them)'
-            )
-            raise ValueError(message)
-        item.replace(after)
-        item.record(
-            self.name,
-            changed = [
-                c for c in before.columns if not after[c].equals(before[c])],
-            created = [c for c in after.columns if c not in before.columns])
-        return item
+        after = self.munge(item.data.copy(), **kwargs)
+        return base._change_columns(item, after, self.name, 'munger')
 
 
 @dataclasses.dataclass
@@ -819,178 +797,6 @@ class NormalizeText(Munger):
 
 
 @dataclasses.dataclass
-class ParseBooleans(Munger):
-    """Turns text such as "yes" and "no" into booleans.
-
-    Text is compared without regard to case or the spaces around it. Numbers
-    are true if they are 1 and false if they are 0. Anything else is missing,
-    so the columns have the `pandas` "boolean" type, which allows missing
-    values.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        columns: Sequence[str] | None = None,
-        true_values: Sequence[Any] = _TRUE,
-        false_values: Sequence[Any] = _FALSE,
-        **kwargs: Any) -> pd.DataFrame:
-        """Turns the values in `columns` into booleans.
-
-        Args:
-            data: the data to change.
-            columns: columns to change. Defaults to `None`, which changes
-                nothing.
-            true_values: words that mean true. Defaults to "true", "t", "yes",
-                "y", and "1".
-            false_values: words that mean false. Defaults to "false", "f",
-                "no", "n", and "0".
-            **kwargs: not used.
-
-        Returns:
-            The data, with booleans. Columns that are already boolean are not
-                changed.
-
-        """
-        trues = _words(true_values)
-        falses = _words(false_values)
-        for column in utilities.select_columns(data, columns or []):
-            values = data[column]
-            if pd.api.types.is_bool_dtype(values.dtype):
-                continue
-            if pd.api.types.is_numeric_dtype(values.dtype):
-                true = (values == 1).to_numpy(dtype = bool)
-                false = (values == 0).to_numpy(dtype = bool)
-            else:
-                words = values.astype('str').str.strip().str.lower()
-                true = words.isin(trues).to_numpy(dtype = bool)
-                false = words.isin(falses).to_numpy(dtype = bool)
-            flags = pd.array(true, dtype = 'boolean')
-            flags[~(true | false)] = pd.NA
-            data[column] = pd.Series(flags, index = values.index)
-        return data
-
-
-@dataclasses.dataclass
-class ParseDates(Munger):
-    """Turns text into dates.
-
-    Text that is not a date becomes a missing value, rather than an error (as
-    it would with `convert_types`).
-
-    Wraps:
-        [`pandas.to_datetime`](https://pandas.pydata.org/docs/reference/api/pandas.to_datetime.html)
-        from pandas.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        columns: Sequence[str] | None = None,
-        date_format: str | None = None,
-        dayfirst: bool = False,
-        **kwargs: Any) -> pd.DataFrame:
-        """Turns the text in `columns` into dates.
-
-        Args:
-            data: the data to change.
-            columns: columns to change. Defaults to `None`, which changes
-                nothing.
-            date_format: the format of the dates, with the codes of Python's
-                `strftime` (such as "%m/%d/%Y"), or "mixed" to find the
-                format of each date separately (which is slower). Defaults to
-                `None`, in which case `pandas` finds the format from the first
-                date and uses it for all of them.
-            dayfirst: whether the day comes before the month in dates such as
-                "01/02/2020". Defaults to `False`.
-            **kwargs: not used.
-
-        Returns:
-            The data, with dates.
-
-        """
-        for column in utilities.select_columns(data, columns or []):
-            values = data[column]
-            if isinstance(values.dtype, pd.CategoricalDtype):
-                values = values.astype('str')
-            data[column] = pd.to_datetime(
-                values,
-                errors = 'coerce',
-                format = date_format,
-                dayfirst = dayfirst)
-        return data
-
-
-@dataclasses.dataclass
-class ParseNumbers(Munger):
-    """Turns text such as "$1,234.50" into numbers.
-
-    The first number in the text is kept, so "$1,234.50" becomes 1234.5,
-    "12%" becomes 12, and "about 3 years" becomes 3. Text without a number
-    becomes a missing value.
-
-    Wraps:
-        [`pandas.to_numeric`](https://pandas.pydata.org/docs/reference/api/pandas.to_numeric.html)
-        from pandas.
-
-    """
-
-    def munge(
-        self,
-        data: pd.DataFrame,
-        *,
-        columns: Sequence[str] | None = None,
-        thousands: str = ',',
-        decimal: str = '.',
-        **kwargs: Any) -> pd.DataFrame:
-        """Turns the text in `columns` into numbers.
-
-        Args:
-            data: the data to change.
-            columns: columns to change. Defaults to `None`, which changes
-                nothing.
-            thousands: the character that separates thousands. Defaults to
-                ",". Set it to "." (and `decimal` to ",") for numbers such as
-                "1.234,50".
-            decimal: the character before the decimals. Defaults to ".".
-            **kwargs: not used.
-
-        Raises:
-            ValueError: if `thousands` and `decimal` are the same.
-
-        Returns:
-            The data, with numbers. Columns that are already numbers are not
-                changed.
-
-        """
-        if thousands == decimal:
-            message = 'the thousands and decimal separators must differ'
-            raise ValueError(message)
-        digits = r'\d+'
-        if thousands:
-            digits += rf'(?:{re.escape(thousands)}\d{{3}})*'
-        point = re.escape(decimal)
-        pattern = (
-            rf'([-+]?(?:{digits}(?:{point}\d*)?|{point}\d+)'
-            rf'(?:[eE][-+]?\d+)?)')
-        for column in utilities.select_columns(data, columns or []):
-            values = data[column]
-            if pd.api.types.is_numeric_dtype(values.dtype):
-                continue
-            found = values.astype('str').str.extract(pattern, expand = False)
-            if thousands:
-                found = found.str.replace(thousands, '', regex = False)
-            if decimal != '.':
-                found = found.str.replace(decimal, '.', regex = False)
-            data[column] = pd.to_numeric(found, errors = 'coerce')
-        return data
-
-
-@dataclasses.dataclass
 class ReplaceText(Munger):
     r"""Replaces the matches of patterns in text.
 
@@ -1281,66 +1087,6 @@ def register_value_map(
 """ Private Functions """
 
 
-def _capture(pattern: str) -> str:
-    """Returns `pattern` as one group, so that `pandas` can extract it.
-
-    Args:
-        pattern: a regular expression without groups.
-
-    Returns:
-        The pattern inside a group, after any inline flags at its start (which
-            must stay at the start).
-
-    """
-    match = _LEADING_FLAGS.match(pattern)
-    start = match.end() if match else 0
-    return f'{pattern[:start]}({pattern[start:]})'
-
-
-def _compile(pattern: Any, flags: int) -> re.Pattern[str]:
-    """Returns `pattern` compiled, to check it and count its groups.
-
-    Args:
-        pattern: a regular expression. Anything else (such as a number read
-            from a settings file) is made into text.
-        flags: flags of the `re` module (such as `re.IGNORECASE`).
-
-    Raises:
-        ValueError: if `pattern` is not a valid regular expression.
-
-    Returns:
-        The compiled pattern. Its `pattern` attribute is the text of the
-            pattern, which `pandas` takes with the same `flags`.
-
-    """
-    text = str(pattern)
-    try:
-        return re.compile(text, flags)
-    except re.error as error:
-        message = f'the pattern {text!r} is not valid: {error}'
-        raise ValueError(message) from error
-
-
-def _contains(text: pd.Series, pattern: str, flags: int) -> np.ndarray:
-    """Returns whether each value of `text` matches `pattern`.
-
-    Args:
-        text: the text to search.
-        pattern: a regular expression.
-        flags: flags of the `re` module.
-
-    Returns:
-        A boolean array, which is false for missing text.
-
-    """
-    with warnings.catch_warnings():
-        # Patterns often have groups (such as "(F|U\.S)\."), which `pandas`
-        # warns are not kept. Only whether they match matters here.
-        warnings.filterwarnings('ignore', _GROUPS_WARNING, UserWarning)
-        found = text.str.contains(pattern, flags = flags, na = False)
-    return found.to_numpy(dtype = bool)
-
-
 def _find_kinds(
     data: pd.DataFrame,
     listed: Mapping[str, Any],
@@ -1566,66 +1312,6 @@ def _shrink_numbers(values: pd.Series, column: Any) -> pd.Series:
     return floats
 
 
-def _text(data: pd.DataFrame, column: Any, technique: str) -> pd.Series:
-    """Returns the text in `column`, to search or change.
-
-    Args:
-        data: the data.
-        column: name of a column of text.
-        technique: name of the technique that uses the text, for messages.
-
-    Raises:
-        ValueError: if `column` is `None`.
-        KeyError: if `column` is not in `data`.
-        TypeError: if `column` does not hold text.
-
-    Returns:
-        The column. A categorical column of text is returned as text.
-
-    """
-    if column is None:
-        message = f'{technique!r} needs the name of a column of text'
-        raise ValueError(message)
-    utilities.select_columns(data, [column])
-    values: pd.Series = data[column]
-    if isinstance(values.dtype, pd.CategoricalDtype):
-        values = values.astype(values.cat.categories.dtype)
-    if not pd.api.types.is_string_dtype(values.dtype):
-        message = f'{technique!r} uses text, but {column!r} is not text'
-        raise TypeError(message)
-    return values
-
-
-def _text_columns(data: pd.DataFrame) -> list[str]:
-    """Returns the names of the columns of text that are not categorical.
-
-    Args:
-        data: the data.
-
-    Returns:
-        The names of the columns.
-
-    """
-    return [
-        c for c in data.columns
-        if pd.api.types.is_string_dtype(data[c].dtype)
-        and not isinstance(data[c].dtype, pd.CategoricalDtype)]
-
-
-def _tidy(text: pd.Series) -> pd.Series:
-    """Returns `text` trimmed of spaces, with empty text missing.
-
-    Args:
-        text: a column of text.
-
-    Returns:
-        The trimmed text.
-
-    """
-    text = text.str.strip()
-    return text.mask(text == '')
-
-
 def _truth(values: pd.Series, column: Any) -> np.ndarray:
     """Returns a column of flags as plain booleans.
 
@@ -1643,24 +1329,8 @@ def _truth(values: pd.Series, column: Any) -> np.ndarray:
     """
     if not pd.api.types.is_numeric_dtype(values.dtype):
         message = (
-            f'{column!r} is not a flag (true or false): parse_booleans can '
+            f'{column!r} is not a flag (true or false): clean_booleans can '
             f'make it one'
         )
         raise TypeError(message)
     return np.asarray(values.astype(float).fillna(0).to_numpy() != 0)
-
-
-def _words(values: Sequence[Any] | Any) -> list[str]:
-    """Returns words that mean true or false, in lower case.
-
-    Args:
-        values: a word or a sequence of them. Numbers and booleans (as a
-            settings file may give them) are made into text.
-
-    Returns:
-        The words, trimmed and in lower case.
-
-    """
-    items = [values] if isinstance(values, str) or not isinstance(
-        values, Iterable) else list(values)
-    return [str(v).strip().lower() for v in items]

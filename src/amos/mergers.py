@@ -894,8 +894,8 @@ def _keys(
                 f'{technique!r} cannot match {near!r}, which is {kinds[0]} in '
                 f'the data, with {far!r}, which is {kinds[1]} in the other '
                 f'table: make the column of the data the same kind with a '
-                f'munger (such as parse_numbers, parse_dates, or '
-                f'convert_types)'
+                f'cleaner (such as clean_numbers or clean_dates) or a munger '
+                f'(such as convert_types)'
             )
             raise TypeError(message)
         left[far], right[far] = _same(
@@ -952,8 +952,8 @@ def _measures(
             f'{technique!r} compares numbers with numbers or dates with '
             f'dates, but {first.name!r} is {kinds[0]} in the data and '
             f'{second.name!r} is {kinds[1]} in the other table: make the '
-            f'column of the data the same kind with a munger (such as '
-            f'parse_numbers or parse_dates)'
+            f'column of the data the same kind with a cleaner (such as '
+            f'clean_numbers or clean_dates)'
         )
         raise TypeError(message)
     return _same(first, second, kinds[0], exact = False)

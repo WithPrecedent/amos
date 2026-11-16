@@ -169,6 +169,24 @@ def mixed() -> amos.Dataset:
 
 
 @pytest.fixture
+def cases() -> amos.Dataset:
+    """A small dataset of court cases, with text to clean and munge."""
+    data = pd.DataFrame({
+        'caption': [
+            'United States v. Smith', 'Jones  v.  Acme Corp.',
+            'In re Doe', None],
+        'disposition': [
+            'REVERSED and remanded', 'Affirmed.', 'vacated in part', None],
+        'court': [
+            'First Circuit', 'second circuit', 'Ninth Circuit', 'Ninth'],
+        'damages': ['$1,200', 'n/a', '$350.50', '15,000'],
+        'decided': ['2020-01-05', '2021-03-04', 'unknown', None],
+        'appealed': ['Yes', ' no', 'maybe', None],
+        'won': ['yes', 'no', 'yes', 'no']})
+    return amos.Dataset(data.astype('str'), label = 'won')
+
+
+@pytest.fixture
 def classified() -> amos.Dataset:
     """A split binary classification dataset with numeric features."""
     dataset = amos.Dataset(make_numeric(), label = 'target', seed = SEED)

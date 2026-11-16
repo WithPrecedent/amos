@@ -186,7 +186,7 @@ def test_keys_of_different_kinds_are_explained(
     cases: amos.Dataset,
     courts: pd.DataFrame) -> None:
     courts['year'] = ['2001', '2015', '2019']
-    with pytest.raises(TypeError, match = 'numbers in the data.*parse_numbers'):
+    with pytest.raises(TypeError, match = 'numbers in the data.*clean_numbers'):
         mergers.MergeKeys().apply(cases, source = courts, on = 'year')
 
 

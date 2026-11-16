@@ -24,7 +24,7 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Project` | A `chrisjen.Project` that makes your data into a `Dataset`, applies the workflow to a copy of it, and can `export` the results. |
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
-| `Loader`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, `Selector`, and `Reducer`, and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
+| `Loader`, `Parser`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, `Selector`, and `Reducer`, and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
 | `Metric` | Base class for metrics, which score a model's predictions. A metric is a `chrisjen.Criteria`, not a technique, so it is not a step of a workflow: name it as a `criterion`, or in the `metrics` of a technique such as `scorecard` or a validator. `GroupMetric` is its genre of fairness metrics. |
 | `Chooser` | The genre of the techniques that choose other techniques to suit the data (`auto`, `auto_sampler`, `auto_model`, and `auto_plot`). See [Choosing techniques automatically](#choosing-techniques-automatically). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
@@ -46,7 +46,7 @@ import sklearn.datasets
 import amos
 
 print(sorted(amos.library["vertex"]["operation"]))
-# ['chooser', 'cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'model', 'munger', 'plot', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
+# ['chooser', 'cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'model', 'munger', 'parser', 'plot', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
 print(amos.library.classify("smote"), amos.library.classify("one_hot"))
 # sampler encoder
 print(amos.library.all["random_forest"])
@@ -213,8 +213,8 @@ downloads are saved in the input folder.
 | Loader | Source | Other parameters |
 | --- | --- | --- |
 | `load_file` | The path of a data file. | |
-| `download` | The URL of a file (http or https). It is saved in the input folder and only downloaded again if it is missing. | `file_name` (what to save it as), `refresh` (to download it again), and `timeout` (in seconds) |
-| `openml` | The name (such as "credit-g") or id (such as 31) of an [OpenML](https://www.openml.org) dataset, which scikit-learn saves in the input folder. Its default target is the label unless "label" is set. | `version`, `target_column`, and the other parameters of `sklearn.datasets.fetch_openml` |
+| `load_files` | A folder, a pattern of paths (such as "opinions/*.txt"), or a list of paths. Files of tables add their rows, and files of text add a row each, with the text in a "text" column. Every row names its file in a "file" column. | `pattern` (of the names of a folder's files, such as "*.txt"), `recursive` (whether to look in subfolders), `file_column`, `text_column`, `limit` (most files), and `workers` (threads that read at once) |
+| `download` | The URL of a file (http or https), or the name (such as "credit-g") or id (such as 31) of an [OpenML](https://www.openml.org) dataset. Both are saved in the input folder and only downloaded again if they are missing. An OpenML dataset's default target is the label unless "label" is set. | For a URL, `file_name` (what to save it as), `refresh` (to download it again), and `timeout` (in seconds). For OpenML, `version`, `target_column`, and the other parameters of `sklearn.datasets.fetch_openml` |
 
 Every loader takes a `source`, and the `label`, `task`, and `groups` of the
 data, which default to those in the "general" section. The dataset's history
@@ -306,10 +306,122 @@ print(amos.Dataset.create("appeals.psv"))
 To write a loader for another source, see "Writing your own techniques"
 below.
 
+## Parsing documents
+
+Loaders bring documents into a dataset as they are: `load_files` makes a row
+for each file of text, with its path in a "file" column and its text in a
+"text" column. *Parsers* then find information in that text and make columns
+of it. Like mungers, they keep the rows and every column, and they come
+before the data is split. Where a munger does one thing to a column, the
+`parse_documents` parser applies a *rulebook*: an ordered list of rules, each
+of which searches text for a [regular
+expression](https://docs.python.org/3/library/re.html) and records what it
+finds. Each rule searches every row at once, so a rulebook of hundreds of
+rules parses thousands of documents in seconds.
+
+Rules are usually rows of CSV files, so they can be written and checked in a
+spreadsheet:
+
+<!-- file: rules/opinions.csv -->
+```csv
+column,name,kind,pattern,value,flags,note
+,caption,extract,^.*,,,The first line
+caption,"party1, party2",split,\sv\.\s,,,The parties on either side of "v."
+,,fields,^[A-Z]+:,,multiline,Sections such as JUDGES: and OPINION:
+judges,panel,names,"BEFORE|CIRCUIT JUDGES?|\bAND\b|,",,,
+opinion,outcome,map,revers,reversed,ignorecase,The first that matches wins
+opinion,outcome,map,affirm,affirmed,ignorecase,
+opinion,citations,extract_all,\d+ F\.\w+ \d+,,,
+```
+
+<!-- file: opinions/smith.txt -->
+```text
+United States v. Smith
+JUDGES: Before LYNCH, O'SCANNLAIN, and BARRON, Circuit Judges.
+OPINION: We REVERSE. See 512 F.3d 1093 and 98 F.4th 12.
+```
+
+<!-- file: opinions/jones.txt -->
+```text
+Jones v. Acme Corp.
+JUDGES: Before BOUDIN, Circuit Judge.
+OPINION: Affirmed. See 5 F.3d 2.
+```
+
+```python
+settings = {
+    "general": {"seed": 43},
+    "opinions_project": {"opinions_workers": "wrangler"},
+    "wrangler": {
+        "steps": "load, parse",
+        "load_techniques": "load_files",
+        "parse_techniques": "parse_documents",
+    },
+    "load_files_parameters": {"source": "opinions", "pattern": "*.txt"},
+    "parse_documents_parameters": {"rules": "rules/opinions.csv"},
+}
+project = amos.Project.create(settings, id = "opinions")
+parsed = project.result.data
+print(parsed[["file", "party1", "party2", "panel", "outcome"]].to_string(index = False))
+#      file        party1     party2                     panel  outcome
+# jones.txt         Jones Acme Corp.                    BOUDIN affirmed
+# smith.txt United States      Smith LYNCH, OSCANNLAIN, BARRON reversed
+print(parsed["citations"].tolist())
+# ['5 F.3d 2', '512 F.3d 1093, 98 F.4th 12']
+print(project.result.history[-1]["created"])
+# ['caption', 'party1', 'party2', 'judges', 'opinion', 'panel', 'outcome', 'citations']
+```
+
+The columns of a file of rules are:
+
+| Column | Meaning |
+| --- | --- |
+| `column` | The columns of text to search, separated by commas. If it is blank, the rule searches the parser's `column` ("text" unless it is set). |
+| `name` | The column that the rule makes (or adds to). A `split` rule names two. It is blank for a `replace` rule that changes the text it searches, and optional for a `fields` rule. |
+| `kind` | What the rule does (see below). |
+| `pattern` | The regular expression to search for. |
+| `value` | What a `map`, `map_all`, or `replace` rule writes. Blank for the other kinds. |
+| `flags` | Optional: any of "ignorecase", "dotall" (so "." also matches line breaks), "multiline" (so "^" and "$" match at each line), and "verbose", separated by commas. |
+| `note` | Optional: anything you want to say about the rule. |
+
+The kinds of rules are:
+
+| Kind | Makes |
+| --- | --- |
+| `flag` | True if the pattern appears, and otherwise false. |
+| `count` | The number of times the pattern appears. |
+| `map` | The rule's `value` if the pattern appears. The first rule for a column that matches wins, so rules can turn text into categories. |
+| `map_all` | The `value` of every rule for the column whose pattern appears, once each, separated by commas. |
+| `extract` | The first match. |
+| `extract_all` | Every match, separated by commas. |
+| `split` | Two columns: the text before the first match and the text after it. |
+| `names` | The names in the text, separated by commas, split wherever the pattern matches (the pattern matches what comes between names). The names are made upper-case without periods or apostrophes. |
+| `fields` | A column for each label that the pattern matches (such as "JUDGES:"), with the text after it, up to the next label. The columns are named for the labels in snake case, after the rule's `name` if it has one. |
+| `replace` | The text with every match replaced by the `value` ("\1" is the first group of the match). A blank `value` removes the matches. |
+
+Rules are applied from top to bottom, and every column that a rule makes can
+be searched by the rules after it, as the rules above search the "judges"
+and "opinion" columns that the `fields` rule made. Rules that make the same
+column are combined: flags are true if any rule matches, counts are added,
+the first `map` or `extract` that matches is kept, and the results of
+`map_all`, `extract_all`, and `names` rules are joined. Several values in one
+cell are separated by commas; a munger such as `split_text` can make columns
+of them, and the shaper `lists_to_rows` can make rows of them.
+
+The "rules" of `parse_documents` can be a CSV file, a folder of them (read in
+alphabetical order), a list of rules as dictionaries (with the columns above
+as keys), or a list of any of these. A package can register its rulebooks
+with `amos.register_rulebook`, so that its users name them in settings (as
+in `rules = federal`) without knowing where the files are. CSV files in the
+layout of courtpy's rules (with "target", "variable", "ignorecase", and
+"dotall" columns) are read too.
+
 ## Munging data
 
-Cleaners remove rows and columns. *Mungers* change what is in the columns, or
-make new columns from them, without adding or removing rows. Each one changes
+Cleaners remove rows and columns, and turn text into the numbers, dates, and
+booleans it stands for (`clean_numbers`, `clean_dates`, and
+`clean_booleans`). *Mungers* change what else is in the columns, or make new
+columns from them, without adding or removing rows. Each one changes
 a whole column at once with the vectorized methods of `pandas`, so they are
 fast even with a lot of data. None of them learns from the data, so, like
 cleaners, they belong in the wrangler, before the data is split. The
@@ -319,7 +431,7 @@ cleaners, they belong in the wrangler, before the data is split. The
 | --- | --- |
 | Text | `strip_text`, `normalize_text`, `replace_text` |
 | Patterns in text | `flag_patterns`, `count_patterns`, `map_patterns`, `extract_pattern`, `extract_all`, `split_text` |
-| Values and types | `map_values`, `parse_numbers`, `parse_dates`, `parse_booleans`, `convert_types`, `auto_categorize`, `set_kinds` |
+| Values and types | `map_values`, `convert_types`, `auto_categorize`, `set_kinds` |
 | Combining columns | `coalesce`, `combine_flags`, `derive_columns` |
 
 Many mungers search text for patterns, which are [regular
@@ -344,7 +456,7 @@ its backslashes as they are:
 coding_workers = "wrangler"
 
 [wrangler]
-techniques = "split_text, flag_patterns, map_patterns, parse_numbers"
+techniques = "split_text, flag_patterns, map_patterns, clean_numbers"
 
 [split_text_parameters]
 column = "caption"
@@ -366,7 +478,7 @@ ignorecase = true
 'revers|vacat' = "reversed"
 affirm = "affirmed"
 
-[parse_numbers_parameters]
+[clean_numbers_parameters]
 columns = "damages"
 ```
 
@@ -397,7 +509,7 @@ citations = amos.Dataset(
     pd.DataFrame({"cite": ["512 F.3d 1093", "98 F.4th 12", "unpublished"]}))
 amos.mungers.ExtractPattern().apply(
     citations, column = "cite", pattern = r"(?P<volume>\d+) F\.\w+ (?P<page>\d+)")
-amos.mungers.ParseNumbers().apply(citations, columns = ["volume", "page"])
+amos.cleaners.CleanNumbers().apply(citations, columns = ["volume", "page"])
 print(citations.data["volume"].tolist(), citations.data["page"].tolist())
 # [512.0, 98.0, nan] [1093.0, 12.0, nan]
 ```
@@ -1724,6 +1836,7 @@ be named in settings right away.
 | Genre | Write | Returns |
 | --- | --- | --- |
 | `Loader` | `load(self, source, **kwargs)` | The data: a `DataFrame` or anything that `Dataset.create` accepts. `self.read(path, **kwargs)` loads a file with the clerk. |
+| `Parser` | `parse(self, data, **kwargs)` | The `DataFrame` with the information found in its text in changed or new columns, and the same rows. |
 | `Cleaner` | `clean(self, data, **kwargs)` | The cleaned `DataFrame`. |
 | `Munger` | `munge(self, data, **kwargs)` | The `DataFrame` with changed or new columns, and the same rows. |
 | `Merger` | `match(self, data, other, **kwargs)` | For each row of the data, the position of the row of the other table that matches it, or -1 for none. The merger adds the columns of those rows. `prepare(self, other, **kwargs)` can change the other table first. |
@@ -1760,8 +1873,9 @@ class Winsorize(amos.Cleaner):
 
 dataset = amos.Dataset.create(cancer, seed = 43)
 Winsorize().apply(dataset, upper = 0.95)
-print(dataset.history[-1])
-# {'technique': 'winsorize', 'rows': [569, 569], 'columns': [31, 31]}
+entry = dataset.history[-1]
+print(entry["rows"], entry["columns"], len(entry["changed"]))
+# [569, 569] [31, 31] 30
 ```
 
 That cleaner looks at every row, so it belongs before the split. A technique
@@ -2191,7 +2305,7 @@ alone, and takes a `folder`, a `file_name` (without its extension), and a
 | `TypeError: '...' uses text, but '...' is not text` | A munger that searches text was given a column of numbers, dates, or booleans. |
 | `ValueError: '...' has nothing to merge` | A merger has no "source". Set it in the `{merger}_parameters` section. |
 | `ValueError: ... rows of the other table have the same [...] as another of its rows` | A row of the data can match only one row of the other table. Set "duplicates" to "first" or "last" to use one of them, or summarize them with `merge_summary`. |
-| `TypeError: '...' cannot match '...', which is numbers in the data, with '...', which is text in the other table` | A key is not the same kind of data in both tables. Change the column of the data with a munger (such as `parse_numbers`, `parse_dates`, or `convert_types`). |
+| `TypeError: '...' cannot match '...', which is numbers in the data, with '...', which is text in the other table` | A key is not the same kind of data in both tables. Change the column of the data with a cleaner (such as `clean_numbers` or `clean_dates`) or a munger (such as `convert_types`). |
 | `ValueError: '...' would add columns named [...], which the data already has` | A merger was told to add a column whose name is taken. Set its "prefix". |
 | `ValueError: '...' changes the rows of the data, so it must come before the data is split` | A shaper came after a splitter. Reshape the data in the wrangler. |
 | `KeyError: the reshaped data has no columns [...], which are the label or groups` | A shaper left the data without its label or a group. Set the shaper's "label" or "groups" to those of the reshaped data. |

@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* Parsers are a new genre of the wrangler (`amos.Parser`), for techniques
+  that find information in the text of a dataset and make columns of it.
+  `parse_documents` (`amos.parsers.ParseDocuments`) applies a rulebook: an
+  ordered list of rules from CSV files (or `dict`s in settings), each of
+  which searches text for a regular expression and records what it finds.
+  The kinds of rules are `flag`, `count`, `map`, `map_all`, `extract`,
+  `extract_all`, `split`, `names`, `fields` (a column for each labeled
+  section, such as "JUDGES:"), and `replace`. Each rule searches every row
+  at once, and the columns that a rulebook makes are added all at once.
+  `amos.register_rulebook` names a rulebook so that settings can use it, and
+  CSV files in the layout of courtpy's rules are read as they are.
+* The regular-expression helpers that mungers and parsers share are in a
+  private module, `amos._patterns`, and mungers and parsers share the check
+  that they keep the rows and every column.
+* `parse_numbers`, `parse_dates`, and `parse_booleans` are now cleaners named
+  `clean_numbers`, `clean_dates`, and `clean_booleans`
+  (`amos.cleaners.CleanNumbers`, `CleanDates`, and `CleanBooleans`). They
+  work as before, but settings must use the new names, and the old names and
+  classes in `amos.mungers` are gone. Mungers now hold only techniques that
+  change or add to the data already in a dataset in other ways.
+* `download` also downloads OpenML datasets: a source that is not a URL is
+  the name (such as "credit-g") or id (such as 31) of one. The `openml`
+  loader (`amos.loaders.Openml`) is gone, so settings must use `download`.
+* `load_files` (`amos.loaders.LoadFiles`) loads a batch of files (a folder, a
+  pattern of paths, or a list of paths) into one table, reading them at the
+  same time in threads. Files of tables add their rows, and files of text
+  (such as ".txt" files) add a row each, with the text in a "text" column, so
+  a batch of documents can be worked on all at once. Each row names its file
+  in a "file" column.
+* Loaders read plain-text files in UTF-8 (unless "encoding" names another),
+  rather than in the computer's default encoding, which garbled accented
+  letters on Windows.
+* A cleaner's entry in `history` has "changed", the columns whose values or
+  type it changed, when it keeps the rows and changes at least one column.
+
 ## 0.8.1
 
 * A test that runs for more than 10 minutes now fails (with pytest-timeout,

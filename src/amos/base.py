@@ -979,10 +979,10 @@ class Operation(chrisjen.Technique, abc.ABC):
     (see `skipping_incompatible_techniques`). A direct call to `apply` raises
     the error.
 
-    `Operation` is a genre: its abstract subclasses (`Loader`, `Cleaner`,
-    `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`,
-    `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, and `Plot`) are
-    genres within it. In a project, a plot, evaluator, or inferer can be
+    `Operation` is a genre: its abstract subclasses (`Loader`, `Parser`,
+    `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`,
+    `Transformer`, `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`,
+    and `Plot`) are genres within it. In a project, a plot, evaluator, or inferer can be
     replaced by the techniques that the dataset's model names in its
     parameters (see `using_model_specific_techniques`). To add a technique,
     subclass the genre that fits and write the method it requires, or set
@@ -1351,6 +1351,49 @@ def _model_and_replaced(
         if entry.get('model_specific') == setting:
             replaced = True
     return None, replaced
+
+
+def _change_columns(
+    item: Dataset,
+    after: pd.DataFrame,
+    technique: str,
+    genre: str) -> Dataset:
+    """Replaces the data of `item` with `after`, which has changed columns.
+
+    Mungers and parsers change and add columns, but keep the rows and every
+    column. The dataset's `history` records the columns whose values or types
+    changed ("changed") and the new columns ("created").
+
+    Args:
+        item: the dataset.
+        after: its data, with changed or new columns.
+        technique: name of the technique that changed the data.
+        genre: the genre of the technique (such as "munger"), for messages.
+
+    Raises:
+        ValueError: if `after` has different rows or lacks a column of the
+            data.
+
+    Returns:
+        The changed dataset.
+
+    """
+    before = item.data
+    removed = [c for c in before.columns if c not in after.columns]
+    if removed or not after.index.equals(before.index):
+        message = (
+            f'a {genre} only changes and adds columns, but {technique!r} '
+            f'changed the rows or removed columns of the data (use a '
+            f'cleaner to remove them)'
+        )
+        raise ValueError(message)
+    item.replace(after)
+    item.record(
+        technique,
+        changed = [
+            c for c in before.columns if not after[c].equals(before[c])],
+        created = [c for c in after.columns if c not in before.columns])
+    return item
 
 
 def _made_up(

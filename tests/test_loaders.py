@@ -213,7 +213,7 @@ def test_download_errors_leave_no_file(server: _Server) -> None:
         loaders.Download().apply(None, source = f'{server.url}/')
 
 
-def test_openml_downloads_into_the_clerk_input_folder() -> None:
+def test_download_fetches_openml_datasets_by_name_or_id() -> None:
     calls = []
 
     # Takes the same parameters as `sklearn.datasets.fetch_openml` (and a few
@@ -237,7 +237,7 @@ def test_openml_downloads_into_the_clerk_input_folder() -> None:
         return sklearn.utils.Bunch(frame = frame, target = frame['target'])
 
     clerk = nagata.FileManager(root_folder = '.', input_folder = 'data')
-    loader = loaders.Openml(clerk = clerk, contents = fetch)
+    loader = loaders.Download(clerk = clerk, contents = fetch)
     dataset = loader.apply(None, source = 'credit-g', version = 1, extra = 1)
     assert dataset.label == 'target'
     assert calls[-1] == {
@@ -250,6 +250,64 @@ def test_openml_downloads_into_the_clerk_input_folder() -> None:
     loader.apply(None, source = '31')
     assert calls[-1]['data_id'] == 31
     assert calls[-1]['name'] is None
+    loader.apply(None, source = 31)
+    assert calls[-1]['data_id'] == 31
+    assert amos.library.classify('download') == 'loader'
+    assert 'openml' not in amos.library.all
+
+
+def test_load_files_makes_a_row_for_each_document() -> None:
+    folder = pathlib.Path('data/opinions')
+    (folder / 'second').mkdir(parents = True)
+    (folder / '.hidden').mkdir()
+    first = 'Smith v. Jones' + chr(10) + 'AFFIRMED.'
+    (folder / 'a.txt').write_text(first, encoding = 'utf-8')
+    (folder / 'second' / 'b.txt').write_text('Café v. Roe', encoding = 'utf-8')
+    (folder / '.hidden' / 'c.txt').write_text('skipped', encoding = 'utf-8')
+    (folder / 'notes.md').write_text('skipped too', encoding = 'utf-8')
+    loader = loaders.LoadFiles()
+    dataset = loader.apply(None, source = 'opinions', pattern = '*.txt')
+    assert dataset.data['file'].tolist() == ['a.txt', 'second/b.txt']
+    assert dataset.data['text'].tolist() == [
+        first, 'Café v. Roe']
+    assert pd.api.types.is_string_dtype(dataset.data['text'].dtype)
+    assert dataset.history[-1]['rows'] == 2
+    flat = loader.apply(
+        None, source = folder, pattern = '*.txt', recursive = False,
+        file_column = 'case', text_column = 'opinion')
+    assert flat.data.columns.tolist() == ['case', 'opinion']
+    assert flat.data['case'].tolist() == ['a.txt']
+    found = loader.apply(None, source = 'data/opinions/*.txt', workers = 1)
+    assert found.data['file'].tolist() == ['data/opinions/a.txt']
+    found = loader.apply(None, source = 'opinions/*/*.txt')
+    assert found.data['file'].tolist() == ['opinions/second/b.txt']
+    listed = loader.apply(
+        None, source = ['opinions/second/b.txt', folder / 'a.txt'], limit = 1)
+    assert listed.data['file'].tolist() == ['opinions/second/b.txt']
+    as_text = loader.apply(
+        None, source = 'opinions', pattern = '*.md', file_format = 'text')
+    assert as_text.data['text'].tolist() == ['skipped too']
+
+
+def test_load_files_stacks_tables() -> None:
+    folder = pathlib.Path('data/years')
+    folder.mkdir(parents = True)
+    pd.DataFrame({'court': ['state', 'federal'], 'appeals': [2, 1]}).to_csv(
+        folder / '2020.csv', index = False)
+    pd.DataFrame({'court': ['state'], 'appeals': [5]}).to_csv(
+        folder / '2021.csv', index = False)
+    dataset = loaders.LoadFiles().apply(None, source = folder)
+    assert dataset.data.columns.tolist() == ['file', 'court', 'appeals']
+    assert dataset.data['file'].tolist() == ['2020.csv', '2020.csv', '2021.csv']
+    assert dataset.data['appeals'].tolist() == [2, 1, 5]
+    assert list(dataset.data.index) == [0, 1, 2]
+    (folder / 'readme.txt').write_text('about the data', encoding = 'utf-8')
+    with pytest.raises(ValueError, match = 'tables and others'):
+        loaders.LoadFiles().apply(None, source = folder)
+    with pytest.raises(FileNotFoundError, match = 'no files'):
+        loaders.LoadFiles().apply(None, source = folder, pattern = '*.dta')
+    with pytest.raises(FileNotFoundError, match = 'no file'):
+        loaders.LoadFiles().apply(None, source = ['missing.csv'])
 
 
 def _settings(**extra: Any) -> dict[str, Any]:

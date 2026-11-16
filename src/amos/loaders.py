@@ -1,30 +1,35 @@
 """Techniques that load data, usually at the start of the "wrangler" stage.
 
-A loader makes the data of a dataset from a source: a data file, a file that
-it downloads first, or an online collection of datasets. Every loader works
-through the project's clerk (the `nagata.FileManager` that is the `clerk` of a
-`Project`): files are looked for, and downloads are saved, in the clerk's
-input folder, and the clerk loads every format that it knows. A project whose
-workflow has a loader needs no `item`.
+A loader makes the data of a dataset from a source: a data file, a batch of
+files, or a file (or OpenML dataset) that it downloads first. Loaders only
+download and import: whatever a file holds, they bring it into the dataset
+as it is, and parsers, cleaners, and mungers then work on it there. Every
+loader works through the project's clerk (the `nagata.FileManager` that is
+the `clerk` of a `Project`): files are looked for, and downloads are saved,
+in the clerk's input folder, and the clerk loads every format that it knows.
+A project whose workflow has a loader needs no `item`.
 
 Contents:
     Loader: base class for techniques that load data.
-    Download: downloads a file from a URL and loads it.
+    Download: downloads a file from a URL, or a dataset from OpenML, and
+        loads it.
     LoadFile: loads a data file.
-    Openml: downloads a dataset from OpenML and loads it.
+    LoadFiles: loads a batch of files into one table.
 
 """
 
 from __future__ import annotations
 
 import abc
+import concurrent.futures
 import dataclasses
+import functools
 import pathlib
 import shutil
 import urllib.parse
 import urllib.request
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import nagata
@@ -35,13 +40,21 @@ from . import base, clerks, options, utilities
 if TYPE_CHECKING:
     import chrisjen
 
+# Characters that make a source of `load_files` a pattern of paths.
+_GLOB_CHARACTERS: frozenset[str] = frozenset('*?[')
 # Extensions of compressed files, which `pandas` opens itself. They are
 # skipped when the format of a file is found from its name.
 _COMPRESSIONS: frozenset[str] = frozenset({
     'bz2', 'gz', 'tar', 'xz', 'zip', 'zst'})
+# Formats of the clerk that are read as plain text, in UTF-8 unless an
+# "encoding" is given.
+_TEXT_FORMATS: frozenset[str] = frozenset({'text'})
 # Settings in the "general" section that are the default parameters of a
 # loader built from a project's settings.
 _GENERAL: tuple[str, ...] = ('label', 'task', 'groups')
+# The function that `download` uses to fetch OpenML datasets, unless its
+# `contents` names another.
+_OPENML: str = 'sklearn.datasets.fetch_openml'
 # Schemes of the URLs that `download` accepts.
 _SCHEMES: frozenset[str] = frozenset({'http', 'https'})
 # Sent with each download, since some servers refuse requests without one.
@@ -185,7 +198,10 @@ class Loader(base.Operation, abc.ABC):
         clerk's input folder. The format comes from the file's extension
         (skipping an extension of compression, such as ".gz", which `pandas`
         opens itself) unless `file_format` names it. Parameters are passed to
-        the reader (such as `pandas.read_csv`) if it accepts them.
+        the reader (such as `pandas.read_csv`) if it accepts them. A file of
+        plain text (the "text" format) is read in UTF-8 unless "encoding"
+        names another (and "errors" can say what to do with bytes that are
+        not in it, such as "replace").
 
         Args:
             path: path of the file.
@@ -219,6 +235,13 @@ class Loader(base.Operation, abc.ABC):
         kind = formats[name]
         parameters = utilities.accepted_parameters(
             _reader_of(kind), {**_settings_for(kind), **kwargs})
+        if name in _TEXT_FORMATS:
+            # The format reads with `open`, whose default encoding depends on
+            # the computer, and takes no parameters from the clerk.
+            parameters.setdefault('encoding', kwargs.get(
+                'encoding', options._FILE_SETTINGS['file_encoding']))
+            if 'errors' in kwargs:
+                parameters.setdefault('errors', kwargs['errors'])
         return clerk.load(file_path = found, file_format = kind, **parameters)
 
     """ Private Methods """
@@ -258,16 +281,24 @@ class Loader(base.Operation, abc.ABC):
 
 @dataclasses.dataclass
 class Download(Loader):
-    """Downloads a file from a URL and loads it.
+    """Downloads a file from a URL, or a dataset from OpenML, and loads it.
 
-    The file is saved in the clerk's input folder and loaded from there, so it
-    is only downloaded again if it is missing or "refresh" is true. Keeping
-    the file lets others check the exact data that a project used.
+    A URL's file is saved in the clerk's input folder and loaded from there,
+    so it is only downloaded again if it is missing or "refresh" is true.
+    Keeping the file lets others check the exact data that a project used.
+
+    Any other source is the name (such as "credit-g") or id (such as 31) of a
+    dataset on OpenML (https://www.openml.org), which shares thousands of
+    datasets for research. scikit-learn saves each one in an "openml" folder
+    in the clerk's input folder, so it is only downloaded once, and the
+    dataset's default target is the label unless "label" is set.
 
     Wraps:
         [`nagata.FileManager`](https://github.com/WithPrecedent/nagata)
         from nagata, which reads each format with pandas (such as
-        `pandas.read_csv`).
+        `pandas.read_csv`), and
+        [`sklearn.datasets.fetch_openml`](https://scikit-learn.org/stable/modules/generated/sklearn.datasets.fetch_openml.html)
+        from scikit-learn.
 
     """
 
@@ -279,40 +310,81 @@ class Download(Loader):
         refresh: bool = False,
         timeout: float | None = None,
         **kwargs: Any) -> Any:
-        """Downloads the file at `source` (unless it was before) and loads it.
+        """Downloads the data at `source` (unless it was before) and loads it.
 
         Args:
-            source: the URL of the file (http or https).
-            file_name: name to save the file as in the clerk's input folder,
-                which may include folders. Defaults to `None`, in which case
-                the last part of the URL's path is used.
-            refresh: whether to download the file again even if it was
-                downloaded before. Defaults to `False`.
-            timeout: seconds to wait for the server to answer. Defaults to
-                `None`, which uses `options._DOWNLOAD_TIMEOUT` (read when the
-                file is downloaded).
-            **kwargs: parameters for `read`, such as "file_format", "member",
-                and parameters for the reader.
+            source: the URL of a file (http or https), or the name or id of
+                an OpenML dataset.
+            file_name: name to save a URL's file as in the clerk's input
+                folder, which may include folders. Defaults to `None`, in
+                which case the last part of the URL's path is used. Not used
+                for OpenML.
+            refresh: whether to download a URL's file again even if it was
+                downloaded before. Defaults to `False`. Not used for OpenML.
+            timeout: seconds to wait for the server of a URL to answer.
+                Defaults to `None`, which uses `options._DOWNLOAD_TIMEOUT`
+                (read when the file is downloaded). Not used for OpenML.
+            **kwargs: for a URL, parameters for `read`, such as
+                "file_format", "member", and parameters for the reader. For
+                OpenML, parameters for `fetch_openml`, such as "version" or
+                "target_column".
 
         Raises:
-            ValueError: if the URL is not http or https.
+            ValueError: if `source` is a URL whose scheme is not http or
+                https.
 
         Returns:
-            The loaded data.
+            The loaded data: the file's, or the OpenML dataset as
+                scikit-learn returns it.
 
         """
-        url = str(source)
-        if urllib.parse.urlparse(url).scheme not in _SCHEMES:
-            message = f'only http and https URLs can be downloaded, not {url!r}'
+        text = str(source).strip()
+        scheme = urllib.parse.urlparse(text).scheme
+        if not scheme:
+            return self._fetch_openml(text, **kwargs)
+        if scheme not in _SCHEMES:
+            message = (
+                f'only http and https URLs can be downloaded, not {text!r} '
+                f'(any other source must be the name or id of an OpenML '
+                f'dataset)'
+            )
             raise ValueError(message)
-        name = file_name or _name_of(url)
+        name = file_name or _name_of(text)
         path = pathlib.Path(self._get_clerk().input_folder) / name
         if refresh or not path.is_file():
             _download(
-                url,
+                text,
                 path,
                 options._DOWNLOAD_TIMEOUT if timeout is None else timeout)
         return self.read(path, **kwargs)
+
+    """ Private Methods """
+
+    def _fetch_openml(self, source: str, **kwargs: Any) -> Any:
+        """Downloads (unless it was before) and loads an OpenML dataset.
+
+        Args:
+            source: the name of the dataset (such as "credit-g") or its id
+                (such as "31").
+            **kwargs: parameters for `fetch_openml`. Those it does not accept
+                are left out.
+
+        Returns:
+            The dataset, as scikit-learn returns it.
+
+        """
+        fetch = utilities.import_tool(self.contents or _OPENML)
+        if source.isdigit():
+            fixed: dict[str, Any] = {'data_id': int(source)}
+        else:
+            fixed = {'name': source}
+        fixed |= {
+            'data_home': str(self._get_clerk().input_folder),
+            'as_frame': True,
+            'return_X_y': False}
+        extra = utilities.accepted_parameters(fetch, kwargs)
+        return fetch(**fixed, **{
+            k: v for k, v in extra.items() if k not in fixed})
 
 
 @dataclasses.dataclass
@@ -343,50 +415,148 @@ class LoadFile(Loader):
 
 
 @dataclasses.dataclass
-class Openml(Loader):
-    """Downloads a dataset from OpenML (by its name or id) and loads it.
+class LoadFiles(Loader):
+    """Loads a batch of files into one table.
 
-    OpenML (https://www.openml.org) shares thousands of datasets for research.
-    scikit-learn saves each dataset in an "openml" folder in the clerk's input
-    folder, so it is only downloaded once. The dataset's default target is the
-    label unless "label" is set.
+    The source is a folder, a pattern of paths (such as "opinions/*.txt"), or
+    a list of paths. Each file is read with the clerk, as `load_file` reads
+    one, so its format comes from its name unless "file_format" names one for
+    every file. A file of a table (such as a CSV file) adds its rows, and a
+    file of text (a ".txt" file, or any file read with "file_format" set to
+    "text") adds one row, with its text in the "text" column. Either way,
+    each row has the path of its file in the "file" column, so a batch of
+    documents becomes a table that parsers can work on all at once. The
+    files are read at the same time, in threads, and their rows are kept in
+    the order of their paths.
 
     Wraps:
-        [`sklearn.datasets.fetch_openml`](https://scikit-learn.org/stable/modules/generated/sklearn.datasets.fetch_openml.html)
-        from scikit-learn.
+        [`nagata.FileManager`](https://github.com/WithPrecedent/nagata)
+        from nagata, which reads each format with pandas (such as
+        `pandas.read_csv`).
 
     """
 
-    contents: str = 'sklearn.datasets.fetch_openml'
-
-    def load(self, source: Any, **kwargs: Any) -> Any:
-        """Downloads (unless it was before) and loads the dataset `source`.
+    def load(
+        self,
+        source: Any,
+        *,
+        pattern: str = '*',
+        recursive: bool = True,
+        file_column: str = 'file',
+        text_column: str = 'text',
+        limit: int | None = None,
+        workers: int | None = None,
+        **kwargs: Any) -> pd.DataFrame:
+        """Loads the files at `source` into one table.
 
         Args:
-            source: the name of the dataset (such as "credit-g") or its id
-                (such as 31).
-            **kwargs: parameters for `fetch_openml`, such as "version" or
-                "target_column".
+            source: a folder, a pattern of paths (such as "opinions/*.txt"),
+                or a list of paths of files. A relative path or pattern is
+                looked for in the current folder and then in the clerk's
+                input folder.
+            pattern: the pattern of the names of the files to load from a
+                folder (such as "*.txt"). Defaults to "*", which loads every
+                file. Not used for other sources.
+            recursive: whether to load the files of a folder's subfolders
+                too. Defaults to `True`. Files and folders whose names start
+                with "." are left out.
+            file_column: name of the column with the path of each row's file:
+                relative to the folder (or to the folder in which a pattern
+                was found), or else as given, with "/" between its parts.
+                Defaults to "file".
+            text_column: name of the column with the text of each file of
+                text. Defaults to "text".
+            limit: most files to load (the first, in the order of their
+                paths), such as to try out parsers on a few. Defaults to
+                `None`, which loads every file.
+            workers: most threads that read files at once. Defaults to `None`,
+                which lets Python choose (from the number of processors).
+            **kwargs: parameters for `read`, such as "file_format" and
+                parameters for the reader (such as "sep").
+
+        Raises:
+            FileNotFoundError: if there are no files to load.
+            TypeError: if a file holds neither a table nor text.
+            ValueError: if some files are tables and others are text.
 
         Returns:
-            The dataset, as scikit-learn returns it.
+            The rows of every file, numbered from 0, with `file_column`
+                first.
 
         """
-        fetch = utilities.import_tool(self.contents)
-        if str(source).isdigit():
-            fixed: dict[str, Any] = {'data_id': int(source)}
-        else:
-            fixed = {'name': str(source)}
-        fixed |= {
-            'data_home': str(self._get_clerk().input_folder),
-            'as_frame': True,
-            'return_X_y': False}
-        extra = utilities.accepted_parameters(fetch, kwargs)
-        return fetch(**fixed, **{
-            k: v for k, v in extra.items() if k not in fixed})
+        clerk = self._get_clerk()
+        found = _find_files(
+            source,
+            pathlib.Path(clerk.input_folder),
+            pattern = pattern,
+            recursive = recursive)
+        if limit is not None:
+            found = found[:limit]
+        if not found:
+            message = f'there are no files to load at {source!r}'
+            raise FileNotFoundError(message)
+        paths = [path for path, _ in found]
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers = workers) as pool:
+            loaded = list(pool.map(
+                functools.partial(self.read, **kwargs), paths))
+        return _combine(
+            [name for _, name in found],
+            loaded,
+            file_column = file_column,
+            text_column = text_column)
 
 
 """ Private Functions """
+
+
+def _combine(
+    names: list[str],
+    loaded: list[Any],
+    *,
+    file_column: str,
+    text_column: str) -> pd.DataFrame:
+    """Returns the contents of a batch of files as one table.
+
+    Args:
+        names: the name of each file, for its rows' `file_column`.
+        loaded: the contents of each file, in the same order: a table or
+            text.
+        file_column: name of the column with each row's file.
+        text_column: name of the column with the text of a file of text.
+
+    Raises:
+        TypeError: if a file holds neither a table nor text.
+        ValueError: if some files are tables and others are text.
+
+    Returns:
+        The rows of every file, numbered from 0, with `file_column` first.
+
+    """
+    for name, contents in zip(names, loaded, strict = True):
+        if not isinstance(contents, pd.DataFrame | str):
+            message = (
+                f'{name!r} holds {type(contents).__name__}, not a table or '
+                f'text: set "file_format" (such as "text") to read it as one'
+            )
+            raise TypeError(message)
+    texts = [isinstance(c, str) for c in loaded]
+    if all(texts):
+        return pd.DataFrame(
+            {file_column: names, text_column: loaded}).astype('str')
+    if any(texts):
+        mixed = [n for n, t in zip(names, texts, strict = True) if t][:3]
+        message = (
+            f'some files are tables and others (such as {mixed}) are text: '
+            f'load them separately, or set "pattern" to choose one kind'
+        )
+        raise ValueError(message)
+    tables = [
+        table.assign(**{file_column: name})
+        for name, table in zip(names, loaded, strict = True)]
+    data = pd.concat(tables, ignore_index = True)
+    order = [file_column, *[c for c in data.columns if c != file_column]]
+    return cast('pd.DataFrame', data[order])
 
 
 def _download(url: str, path: pathlib.Path, timeout: float) -> None:
@@ -464,6 +634,57 @@ def _find(path: pathlib.Path, folder: pathlib.Path) -> pathlib.Path:
     raise FileNotFoundError(message)
 
 
+def _find_files(
+    source: Any,
+    folder: pathlib.Path,
+    *,
+    pattern: str,
+    recursive: bool) -> list[tuple[pathlib.Path, str]]:
+    """Returns the files that `load_files` loads, in the order of their paths.
+
+    Args:
+        source: a folder, a pattern of paths, or a sequence of paths of
+            files. A relative path or pattern is looked for in the current
+            folder and then in `folder`.
+        folder: the clerk's input folder.
+        pattern: the pattern of the names of the files of a folder.
+        recursive: whether to look in the subfolders of a folder too.
+
+    Raises:
+        FileNotFoundError: if a path in a sequence is not a file, or `source`
+            is not a folder, a pattern, or a file.
+
+    Returns:
+        The path of each file, with its name for the table: its path
+            relative to the folder of a folder, or to the folder in which a
+            pattern was found, and otherwise its path as given, with "/"
+            between its parts. Files and folders whose names start with "."
+            are left out of a folder or pattern.
+
+    """
+    if isinstance(source, Sequence) and not isinstance(source, str):
+        return [
+            (_find(pathlib.Path(p), folder), pathlib.Path(p).as_posix())
+            for p in source]
+    text = str(source)
+    if _GLOB_CHARACTERS & set(text):
+        base = pathlib.Path()
+        if not any(base.glob(text)):
+            base = folder
+        return [
+            (p, p.relative_to(base).as_posix()) for p in sorted(base.glob(text))
+            if p.is_file() and not _is_hidden(p.relative_to(base))]
+    path = pathlib.Path(text)
+    directory = path if path.is_dir() else folder / path
+    if directory.is_dir():
+        search = directory.rglob if recursive else directory.glob
+        return [
+            (p, p.relative_to(directory).as_posix())
+            for p in sorted(search(pattern))
+            if p.is_file() and not _is_hidden(p.relative_to(directory))]
+    return [(_find(path, folder), path.as_posix())]
+
+
 def _format_of(path: pathlib.Path, clerk: nagata.FileManager) -> str:
     """Returns the name of the clerk's format for the file at `path`.
 
@@ -491,6 +712,20 @@ def _format_of(path: pathlib.Path, clerk: nagata.FileManager) -> str:
         )
         raise ValueError(message)
     return name
+
+
+def _is_hidden(path: pathlib.Path) -> bool:
+    """Returns whether a part of `path` starts with "." (and so is hidden).
+
+    Args:
+        path: a path, relative to the folder it was found in.
+
+    Returns:
+        Whether any part of the path other than "." and ".." starts with ".".
+
+    """
+    return any(
+        part.startswith('.') and part not in {'.', '..'} for part in path.parts)
 
 
 def _name_of(url: str) -> str:

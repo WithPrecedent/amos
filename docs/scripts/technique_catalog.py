@@ -27,6 +27,7 @@ FIRST = '## Loaders (wrangler)'
 # Metrics are last, since they are criteria rather than steps of a stage.
 GENRES: tuple[tuple[str, str], ...] = (
     ('loader', 'Loaders (wrangler)'),
+    ('parser', 'Parsers (wrangler)'),
     ('cleaner', 'Cleaners (wrangler)'),
     ('munger', 'Mungers (wrangler)'),
     ('merger', 'Mergers (wrangler)'),

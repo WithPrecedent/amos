@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -107,3 +108,64 @@ def test_rename_columns_by_parameter(mixed: amos.Dataset) -> None:
         mixed, names = {'income': 'earnings'}, age = 'years')
     assert {'years', 'earnings'} <= set(mixed.features)
     assert mixed.kinds == {'years': 'numerics'}
+
+
+def test_clean_numbers(cases: amos.Dataset) -> None:
+    cases.data['notes'] = pd.Series(
+        ['12%', 'about 3 years', '-1.5e3', '.5'], dtype = 'str')
+    cleaners.CleanNumbers().apply(cases, columns = ['damages', 'notes'])
+    assert cases.data['damages'].tolist()[0::2] == [1200.0, 350.5]
+    assert cases.data['damages'].tolist()[3] == 15000.0
+    assert pd.isna(cases.data['damages'].iloc[1])
+    assert cases.data['notes'].tolist() == [12.0, 3.0, -1500.0, 0.5]
+    assert 'damages' in cases.numerics
+    data = pd.DataFrame({'amount': ['1.234,50', '7'], 'count': [1, 2]})
+    result = cleaners.CleanNumbers().apply(
+        data, columns = ['amount', 'count'], thousands = '.', decimal = ',')
+    assert result.data['amount'].tolist() == [1234.5, 7.0]
+    assert result.data['count'].dtype == 'int64'
+    with pytest.raises(ValueError, match = 'must differ'):
+        cleaners.CleanNumbers().apply(data, thousands = ',', decimal = ',')
+
+
+def test_clean_booleans(cases: amos.Dataset) -> None:
+    cases.data['flag'] = [1, 0, 2, np.nan]
+    cleaners.CleanBooleans().apply(cases, columns = ['appealed', 'flag'])
+    assert cases.data['appealed'].dtype == 'boolean'
+    assert cases.data['appealed'].tolist()[:2] == [True, False]
+    assert cases.data['appealed'].isna().tolist() == [
+        False, False, True, True]
+    assert cases.data['flag'].tolist()[:2] == [True, False]
+    assert cases.data['flag'].isna().sum() == 2
+    assert 'appealed' in cases.booleans
+    cleaners.CleanBooleans().apply(
+        cases, columns = 'disposition', true_values = 'affirmed.',
+        false_values = ['vacated in part'])
+    assert cases.data['disposition'].tolist()[1:3] == [True, False]
+
+
+def test_clean_dates(cases: amos.Dataset) -> None:
+    cleaners.CleanDates().apply(cases, columns = ['decided'])
+    assert cases.data['decided'].tolist()[:2] == [
+        pd.Timestamp('2020-01-05'), pd.Timestamp('2021-03-04')]
+    assert cases.data['decided'].isna().tolist() == [
+        False, False, True, True]
+    assert cases.dates == ['decided']
+    data = pd.DataFrame({'when': ['January 5, 2010', '2020-03-04']})
+    result = cleaners.CleanDates().apply(
+        data, columns = 'when', date_format = 'mixed')
+    assert result.data['when'].dt.year.tolist() == [2010, 2020]
+
+
+def test_cleaners_record_changed_columns(cases: amos.Dataset) -> None:
+    cleaners.CleanNumbers().apply(cases, columns = ['damages'])
+    assert cases.history[-1] == {
+        'technique': 'clean_numbers', 'rows': [4, 4], 'columns': [7, 7],
+        'changed': ['damages']}
+    for kind in (
+        cleaners.CleanBooleans, cleaners.CleanDates, cleaners.CleanNumbers):
+        before = cases.data.copy()
+        kind().apply(cases)
+        assert 'changed' not in cases.history[-1], kind
+        pd.testing.assert_frame_equal(cases.data, before)
+    assert amos.library.classify('clean_numbers') == 'cleaner'

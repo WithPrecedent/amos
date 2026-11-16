@@ -32,16 +32,25 @@ Every model has a pipeline of its own for each task that it can do. The
 
 ## Loaders (wrangler)
 
-| Name | Tool | Description |
-| --- | --- | --- |
-| [`download`][amos.loaders.Download] |  | Downloads a file from a URL and loads it. |
-| [`load_file`][amos.loaders.LoadFile] |  | Loads a data file in any format that the clerk knows. |
-| [`openml`][amos.loaders.Openml] | <code>sklearn.<wbr>datasets.<wbr>fetch_openml</code> | Downloads a dataset from OpenML (by its name or id) and loads it. |
+| Name | Description |
+| --- | --- |
+| [`download`][amos.loaders.Download] | Downloads a file from a URL, or a dataset from OpenML, and loads it. |
+| [`load_file`][amos.loaders.LoadFile] | Loads a data file in any format that the clerk knows. |
+| [`load_files`][amos.loaders.LoadFiles] | Loads a batch of files into one table. |
+
+## Parsers (wrangler)
+
+| Name | Description |
+| --- | --- |
+| [`parse_documents`][amos.parsers.ParseDocuments] | Finds information in text with a rulebook. |
 
 ## Cleaners (wrangler)
 
 | Name | Description |
 | --- | --- |
+| [`clean_booleans`][amos.cleaners.CleanBooleans] | Turns text such as "yes" and "no" into booleans. |
+| [`clean_dates`][amos.cleaners.CleanDates] | Turns text into dates. |
+| [`clean_numbers`][amos.cleaners.CleanNumbers] | Turns text such as "$1,234.50" into numbers. |
 | [`drop_columns`][amos.cleaners.DropColumns] | Removes columns. |
 | [`drop_constant`][amos.cleaners.DropConstant] | Removes columns that have only one value (and so tell you nothing). |
 | [`drop_duplicates`][amos.cleaners.DropDuplicates] | Removes rows that duplicate an earlier row. |
@@ -66,9 +75,6 @@ Every model has a pipeline of its own for each task that it can do. The
 | [`map_patterns`][amos.mungers.MapPatterns] | Turns text into values by the first pattern that it matches. |
 | [`map_values`][amos.mungers.MapValues] | Replaces values with others, such as "N/A" with a missing value. |
 | [`normalize_text`][amos.mungers.NormalizeText] | Normalizes the spaces, case, accents, and punctuation of text. |
-| [`parse_booleans`][amos.mungers.ParseBooleans] | Turns text such as "yes" and "no" into booleans. |
-| [`parse_dates`][amos.mungers.ParseDates] | Turns text into dates. |
-| [`parse_numbers`][amos.mungers.ParseNumbers] | Turns text such as "$1,234.50" into numbers. |
 | [`replace_text`][amos.mungers.ReplaceText] | Replaces the matches of patterns in text. |
 | [`set_kinds`][amos.mungers.SetKinds] | Sets the kind of each column, with the smallest type that holds it. |
 | [`split_text`][amos.mungers.SplitText] | Splits text into columns where a pattern matches. |

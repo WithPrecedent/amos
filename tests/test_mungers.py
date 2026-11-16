@@ -13,24 +13,6 @@ import amos
 from amos import mungers
 
 
-@pytest.fixture
-def cases() -> amos.Dataset:
-    """A small dataset of court cases, with text to munge."""
-    data = pd.DataFrame({
-        'caption': [
-            'United States v. Smith', 'Jones  v.  Acme Corp.',
-            'In re Doe', None],
-        'disposition': [
-            'REVERSED and remanded', 'Affirmed.', 'vacated in part', None],
-        'court': [
-            'First Circuit', 'second circuit', 'Ninth Circuit', 'Ninth'],
-        'damages': ['$1,200', 'n/a', '$350.50', '15,000'],
-        'decided': ['2020-01-05', '2021-03-04', 'unknown', None],
-        'appealed': ['Yes', ' no', 'maybe', None],
-        'won': ['yes', 'no', 'yes', 'no']})
-    return amos.Dataset(data.astype('str'), label = 'won')
-
-
 def test_auto_categorize(mixed: amos.Dataset) -> None:
     mixed.data['few'] = [1, 2] * 100
     mungers.AutoCategorize().apply(mixed)
@@ -231,53 +213,6 @@ def test_normalize_text(cases: amos.Dataset) -> None:
         mungers.NormalizeText().apply(cases, case = 'snake')
 
 
-def test_parse_numbers(cases: amos.Dataset) -> None:
-    cases.data['notes'] = pd.Series(
-        ['12%', 'about 3 years', '-1.5e3', '.5'], dtype = 'str')
-    mungers.ParseNumbers().apply(cases, columns = ['damages', 'notes'])
-    assert cases.data['damages'].tolist()[0::2] == [1200.0, 350.5]
-    assert cases.data['damages'].tolist()[3] == 15000.0
-    assert pd.isna(cases.data['damages'].iloc[1])
-    assert cases.data['notes'].tolist() == [12.0, 3.0, -1500.0, 0.5]
-    assert 'damages' in cases.numerics
-    data = pd.DataFrame({'amount': ['1.234,50', '7'], 'count': [1, 2]})
-    result = mungers.ParseNumbers().apply(
-        data, columns = ['amount', 'count'], thousands = '.', decimal = ',')
-    assert result.data['amount'].tolist() == [1234.5, 7.0]
-    assert result.data['count'].dtype == 'int64'
-    with pytest.raises(ValueError, match = 'must differ'):
-        mungers.ParseNumbers().apply(data, thousands = ',', decimal = ',')
-
-
-def test_parse_booleans(cases: amos.Dataset) -> None:
-    cases.data['flag'] = [1, 0, 2, np.nan]
-    mungers.ParseBooleans().apply(cases, columns = ['appealed', 'flag'])
-    assert cases.data['appealed'].dtype == 'boolean'
-    assert cases.data['appealed'].tolist()[:2] == [True, False]
-    assert cases.data['appealed'].isna().tolist() == [
-        False, False, True, True]
-    assert cases.data['flag'].tolist()[:2] == [True, False]
-    assert cases.data['flag'].isna().sum() == 2
-    assert 'appealed' in cases.booleans
-    mungers.ParseBooleans().apply(
-        cases, columns = 'disposition', true_values = 'affirmed.',
-        false_values = ['vacated in part'])
-    assert cases.data['disposition'].tolist()[1:3] == [True, False]
-
-
-def test_parse_dates(cases: amos.Dataset) -> None:
-    mungers.ParseDates().apply(cases, columns = ['decided'])
-    assert cases.data['decided'].tolist()[:2] == [
-        pd.Timestamp('2020-01-05'), pd.Timestamp('2021-03-04')]
-    assert cases.data['decided'].isna().tolist() == [
-        False, False, True, True]
-    assert cases.dates == ['decided']
-    data = pd.DataFrame({'when': ['January 5, 2010', '2020-03-04']})
-    result = mungers.ParseDates().apply(
-        data, columns = 'when', date_format = 'mixed')
-    assert result.data['when'].dt.year.tolist() == [2010, 2020]
-
-
 def test_map_values(cases: amos.Dataset) -> None:
     mungers.MapValues().apply(cases, values = {'n/a': None, 'maybe': None})
     assert pd.isna(cases.data['damages'].iloc[1])
@@ -322,7 +257,7 @@ def test_combine_flags() -> None:
         mungers.CombineFlags().apply(
             dataset, columns = columns, name = how, how = how)
         assert dataset.data[how].tolist() == expected
-    with pytest.raises(TypeError, match = 'parse_booleans'):
+    with pytest.raises(TypeError, match = 'clean_booleans'):
         mungers.CombineFlags().apply(
             dataset, columns = ['court'], name = 'x')
     with pytest.raises(ValueError, match = 'how must be'):
@@ -467,7 +402,6 @@ def test_mungers_change_nothing_without_their_parameters(
         mungers.Coalesce, mungers.CombineFlags, mungers.CountPatterns,
         mungers.DeriveColumns, mungers.ExtractAll, mungers.ExtractPattern,
         mungers.FlagPatterns, mungers.MapPatterns, mungers.MapValues,
-        mungers.ParseBooleans, mungers.ParseDates, mungers.ParseNumbers,
         mungers.ReplaceText, mungers.SplitText, mungers.ConvertTypes):
         kind().apply(cases)
         assert cases.history[-1]['changed'] == [], kind
@@ -494,17 +428,17 @@ def test_mungers_work_in_a_project(cases: amos.Dataset) -> None:
         'general': {'label': 'won'},
         'cases_project': {'cases_workers': 'wrangler'},
         'wrangler': {
-            'techniques': 'flag_patterns, parse_numbers, auto_categorize'},
+            'techniques': 'flag_patterns, clean_numbers, auto_categorize'},
         'flag_patterns_parameters': {
             'column': 'disposition',
             'patterns': {'reversed': 'revers|vacat'},
             'ignorecase': True},
-        'parse_numbers_parameters': {'columns': 'damages'},
+        'clean_numbers_parameters': {'columns': 'damages'},
         'auto_categorize_parameters': {'columns': ['court']}}
     project = amos.Project.create(settings, item = cases.data)
     result = project.result
     assert result.data['reversed'].tolist() == [True, False, True, False]
     assert 'damages' in result.numerics
     assert [h['technique'] for h in result.history] == [
-        'flag_patterns', 'parse_numbers', 'auto_categorize']
+        'flag_patterns', 'clean_numbers', 'auto_categorize']
     assert amos.library.classify('flag_patterns') == 'munger'

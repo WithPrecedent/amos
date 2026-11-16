@@ -1,10 +1,12 @@
 """Techniques that clean data, usually before it is studied or analyzed.
 
 These are techniques of the "wrangler" stage of a project. Each one removes
-(or keeps) rows or columns, or renames columns. Techniques that change what is
-in the columns are mungers (see the `mungers` module), those that add the
-columns of another table are mergers (see the `mergers` module), and those
-that rearrange the rows and columns are shapers (see the `shapers` module).
+(or keeps) rows or columns, renames columns, or cleans the values of columns
+into their proper types (numbers, dates, or booleans written as text).
+Techniques that otherwise change what is in the columns are mungers (see the
+`mungers` module), those that add the columns of another table are mergers
+(see the `mergers` module), and those that rearrange the rows and columns are
+shapers (see the `shapers` module).
 Cleaners learn nothing from the data that could leak from the test rows into
 the training rows (they do not, for example, fill missing values with an
 average), so they are safe to use before the data is split. To fill missing
@@ -12,6 +14,9 @@ values, use an imputer from the `transformers` module after splitting.
 
 Contents:
     Cleaner: base class for techniques that clean data.
+    CleanBooleans: turns text such as "yes" and "no" into booleans.
+    CleanDates: turns text into dates.
+    CleanNumbers: turns text such as "$1,234.50" into numbers.
     DropColumns: removes columns.
     DropConstant: removes columns that have only one value.
     DropDuplicates: removes duplicate rows.
@@ -28,7 +33,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 import pandas as pd
@@ -38,6 +43,10 @@ from . import base, utilities
 # The start of a condition of `filter_rows` that compares a column to a value:
 # an operator, or "in" or "not in" as words.
 _COMPARISON: re.Pattern[str] = re.compile(r'(==|!=|<=|>=|<|>|in\b|not\s+in\b)')
+# Words (in lower case) that `CleanBooleans` reads as false and as true.
+_FALSE: tuple[str, ...] = ('false', 'f', 'no', 'n', '0')
+_TRUE: tuple[str, ...] = ('true', 't', 'yes', 'y', '1')
+
 
 @dataclasses.dataclass
 class Cleaner(base.Operation, abc.ABC):
@@ -45,7 +54,9 @@ class Cleaner(base.Operation, abc.ABC):
 
     A subclass writes a `clean` method, which takes the data and returns the
     cleaned data. The dataset's `history` records how many rows and columns
-    there were before and after.
+    there were before and after ("rows" and "columns") and, if the rows are
+    the same and the values or type of any kept column changed, those columns
+    ("changed").
 
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
@@ -84,13 +95,192 @@ class Cleaner(base.Operation, abc.ABC):
             The cleaned dataset.
 
         """
-        before = item.data.shape
-        item.replace(self.clean(item.data.copy(), **kwargs))
-        item.record(
-            self.name,
-            rows = [before[0], item.data.shape[0]],
-            columns = [before[1], item.data.shape[1]])
+        before = item.data
+        item.replace(self.clean(before.copy(), **kwargs))
+        after = item.data
+        details: dict[str, Any] = {
+            'rows': [before.shape[0], after.shape[0]],
+            'columns': [before.shape[1], after.shape[1]]}
+        if after.index.equals(before.index):
+            changed = [
+                c for c in before.columns
+                if c in after.columns and not after[c].equals(before[c])]
+            if changed:
+                details['changed'] = changed
+        item.record(self.name, **details)
         return item
+
+
+@dataclasses.dataclass
+class CleanBooleans(Cleaner):
+    """Turns text such as "yes" and "no" into booleans.
+
+    Text is compared without regard to case or the spaces around it. Numbers
+    are true if they are 1 and false if they are 0. Anything else is missing,
+    so the columns have the `pandas` "boolean" type, which allows missing
+    values.
+
+    """
+
+    def clean(
+        self,
+        data: pd.DataFrame,
+        *,
+        columns: Sequence[str] | None = None,
+        true_values: Sequence[Any] = _TRUE,
+        false_values: Sequence[Any] = _FALSE,
+        **kwargs: Any) -> pd.DataFrame:
+        """Turns the values in `columns` into booleans.
+
+        Args:
+            data: the data to clean.
+            columns: columns to change. Defaults to `None`, which changes
+                nothing.
+            true_values: words that mean true. Defaults to "true", "t", "yes",
+                "y", and "1".
+            false_values: words that mean false. Defaults to "false", "f",
+                "no", "n", and "0".
+            **kwargs: not used.
+
+        Returns:
+            The data, with booleans. Columns that are already boolean are not
+                changed.
+
+        """
+        trues = _words(true_values)
+        falses = _words(false_values)
+        for column in utilities.select_columns(data, columns or []):
+            values = data[column]
+            if pd.api.types.is_bool_dtype(values.dtype):
+                continue
+            if pd.api.types.is_numeric_dtype(values.dtype):
+                true = (values == 1).to_numpy(dtype = bool)
+                false = (values == 0).to_numpy(dtype = bool)
+            else:
+                words = values.astype('str').str.strip().str.lower()
+                true = words.isin(trues).to_numpy(dtype = bool)
+                false = words.isin(falses).to_numpy(dtype = bool)
+            flags = pd.array(true, dtype = 'boolean')
+            flags[~(true | false)] = pd.NA
+            data[column] = pd.Series(flags, index = values.index)
+        return data
+
+
+@dataclasses.dataclass
+class CleanDates(Cleaner):
+    """Turns text into dates.
+
+    Text that is not a date becomes a missing value, rather than an error (as
+    it would with `convert_types`).
+
+    Wraps:
+        [`pandas.to_datetime`](https://pandas.pydata.org/docs/reference/api/pandas.to_datetime.html)
+        from pandas.
+
+    """
+
+    def clean(
+        self,
+        data: pd.DataFrame,
+        *,
+        columns: Sequence[str] | None = None,
+        date_format: str | None = None,
+        dayfirst: bool = False,
+        **kwargs: Any) -> pd.DataFrame:
+        """Turns the text in `columns` into dates.
+
+        Args:
+            data: the data to clean.
+            columns: columns to change. Defaults to `None`, which changes
+                nothing.
+            date_format: the format of the dates, with the codes of Python's
+                `strftime` (such as "%m/%d/%Y"), or "mixed" to find the
+                format of each date separately (which is slower). Defaults to
+                `None`, in which case `pandas` finds the format from the first
+                date and uses it for all of them.
+            dayfirst: whether the day comes before the month in dates such as
+                "01/02/2020". Defaults to `False`.
+            **kwargs: not used.
+
+        Returns:
+            The data, with dates.
+
+        """
+        for column in utilities.select_columns(data, columns or []):
+            values = data[column]
+            if isinstance(values.dtype, pd.CategoricalDtype):
+                values = values.astype('str')
+            data[column] = pd.to_datetime(
+                values,
+                errors = 'coerce',
+                format = date_format,
+                dayfirst = dayfirst)
+        return data
+
+
+@dataclasses.dataclass
+class CleanNumbers(Cleaner):
+    """Turns text such as "$1,234.50" into numbers.
+
+    The first number in the text is kept, so "$1,234.50" becomes 1234.5,
+    "12%" becomes 12, and "about 3 years" becomes 3. Text without a number
+    becomes a missing value.
+
+    Wraps:
+        [`pandas.to_numeric`](https://pandas.pydata.org/docs/reference/api/pandas.to_numeric.html)
+        from pandas.
+
+    """
+
+    def clean(
+        self,
+        data: pd.DataFrame,
+        *,
+        columns: Sequence[str] | None = None,
+        thousands: str = ',',
+        decimal: str = '.',
+        **kwargs: Any) -> pd.DataFrame:
+        """Turns the text in `columns` into numbers.
+
+        Args:
+            data: the data to clean.
+            columns: columns to change. Defaults to `None`, which changes
+                nothing.
+            thousands: the character that separates thousands. Defaults to
+                ",". Set it to "." (and `decimal` to ",") for numbers such as
+                "1.234,50".
+            decimal: the character before the decimals. Defaults to ".".
+            **kwargs: not used.
+
+        Raises:
+            ValueError: if `thousands` and `decimal` are the same.
+
+        Returns:
+            The data, with numbers. Columns that are already numbers are not
+                changed.
+
+        """
+        if thousands == decimal:
+            message = 'the thousands and decimal separators must differ'
+            raise ValueError(message)
+        digits = r'\d+'
+        if thousands:
+            digits += rf'(?:{re.escape(thousands)}\d{{3}})*'
+        point = re.escape(decimal)
+        pattern = (
+            rf'([-+]?(?:{digits}(?:{point}\d*)?|{point}\d+)'
+            rf'(?:[eE][-+]?\d+)?)')
+        for column in utilities.select_columns(data, columns or []):
+            values = data[column]
+            if pd.api.types.is_numeric_dtype(values.dtype):
+                continue
+            found = values.astype('str').str.extract(pattern, expand = False)
+            if thousands:
+                found = found.str.replace(thousands, '', regex = False)
+            if decimal != '.':
+                found = found.str.replace(decimal, '.', regex = False)
+            data[column] = pd.to_numeric(found, errors = 'coerce')
+        return data
 
 
 @dataclasses.dataclass
@@ -405,3 +595,19 @@ def _condition_query(column: str, condition: Any) -> str:
     if text.startswith('not '):
         return f'{name} != {text[4:].strip()}'
     return f'{name} == {text}'
+
+
+def _words(values: Sequence[Any] | Any) -> list[str]:
+    """Returns words that mean true or false, in lower case.
+
+    Args:
+        values: a word or a sequence of them. Numbers and booleans (as a
+            settings file may give them) are made into text.
+
+    Returns:
+        The words, trimmed and in lower case.
+
+    """
+    items = [values] if isinstance(values, str) or not isinstance(
+        values, Iterable) else list(values)
+    return [str(v).strip().lower() for v in items]
