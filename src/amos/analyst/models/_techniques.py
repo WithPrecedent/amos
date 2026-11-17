@@ -19,7 +19,7 @@ from typing import Any, ClassVar
 
 from ...core import base
 from ._adapters import FixedEffects, ProportionalHazards, Statsmodel
-from ._base import Model, ModelTraits
+from ._base import Model
 
 """ Models """
 
@@ -64,6 +64,8 @@ class Adaboost(Model):
 
     """
 
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features',)
+
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.ensemble.AdaBoostClassifier',
         'regress': 'sklearn.ensemble.AdaBoostRegressor'}
@@ -106,6 +108,11 @@ class BinomialBayesMixedglm(_Statsmodels, Model):
         from statsmodels.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'binary_label', 'numeric_features', 'no_missing_values')
 
     tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
     column_parameters: ClassVar[tuple[str, ...]] = ('groups',)
@@ -158,11 +165,8 @@ class Catboost(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'catboost',
-        complexity = 3,
-        missing = True,
-        categories = True)
+    package: ClassVar[str] = 'catboost'
+    complexity: ClassVar[int] = 3
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'catboost.CatBoostClassifier',
@@ -225,6 +229,10 @@ class Cox(Model):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'proportional_hazards', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
+
     tools: ClassVar[Mapping[str, Any]] = {'regress': ProportionalHazards}
     column_parameters: ClassVar[tuple[str, ...]] = ('event',)
 
@@ -241,6 +249,8 @@ class DecisionTree(Model):
 
     """
 
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features',)
+
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.tree.DecisionTreeClassifier',
         'regress': 'sklearn.tree.DecisionTreeRegressor'}
@@ -255,6 +265,9 @@ class ElasticNet(Model):
         from scikit-learn.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('linearity', 'similar_scales')
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'regress': 'sklearn.linear_model.ElasticNet'}
@@ -294,6 +307,8 @@ class ExtraTrees(Model):
 
     """
 
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features',)
+
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.ensemble.ExtraTreesClassifier',
         'regress': 'sklearn.ensemble.ExtraTreesRegressor'}
@@ -321,6 +336,11 @@ class Fixest(Model):
           from pyfixest, for the "logit" and "probit" families.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': FixedEffects,
@@ -361,6 +381,10 @@ class GEE(Model):
         from statsmodels.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('no_multicollinearity',)
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': Statsmodel,
@@ -428,9 +452,13 @@ class GeneralizedPoisson(_Statsmodels, Model):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('independent_errors',)
+    needs: ClassVar[tuple[str, ...]] = (
+        'count_label', 'numeric_features', 'no_missing_values',
+        'more_rows_than_features')
+
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     kind: ClassVar[str] = 'generalized_poisson'
-    counts: ClassVar[bool] = True
 
 
 @dataclasses.dataclass
@@ -448,6 +476,11 @@ class GLM(Model):
         from statsmodels.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'independent_errors', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': Statsmodel,
@@ -485,11 +518,8 @@ class GradientBoosting(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 3,
-        missing = True,
-        categories = True)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 3
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.ensemble.HistGradientBoostingClassifier',
@@ -508,12 +538,13 @@ class KNN(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 2,
-        scaled = True,
-        max_rows = 50_000,
-        max_features = 30)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 2
+    max_rows: ClassVar[int | None] = 50_000
+    max_features: ClassVar[int | None] = 30
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'max_rows', 'max_features')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.neighbors.KNeighborsClassifier',
@@ -530,10 +561,10 @@ class Lasso(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 1,
-        scaled = True)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = ('linearity', 'similar_scales')
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'regress': 'sklearn.linear_model.Lasso'}
@@ -555,11 +586,8 @@ class Lightgbm(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'lightgbm',
-        complexity = 3,
-        missing = True,
-        categories = True)
+    package: ClassVar[str] = 'lightgbm'
+    complexity: ClassVar[int] = 3
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'lightgbm.LGBMClassifier',
@@ -595,12 +623,13 @@ class Linear(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 1,
-        normal_errors = True,
-        independent = True,
-        wide = False)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'normal_errors', 'constant_variance', 'independent_errors',
+        'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'regress': 'sklearn.linear_model.LinearRegression'}
@@ -619,10 +648,10 @@ class Logit(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 1,
-        scaled = True)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = ('linearity', 'similar_scales')
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.linear_model.LogisticRegression'}
@@ -644,11 +673,13 @@ class LogitSM(_Statsmodels, Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'statsmodels',
-        complexity = 1,
-        wide = False,
-        max_classes = 2)
+    package: ClassVar[str] = 'statsmodels'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'independent_errors', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'binary_label', 'numeric_features', 'no_missing_values',
+        'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
     kind: ClassVar[str] = 'logit'
@@ -668,6 +699,12 @@ class Mixedlm(_Statsmodels, Model):
         from statsmodels.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'normal_errors', 'constant_variance',
+        'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     column_parameters: ClassVar[tuple[str, ...]] = ('groups',)
@@ -719,11 +756,13 @@ class Mnlogit(_Statsmodels, Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'statsmodels',
-        complexity = 2,
-        wide = False,
-        min_classes = 3)
+    package: ClassVar[str] = 'statsmodels'
+    complexity: ClassVar[int] = 2
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'independent_errors', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'multiclass_label', 'numeric_features', 'no_missing_values',
+        'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
     kind: ClassVar[str] = 'mnlogit'
@@ -739,11 +778,11 @@ class NaiveBayes(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 1,
-        normal_features = True,
-        independent = True)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'normal_features', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.naive_bayes.GaussianNB'}
@@ -762,15 +801,15 @@ class NegativeBinomial(_Statsmodels, Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'statsmodels',
-        complexity = 1,
-        wide = False,
-        counts = 'overdispersed')
+    package: ClassVar[str] = 'statsmodels'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = ('independent_errors',)
+    needs: ClassVar[tuple[str, ...]] = (
+        'count_label', 'numeric_features', 'no_missing_values',
+        'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     kind: ClassVar[str] = 'negative_binomial'
-    counts: ClassVar[bool] = True
 
 
 @dataclasses.dataclass
@@ -785,11 +824,12 @@ class NeuralNetwork(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 4,
-        scaled = True,
-        min_rows = 1000)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 4
+    min_rows: ClassVar[int] = 1000
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'min_rows')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.neural_network.MLPClassifier',
@@ -811,11 +851,13 @@ class OLS(_Statsmodels, Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'statsmodels',
-        complexity = 1,
-        independent = True,
-        wide = False)
+    package: ClassVar[str] = 'statsmodels'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'constant_variance', 'independent_errors',
+        'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     kind: ClassVar[str] = 'ols'
@@ -836,11 +878,13 @@ class OrdinalRegression(_Statsmodels, Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'statsmodels',
-        complexity = 1,
-        wide = False,
-        ordinal = True)
+    package: ClassVar[str] = 'statsmodels'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'proportional_odds', 'independent_errors')
+    needs: ClassVar[tuple[str, ...]] = (
+        'ordinal_label', 'numeric_features', 'no_missing_values',
+        'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
     kind: ClassVar[str] = 'ordinal_regression'
@@ -859,15 +903,16 @@ class Poisson(_Statsmodels, Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'statsmodels',
-        complexity = 1,
-        wide = False,
-        counts = 'equidispersed')
+    package: ClassVar[str] = 'statsmodels'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'equidispersion', 'independent_errors')
+    needs: ClassVar[tuple[str, ...]] = (
+        'count_label', 'numeric_features', 'no_missing_values',
+        'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     kind: ClassVar[str] = 'poisson'
-    counts: ClassVar[bool] = True
 
 
 @dataclasses.dataclass
@@ -880,11 +925,13 @@ class Probit(_Statsmodels, Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'statsmodels',
-        complexity = 1,
-        wide = False,
-        max_classes = 2)
+    package: ClassVar[str] = 'statsmodels'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'independent_errors', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'binary_label', 'numeric_features', 'no_missing_values',
+        'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'classify': Statsmodel}
     kind: ClassVar[str] = 'probit'
@@ -903,6 +950,10 @@ class QuantileRegression(_Statsmodels, Model):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('linearity', 'independent_errors')
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'more_rows_than_features')
+
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     kind: ClassVar[str] = 'quantile_regression'
 
@@ -919,10 +970,9 @@ class RandomForest(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 3,
-        missing = True)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 3
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features',)
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.ensemble.RandomForestClassifier',
@@ -939,10 +989,10 @@ class Ridge(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 1,
-        scaled = True)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = ('linearity', 'similar_scales')
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'regress': 'sklearn.linear_model.Ridge'}
@@ -961,11 +1011,11 @@ class RobustRegression(_Statsmodels, Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'statsmodels',
-        complexity = 1,
-        wide = False,
-        outliers = True)
+    package: ClassVar[str] = 'statsmodels'
+    complexity: ClassVar[int] = 1
+    assumptions: ClassVar[tuple[str, ...]] = ('linearity', 'independent_errors')
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     kind: ClassVar[str] = 'robust_regression'
@@ -983,11 +1033,12 @@ class SVM(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'sklearn',
-        complexity = 2,
-        scaled = True,
-        max_rows = 10_000)
+    package: ClassVar[str] = 'sklearn'
+    complexity: ClassVar[int] = 2
+    max_rows: ClassVar[int | None] = 10_000
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'max_rows')
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.svm.SVC',
@@ -1046,6 +1097,11 @@ class WLS(_Statsmodels, Model):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'independent_errors', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'numeric_features', 'no_missing_values', 'more_rows_than_features')
+
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     column_parameters: ClassVar[tuple[str, ...]] = ('weights',)
     kind: ClassVar[str] = 'wls'
@@ -1065,10 +1121,9 @@ class Xgboost(Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'xgboost',
-        complexity = 3,
-        missing = True)
+    package: ClassVar[str] = 'xgboost'
+    complexity: ClassVar[int] = 3
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features',)
 
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'xgboost.XGBClassifier',
@@ -1101,15 +1156,15 @@ class ZeroInflatedPoisson(_Statsmodels, Model):
 
     """
 
-    traits: ClassVar[ModelTraits | None] = ModelTraits(
-        package = 'statsmodels',
-        complexity = 2,
-        wide = False,
-        counts = 'zero_inflated')
+    package: ClassVar[str] = 'statsmodels'
+    complexity: ClassVar[int] = 2
+    assumptions: ClassVar[tuple[str, ...]] = ('independent_errors',)
+    needs: ClassVar[tuple[str, ...]] = (
+        'count_label', 'numeric_features', 'no_missing_values',
+        'more_rows_than_features')
 
     tools: ClassVar[Mapping[str, Any]] = {'regress': Statsmodel}
     kind: ClassVar[str] = 'zero_inflated_poisson'
-    counts: ClassVar[bool] = True
 
 
 """ Private Functions """

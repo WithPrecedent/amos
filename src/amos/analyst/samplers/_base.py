@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -33,6 +33,11 @@ class Sampler(base.Operation, abc.ABC):
             `dict`.
 
     """
+
+    # The names of what the technique assumes about the data (see the
+    # `assumptions` module) and needs from it (see the `needs` module).
+    assumptions: ClassVar[tuple[str, ...]] = ()
+    needs: ClassVar[tuple[str, ...]] = ()
 
     """ Public Methods """
 

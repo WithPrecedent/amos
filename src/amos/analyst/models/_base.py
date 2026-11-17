@@ -1,7 +1,6 @@
 """The base class of models, and what they share.
 
 Contents:
-    ModelTraits: what a model needs from the data, and what it assumes about it.
     Model: base class for techniques that fit models.
     LabelCoded: lets a classifier that needs classes numbered 0 to n - 1 use any
         classes.
@@ -27,60 +26,6 @@ import pandas as pd
 from ...core import base, utilities
 
 
-@dataclasses.dataclass(frozen = True)
-class ModelTraits:
-    """What a model needs from the data, and what it assumes about it.
-
-    `auto_model` reads the `traits` of each model to rule out the ones
-    that do not suit the data and to choose among the others. The tasks
-    that a model can do are the keys of its `tools`.
-
-    Args:
-        package: the package that the model needs.
-        complexity: how complex the model is, from 1 (the simplest, such as a
-            linear model) up. Of models that score about as well, the
-            simplest is chosen.
-        missing: whether it can use missing values in the features.
-        categories: whether it can use categorical features directly.
-        scaled: whether it needs features on similar scales.
-        normal_errors: whether it assumes that a regression's errors are
-            normal.
-        normal_features: whether it assumes that the features are normal.
-        independent: whether it assumes that the features are not collinear.
-        wide: whether it can use more features than there are rows.
-        counts: the kind of counts it models: "equidispersed" (a variance
-            equal to the mean), "overdispersed", or "zero_inflated". `None`
-            for a model that is not only for counts.
-        ordinal: whether it is only for ordered classes.
-        outliers: whether it is only for errors with outliers (for a model
-            that is less precise without them).
-        min_rows: fewest training rows it learns well from.
-        max_rows: most training rows it can be fitted to in reasonable time.
-        max_features: most features it works well with.
-        min_classes: fewest classes of a classified label it can model.
-        max_classes: most classes of a classified label it can model.
-
-    """
-
-    package: str
-    complexity: int
-    missing: bool = False
-    categories: bool = False
-    scaled: bool = False
-    normal_errors: bool = False
-    normal_features: bool = False
-    independent: bool = False
-    wide: bool = True
-    counts: str | None = None
-    ordinal: bool = False
-    outliers: bool = False
-    min_rows: int = 0
-    max_rows: int | None = None
-    max_features: int | None = None
-    min_classes: int = 0
-    max_classes: int | None = None
-
-
 @dataclasses.dataclass
 class Model(base.Operation, abc.ABC):
     """Base class for techniques that fit models and make predictions.
@@ -96,6 +41,13 @@ class Model(base.Operation, abc.ABC):
     ```py
     amos.Model(name = "bayes_ridge", contents = "sklearn.linear_model.BayesianRidge")
     ```
+
+    A model lists by name what it assumes about the data in `assumptions`
+    (such as "normal_errors") and what it needs from it in `needs` (such as
+    "no_missing_values"). They are checked before it is fitted, and the
+    dataset's `assumption_violations` decides what is done if the data does
+    not meet one (see `base.Operation._check_conditions`). `auto_model`
+    reads them, with `package` and `complexity`, to choose a model.
 
     A model that can be fitted on a GPU overrides `_device_parameters` to
     return the parameters that put its tool on the GPU or the CPU. It is
@@ -128,15 +80,31 @@ class Model(base.Operation, abc.ABC):
     # Parameters that name columns (such as fixed effects or an event) that
     # the model is given along with the features.
     column_parameters: ClassVar[tuple[str, ...]] = ()
-    # Whether the label must be counts: whole numbers of 0 or more.
-    counts: ClassVar[bool] = False
     # Parameters that the tool accepts only through `**kwargs` (and so does
     # not list in its signature or `get_params`), which are passed to it
     # when they are set.
     keyword_parameters: ClassVar[tuple[str, ...]] = ()
-    # What the model needs from the data and assumes about it, which
-    # `auto_model` reads, or `None` for a model that it does not know.
-    traits: ClassVar[ModelTraits | None] = None
+    # The names of what the model assumes about the data (see the
+    # `assumptions` module), which are checked before it is fitted (and, for
+    # some, after) and which `auto_model` reads.
+    assumptions: ClassVar[tuple[str, ...]] = ()
+    # The names of what the model needs from the data (see the `needs`
+    # module), which are checked before it is fitted.
+    needs: ClassVar[tuple[str, ...]] = ()
+    # The package that the model needs, which `auto_model` checks is
+    # installed, or an empty `str` for a model that `auto_model` does not
+    # know.
+    package: ClassVar[str] = ''
+    # How complex the model is, from 1 (the simplest, such as a linear
+    # model) up. Of models that score about as well, `auto_model` chooses
+    # the simplest.
+    complexity: ClassVar[int] = 3
+    # Fewest training rows the model learns well from (the "min_rows"
+    # need), most it can be fitted to in reasonable time ("max_rows"), and
+    # most features it works well with ("max_features").
+    min_rows: ClassVar[int] = 0
+    max_rows: ClassVar[int | None] = None
+    max_features: ClassVar[int | None] = None
 
     """ Public Methods """
 
@@ -294,7 +262,7 @@ class Model(base.Operation, abc.ABC):
             message = (
                 f'{self.name!r} can {tasks}, but the label is set to {task}'
             )
-            if self.counts:
+            if 'count_label' in self.needs:
                 # Whole numbers with few values are classified by default.
                 message += (
                     ': set "task" to "regress" in the "general" section for '

@@ -22,7 +22,10 @@ class Findings(chrisjen.Report):
     This is the default report of an `amos.Project`. It describes the data,
     how it was split, the path taken through the workflow, the winner of each
     `experiment` or `contest`, the model, its metrics, and the tables and
-    figures that were made.
+    figures that were made. It ends with the assumptions and needs of the
+    techniques that the data did not meet (see the `conditions` module):
+    those of the result's own techniques, then, for each experiment, those
+    of each of its paths and the paths that were left out.
 
     Args:
         contents: the text of the most recent report. Defaults to `None`.
@@ -52,7 +55,8 @@ class Findings(chrisjen.Report):
             lines.extend(_describe(result))
         else:
             lines.append(f'result: {result!r}')
-        for worker in _comparators(workflow):
+        comparators = _comparators(workflow)
+        for worker in comparators:
             if worker.winner is not None:
                 # A worker that conserves memory keeps only the winner's
                 # result, but it scores every path it compares.
@@ -60,12 +64,46 @@ class Findings(chrisjen.Report):
                 lines.append(
                     f'{worker.name}: the best of {len(compared)} paths '
                     f'was {worker.winner}')
+        lines.extend(_assumptions(result, comparators))
         text = '\n'.join(lines)
         self.contents = text
         return text
 
 
 """ Private Functions """
+
+
+def _assumptions(result: Any, comparators: list[Any]) -> list[str]:
+    """Returns lines about the assumptions and needs that were not met.
+
+    Args:
+        result: the result of the project.
+        comparators: the workers of the workflow that compare paths.
+
+    Returns:
+        A heading and a line for each violation of the result's techniques,
+            then for each path of each experiment that did not meet some or
+            was left out, or no lines if there were none.
+
+    """
+    lines: list[str] = []
+    if isinstance(result, base.Dataset):
+        found = [
+            violation for entry in result.history
+            for violation in entry.get('violations', [])
+            if isinstance(violation, str)]
+        lines.extend(f'  {violation}' for violation in dict.fromkeys(found))
+    for worker in comparators:
+        for label, violations in getattr(worker, 'violations', {}).items():
+            lines.append(f'  {worker.name} path {label}:')
+            lines.extend(f'    {violation}' for violation in violations)
+        for label, reason in getattr(worker, 'excluded', {}).items():
+            lines.append(f'  {worker.name} left out path {label}: {reason}')
+    if not lines:
+        return []
+    policy = getattr(result, 'assumption_violations', 'warn')
+    return [
+        f'assumptions not met (assumption_violations = {policy}):', *lines]
 
 
 def _comparators(worker: Any) -> list[Any]:

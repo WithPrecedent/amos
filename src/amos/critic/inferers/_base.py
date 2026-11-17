@@ -89,6 +89,10 @@ class Inferer(base.Operation, base.Visualizer, abc.ABC):
     stage_setting: ClassVar[str] = 'visualize_critics'
     visual: ClassVar[str] = 'coefficient_plot'
     model_specific_setting: ClassVar[str] = 'inferers'
+    # The names of what the technique assumes about the data (see the
+    # `assumptions` module) and needs from it (see the `needs` module).
+    assumptions: ClassVar[tuple[str, ...]] = ()
+    needs: ClassVar[tuple[str, ...]] = ()
 
     """ Required Methods """
 

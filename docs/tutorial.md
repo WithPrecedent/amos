@@ -111,7 +111,7 @@ project = amos.Project.create(settings, item = data)
 print(roc_auc.measure(project.result) == roc_auc.measure(dataset))
 # True
 print(list(project.result.tables))
-# ['summarize', 'label_balance', 'confusion']
+# ['summarize', 'label_balance', 'assumptions', 'confusion']
 ```
 
 The project did the same work as the techniques applied by hand, and got the
@@ -151,7 +151,7 @@ combination is labeled with its steps, each named "{technique}_{step}":
 ```python
 table = project.result.tables["analyst_comparison"]
 print(list(table.columns))
-# ['rank', 'score', 'roc_auc']
+# ['rank', 'score', 'roc_auc', 'violations']
 print(table.index[0] == analyst.winner)
 # True
 print(table.index[0].startswith("stratified_split > "))
@@ -161,6 +161,13 @@ print(table.index[0].startswith("stratified_split > "))
 The combinations are always tried in the same order, and ties go to the
 first, so the comparison is the same every time. A `contest` (from
 `chrisjen`) does the same thing without the table.
+
+The "violations" column lists the assumptions of each combination's
+techniques that the data did not meet. Without a scaler, `logit` is given
+features on very different scales, which it assumes they are not, so amos
+warns and notes it there. The [assumptions](assumptions.md) page describes
+how amos checks them, and how to make it raise an error or leave such
+combinations out instead.
 
 ## 5. Use a settings file
 
@@ -292,7 +299,7 @@ predictions, and every table and figure:
 ```python
 folder = project.export()
 print(sorted(path.name for path in (folder / "tables").iterdir()))
-# ['analyst_comparison.csv', 'confusion.csv', 'label_balance.csv', 'permutation_importance.csv', 'random_forest_search.csv', 'scorecard.csv', 'summarize.csv']
+# ['analyst_comparison.csv', 'assumptions.csv', 'confusion.csv', 'label_balance.csv', 'permutation_importance.csv', 'random_forest_search.csv', 'scorecard.csv', 'summarize.csv']
 ```
 
 Anyone with the settings file, the data, and "environment.json" can reproduce

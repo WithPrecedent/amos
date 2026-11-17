@@ -70,7 +70,9 @@ def test_the_report_describes_the_project() -> None:
     assert f'seed: {SEED}' in text
     assert 'split: 150 training rows and 50 test rows' in text
     assert 'analyst: the best of 4 paths was stratified_split' in text
-    assert 'tables: summarize, analyst_comparison, scorecard, confusion' in text
+    assert (
+        'tables: summarize, assumptions, analyst_comparison, scorecard, '
+        'confusion') in text
 
 
 def test_the_report_counts_every_path_when_memory_is_conserved() -> None:
@@ -231,6 +233,7 @@ def test_export_saves_everything(tmp_path: pathlib.Path) -> None:
         'settings.json',
         'study_replication.json',
         'tables/analyst_comparison.csv',
+        'tables/assumptions.csv',
         'tables/confusion.csv',
         'tables/scorecard.csv',
         'tables/summarize.csv']

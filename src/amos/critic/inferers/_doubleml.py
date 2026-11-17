@@ -82,6 +82,8 @@ class Doubleml(Inferer, abc.ABC):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('unconfoundedness',)
+
     # DoubleML's class of the data of the model.
     data: ClassVar[str] = 'doubleml.DoubleMLData'
     # The arguments of `data` that the columns named by parameters fill, by
@@ -253,6 +255,8 @@ class DifferenceInDifferences(Doubleml):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('parallel_trends', 'overlap')
+
     contents: Any = 'doubleml.did.DoubleMLDIDMulti'
     data: ClassVar[str] = 'doubleml.DoubleMLPanelData'
     roles: ClassVar[dict[str, str]] = {'time': 't_col', 'unit': 'id_col'}
@@ -370,6 +374,8 @@ class InteractiveIV(Doubleml):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('valid_instrument',)
+
     contents: Any = 'doubleml.DoubleMLIIVM'
     roles: ClassVar[dict[str, str]] = {'instrument': 'z_cols'}
     required: ClassVar[tuple[str, ...]] = ('instrument',)
@@ -410,6 +416,8 @@ class InteractiveRegression(Doubleml):
         from DoubleML.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('unconfoundedness', 'overlap')
 
     contents: Any = 'doubleml.DoubleMLIRM'
 
@@ -487,6 +495,8 @@ class PartiallyLinearIV(Doubleml):
         from DoubleML.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('valid_instrument',)
 
     contents: Any = 'doubleml.DoubleMLPLIV'
     roles: ClassVar[dict[str, str]] = {'instrument': 'z_cols'}
@@ -651,6 +661,8 @@ class PotentialOutcomes(Doubleml):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('unconfoundedness', 'overlap')
+
     contents: Any = 'doubleml.DoubleMLAPOS'
 
     def _adjust(self, setup: _Setup) -> pd.DataFrame:
@@ -731,6 +743,8 @@ class QuantileEffects(Doubleml):
         from DoubleML.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('unconfoundedness', 'overlap')
 
     contents: Any = 'doubleml.DoubleMLQTE'
     roles: ClassVar[dict[str, str]] = {'instrument': 'z_cols'}
@@ -816,6 +830,8 @@ class RegressionDiscontinuity(Doubleml):
         from DoubleML.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('continuity',)
 
     contents: Any = 'doubleml.rdd.RDFlex'
     data: ClassVar[str] = 'doubleml.DoubleMLRDDData'

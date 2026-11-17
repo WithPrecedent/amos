@@ -401,8 +401,13 @@ _PENALIZED = _Family(
         'fairness_plot'),
     scale = 'standard')
 # Least squares without a penalty needs no scaling, but its intercept makes a
-# full set of dummy variables collinear.
-_LEAST_SQUARES = dataclasses.replace(_PENALIZED, scale = None, reference = True)
+# full set of dummy variables collinear. Its errors are audited for the
+# assumptions of its standard errors.
+_LEAST_SQUARES = dataclasses.replace(
+    _PENALIZED,
+    evaluators = (*_PENALIZED.evaluators, 'audit_assumptions'),
+    scale = None,
+    reference = True)
 # Models of distances, kernels, or weights that are not linear, which need
 # standardized features and are explained by shuffling the features and by
 # partial dependence.
@@ -438,9 +443,12 @@ _PRETRAINED = _Family(
 # Models for inference keep the features in their units and the real share
 # of each class (see the module's docstring). Their coefficients go in a
 # regression table, and their diagnostics check their assumptions: normal
-# errors (Q-Q plot), influential rows, and calibrated probabilities.
+# errors (Q-Q plot and audits), errors of constant variance and independent
+# errors (audits), influential rows, and calibrated probabilities.
 _STATISTICAL = _Family(
-    evaluators = (*_OUTCOME_EVALUATORS, 'regression_table', 'fairness'),
+    evaluators = (
+        *_OUTCOME_EVALUATORS, 'regression_table', 'audit_assumptions',
+        'fairness'),
     plots = (
         *_OUTCOME_PLOTS, 'qq_plot', 'influence_plot', 'coefficient_plot',
         'fairness_plot'),

@@ -62,6 +62,9 @@ class Tigramite(Inferer, abc.ABC):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'stationarity', 'causal_sufficiency')
+
     visual: ClassVar[str] = 'causal_graph'
 
     def infer(
@@ -138,6 +141,8 @@ class LPCMCI(Tigramite):
         from tigramite.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('stationarity',)
 
     contents: Any = 'tigramite.lpcmci.LPCMCI'
 

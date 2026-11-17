@@ -17,6 +17,7 @@ Contents:
 from __future__ import annotations
 
 import dataclasses
+from typing import ClassVar
 
 from ._base import Sampler
 
@@ -31,6 +32,9 @@ class Adasyn(Sampler):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
+
     contents: str = 'imblearn.over_sampling.ADASYN'
 
 
@@ -44,6 +48,9 @@ class BorderlineSmote(Sampler):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
+
     contents: str = 'imblearn.over_sampling.BorderlineSMOTE'
 
 
@@ -56,6 +63,9 @@ class NearMiss(Sampler):
         from imbalanced-learn.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
 
     contents: str = 'imblearn.under_sampling.NearMiss'
 
@@ -96,6 +106,9 @@ class Smote(Sampler):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
+
     contents: str = 'imblearn.over_sampling.SMOTE'
 
 
@@ -108,6 +121,9 @@ class SmoteEnn(Sampler):
         from imbalanced-learn.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
 
     contents: str = 'imblearn.combine.SMOTEENN'
 
@@ -122,6 +138,9 @@ class SmoteTomek(Sampler):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
+
     contents: str = 'imblearn.combine.SMOTETomek'
 
 
@@ -134,5 +153,8 @@ class TomekLinks(Sampler):
         from imbalanced-learn.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('similar_scales',)
+    needs: ClassVar[tuple[str, ...]] = ('numeric_features', 'no_missing_values')
 
     contents: str = 'imblearn.under_sampling.TomekLinks'

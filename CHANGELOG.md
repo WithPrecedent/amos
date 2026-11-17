@@ -4,6 +4,66 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.10.0
+
+* Techniques name what they **assume** about the data in `assumptions` and
+  what they **need** from it in `needs` (such as `Linear.assumptions =
+  ("linearity", "normal_errors", ...)`). Each name is a subclass of
+  `amos.Assumption` or `amos.Need` (in the new `amos.conditions`,
+  `amos.assumptions`, and `amos.needs` modules), so a user can add their
+  own. Models, imputers, samplers, and inferers have them.
+* **Breaking:** `amos.models.ModelTraits` and `Model.traits` are gone. What
+  a model assumes and needs are its `assumptions` and `needs`, and the rest
+  are attributes of the model: `package`, `complexity`, `min_rows`,
+  `max_rows`, and `max_features`. `Model.counts` is the `count_label` need.
+* Pretests are a new genre of the analyst (`amos.pretests`), which check
+  assumptions and needs before a technique is applied: `check_normality`,
+  `check_multicollinearity`, `check_linearity` (RESET, or Box-Tidwell for
+  two classes), `check_scales`, `check_dispersion`, `check_features`,
+  `check_label`, `check_sample_size`, and `check_assumptions`, which runs
+  every pretest that the workflow's techniques need.
+* Audits are a new genre of the critic (`amos.audits`), which check a
+  fitted model's assumptions from its errors: `audit_residuals` (normal
+  errors), `audit_errors` (constant variance, by Breusch-Pagan),
+  `audit_independence` (Breusch-Godfrey and Durbin-Watson in the dataset's
+  order, and the intraclass correlation within its groups), and
+  `audit_assumptions`, which runs every audit that the model needs.
+* More pretests test the assumptions of imputers, ordinal models, and
+  inferers: `check_missingness` (missing completely at random, by Little's
+  test), `check_proportional_odds` (Brant's test), `check_overlap` (the
+  propensity scores of a treatment), `check_instrument` (the first-stage F
+  statistic of an instrument), `check_parallel_trends` (the trends before a
+  treatment), `check_continuity` (a density test at a regression
+  discontinuity's cutoff), and `check_stationarity` (the augmented
+  Dickey-Fuller and KPSS tests). `audit_proportional_hazards` applies
+  Grambsch and Therneau's test to a fitted `cox` model. The pretests of an
+  inferer read its parameters (such as its "treatment"), and a pretest step
+  passes its own parameters to them. Some of these assumptions can only be
+  tested in part (such as the relevance, but not the exclusion, of an
+  instrument), and three cannot be tested at all (`unconfoundedness`,
+  `causal_sufficiency`, and `missing_at_random`).
+* amos runs the pretests of a technique just before it is applied, records
+  them in the dataset's "assumptions" table and `history`, and does what the
+  new "assumption_violations" setting of the "general" section says when
+  one fails: "warn" (the default), "raise" an `amos.AssumptionError`,
+  "ignore" it, or "skip" the branch of an experiment. A hard need (such as
+  no missing values) always raises, or leaves the branch out.
+* An experiment's comparison table has a "violations" column when a branch
+  did not meet an assumption, and lists the branches it left out. The
+  `Findings` report ends with the assumptions that were not met.
+* `auto_evaluator` applies `audit_assumptions` to a regression whose model
+  makes assumptions that only its errors can test (such as `linear` and
+  `ols`), and the pipelines of least squares and statistical models include
+  it. An `AssumptionError` from an evaluator is raised, not left out.
+* `auto_model` screens models with the same pretests, so it now also rules
+  out models whose label is not linear in the features, and statistical
+  models (such as `logit_sm`) with collinear features.
+* The "general" section can set an `order`: the column that puts the rows
+  in order (such as a date), which is not a feature.
+* A new page of the documentation, Assumptions, lists every assumption and
+  need (with the tests that decide each, or whether it cannot be tested),
+  and those of each technique.
+
 ## 0.9.0
 
 * The source follows the stages of a project. `src/amos` has a folder for

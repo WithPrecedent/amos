@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-__version__ = '0.9.0'
+__version__ = '0.10.0'
 
 __author__: str = 'Corey Rayburn Yung'
 
 __all__: list[str] = [
     'AmosWarning',
+    'Assumption',
+    'AssumptionError',
+    'Audit',
     'Chooser',
     'Cleaner',
     'Clerk',
@@ -28,17 +31,20 @@ __all__: list[str] = [
     'Mixer',
     'Model',
     'Munger',
+    'Need',
     'Operation',
     'Parser',
     'PatternParser',
     'Pipeline',
     'Plot',
+    'Pretest',
     'Project',
     'Reducer',
     'Sampler',
     'Scaler',
     'Selector',
     'Shaper',
+    'SkippedBranchError',
     'Splitter',
     'Transformer',
     'Validator',
@@ -57,6 +63,7 @@ from .analyst import (
     imputers,
     mixers,
     models,
+    pretests,
     reducers,
     samplers,
     scalers,
@@ -69,6 +76,7 @@ from .analyst.encoders import Encoder
 from .analyst.imputers import Imputer
 from .analyst.mixers import Mixer
 from .analyst.models import Model
+from .analyst.pretests import Pretest
 from .analyst.reducers import Reducer
 from .analyst.samplers import Sampler
 from .analyst.scalers import Scaler
@@ -78,11 +86,14 @@ from .analyst.validators import Validator
 from .artist import plots
 from .artist.plots import Plot
 from .core import (
+    assumptions,
     auto,
     base,
     clerks,
+    conditions,
     interface,
     metrics,
+    needs,
     options,
     pipelines,
     reports,
@@ -92,17 +103,21 @@ from .core import (
 from .core.auto import Chooser
 from .core.base import (
     AmosWarning,
+    AssumptionError,
     Dataset,
     IncompatibleTechniqueError,
     Operation,
+    SkippedBranchError,
 )
 from .core.clerks import Clerk
+from .core.conditions import Assumption, Need
 from .core.interface import Project
 from .core.metrics import GroupMetric, Metric
 from .core.pipelines import Pipeline
 from .core.reports import Findings
 from .core.workers import Experiment
-from .critic import evaluators, inferers
+from .critic import audits, evaluators, inferers
+from .critic.audits import Audit
 from .critic.evaluators import Evaluator
 from .critic.inferers import Inference, Inferer
 from .explorer import describers
@@ -120,10 +135,10 @@ from .wrangler.shapers import Shaper
 # its stage. The techniques of each step are named by that path (see the
 # `__init__` of each step), so pickles and records find them there.
 for _module in (
-        auto, base, clerks, interface, metrics, options, pipelines, reports,
-        utilities, workers, cleaners, loaders, mergers, mungers, parsers,
-        shapers, describers, encoders, imputers, mixers, models, reducers,
-        samplers, scalers, selectors, splitters, transformers, validators,
-        evaluators, inferers, plots):
+        assumptions, auto, base, clerks, conditions, interface, metrics, needs,
+        options, pipelines, reports, utilities, workers, cleaners, loaders, mergers, mungers, parsers,
+        shapers, describers, encoders, imputers, mixers, models, pretests,
+        reducers, samplers, scalers, selectors, splitters, transformers,
+        validators, audits, evaluators, inferers, plots):
     _short = _module.__name__.rpartition('.')[2].removeprefix('_')
     sys.modules.setdefault(f'{__name__}.{_short}', _module)

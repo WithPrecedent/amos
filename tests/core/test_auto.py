@@ -560,12 +560,13 @@ def test_best_prefers_the_simplest_model_within_one_standard_error() -> None:
 def test_auto_model_chooses_inference_models_by_the_classes() -> None:
     requires('statsmodels')
     choices = ['ordinal_regression', 'logit_sm', 'mnlogit']
-    dataset = _split(make_numeric(rows = 300))
+    # The features are not collinear, which these models assume.
+    dataset = _split(make_numeric(rows = 300, redundant = 0))
     auto.AutoModel().apply(dataset, choices = choices, folds = 1)
     table = dataset.tables['auto_model']
     assert _chosen(dataset, 'auto_model') == ['logit_sm']
     assert table.loc['mnlogit', 'reason'] == 'is for 3 or more classes, not 2'
-    data = make_numeric(rows = 300, classes = 3)
+    data = make_numeric(rows = 300, classes = 3, redundant = 0)
     data['target'] = data['target'].map({0: 'a', 1: 'b', 2: 'c'})
     dataset = _split(data)
     auto.AutoModel().apply(dataset, choices = choices, folds = 1)
@@ -590,6 +591,8 @@ def test_auto_evaluator_suits_a_classifier() -> None:
         dataset.tables)
     reason = dataset.tables['auto_evaluator'].loc['regression_table', 'reason']
     assert reason == 'random_forest has no coefficients with standard errors'
+    reason = dataset.tables['auto_evaluator'].loc['audit_assumptions', 'reason']
+    assert reason == 'the audits test the errors of a regression'
 
 
 def test_auto_evaluator_tabulates_coefficients() -> None:
@@ -602,6 +605,34 @@ def test_auto_evaluator_tabulates_coefficients() -> None:
     assert 'classification_report' not in chosen
     assert 'permutation_importance' not in chosen
     assert 'regression_table' in dataset.tables
+
+
+def test_auto_evaluator_audits_the_assumptions_of_a_regression() -> None:
+    dataset = _split(make_regression())
+    amos.models.Linear().apply(dataset)
+    auto.AutoEvaluator().apply(dataset)
+    assert 'audit_assumptions' in _chosen(dataset, 'auto_evaluator')
+    table = dataset.tables['audit_assumptions']
+    assert set(table['condition']) == {
+        'normal_errors', 'constant_variance', 'independent_errors'}
+    reason = dataset.tables['auto_evaluator'].loc['audit_assumptions', 'reason']
+    assert 'normal_errors, constant_variance, independent_errors' in reason
+    dataset = _split(make_regression())
+    amos.models.RandomForest().apply(dataset, n_estimators = 10)
+    auto.AutoEvaluator().apply(dataset)
+    assert 'audit_assumptions' not in _chosen(dataset, 'auto_evaluator')
+
+
+def test_auto_evaluator_raises_an_audit_that_fails_when_told() -> None:
+    rng = np.random.default_rng(SEED)
+    data = pd.DataFrame({'x': rng.normal(size = 400)})
+    data['target'] = data['x'] + rng.exponential(size = 400) ** 2
+    dataset = amos.Dataset(
+        data, label = 'target', seed = SEED, assumption_violations = 'ignore')
+    amos.models.Linear().apply(dataset)
+    dataset.assumption_violations = 'raise'
+    with pytest.raises(amos.AssumptionError, match = 'normal errors'):
+        auto.AutoEvaluator().apply(dataset)
 
 
 def test_auto_evaluator_needs_predictions() -> None:
@@ -776,12 +807,14 @@ def test_an_experiment_can_compare_auto_with_other_techniques() -> None:
         'stratified_split > auto_model', 'stratified_split > baseline_model']
 
 
-def test_every_model_that_auto_model_prefers_has_traits() -> None:
+def test_every_model_that_auto_model_prefers_has_a_package() -> None:
     for name in auto._MODELS:
         kind = amos.library.borrow(name, genre = 'model')
-        assert isinstance(kind.traits, amos.models.ModelTraits), name
-    assert auto._traits_of('ols') is not None
-    assert auto._traits_of('not_a_model') is None
+        assert kind.package, name
+        for condition in amos.conditions.conditions_of(kind):
+            amos.conditions.borrow(condition)
+    assert auto._complexity('ols') == 1
+    assert auto._complexity('not_a_model') == 3
     assert auto._tasks_of('random_forest') == ('classify', 'regress')
 
 

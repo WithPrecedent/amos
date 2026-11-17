@@ -83,6 +83,8 @@ class Causalml(Inferer, abc.ABC):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('unconfoundedness', 'overlap')
+
     contents: Any = None
     # Whether the estimator needs the propensity score.
     propensity: ClassVar[bool] = False

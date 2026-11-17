@@ -23,7 +23,7 @@ def _needs(kind: type[amos.Model], item: amos.Dataset) -> dict[str, str]:
     """
     rng = np.random.default_rng(SEED)
     rows = len(item.data)
-    if kind.counts:
+    if 'count_label' in kind.needs:
         item.data['target'] = rng.poisson(
             np.exp(0.3 * item.data['x0'].clip(-2, 2)))
     if 'groups' in kind.column_parameters:

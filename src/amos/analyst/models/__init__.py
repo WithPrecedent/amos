@@ -26,8 +26,6 @@ Every other model is fitted on the CPU, as every model is when "use_gpu" is
 false (the default).
 
 Contents:
-    ModelTraits: what a model needs from the data, and what it assumes
-        about it.
     Model: base class for techniques that fit models.
     LabelCoded: lets a classifier that needs classes numbered 0 to n - 1 use
         any classes.
@@ -78,7 +76,6 @@ __all__: list[str] = [
     'Mixedlm',
     'Mnlogit',
     'Model',
-    'ModelTraits',
     'NaiveBayes',
     'NegativeBinomial',
     'NeuralNetwork',
@@ -99,7 +96,7 @@ __all__: list[str] = [
 
 from ._adapters import FixedEffects, ProportionalHazards, Statsmodel
 from ._adapters import _collinear as _collinear
-from ._base import LabelCoded, Model, ModelTraits, search_folds
+from ._base import LabelCoded, Model, search_folds
 from ._techniques import (
     GEE,
     GLM,

@@ -26,9 +26,9 @@ STAGES: dict[str, tuple[str, ...]] = {
     'explorer': ('describers',),
     'analyst': (
         'splitters', 'transformers', 'imputers', 'scalers', 'encoders',
-        'mixers', 'selectors', 'reducers', 'samplers', 'models',
-        'validators'),
-    'critic': ('evaluators', 'inferers'),
+        'mixers', 'selectors', 'reducers', 'samplers', 'pretests',
+        'models', 'validators'),
+    'critic': ('evaluators', 'audits', 'inferers'),
     'artist': ('plots',)}
 
 nav = mkdocs_gen_files.Nav()
