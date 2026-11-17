@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.10.0
 
 * Techniques name what they **assume** about the data in `assumptions` and
   what they **need** from it in `needs` (such as `Linear.assumptions =
