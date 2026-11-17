@@ -34,6 +34,7 @@ Contents:
     conditions_of: returns the names of the assumptions and needs of a
         technique.
     name_of: returns the name of a technique, from an instance or a class.
+    parameters_of: returns the parameters that a technique is applied with.
     judge_before: checks the conditions of techniques with their pretests.
     judge_after: checks the conditions of a model with its audits.
     enforce: does what the dataset's `assumption_violations` says about the
@@ -43,6 +44,8 @@ Contents:
         does).
     tabulate: returns verdicts as a table.
     _CONDITIONS: every assumption and need, by name.
+    _PARAMETERS: the name under which the parameters of the techniques are
+        kept with the results that conditions share.
     _COLUMNS: the columns of a table of verdicts.
 
 """
@@ -63,6 +66,9 @@ from . import base
 # Every assumption and need, by its name. Each subclass of `Assumption` and
 # `Need` adds itself.
 _CONDITIONS: dict[str, type[Condition]] = {}
+# The name under which the parameters of the techniques are kept in the cache
+# of results shared by the conditions checked together.
+_PARAMETERS: str = 'parameters'
 # The columns of a table of verdicts, in order.
 _COLUMNS: tuple[str, ...] = (
     'technique', 'condition', 'kind', 'check', 'passed', 'statistic',
@@ -180,6 +186,9 @@ class Condition:
     # What a violation harms: "inference" (standard errors, p-values, and
     # intervals), "prediction", or "both".
     affects: ClassVar[str] = 'both'
+    # The tests that decide whether the data meets the condition, in words,
+    # or an empty `str` for a condition that cannot be tested.
+    tests_used: ClassVar[str] = ''
     # Whether the technique cannot be applied without it.
     hard: ClassVar[bool] = False
 
@@ -381,7 +390,7 @@ def check_before(
 
     """
     view = _without_extra_columns(item, technique, parameters or {})
-    verdicts = judge_before(view, [technique])
+    verdicts = judge_before(view, [technique], parameters = parameters)
     if not verdicts:
         return []
     _add_rows(item, verdicts, 'assumptions')
@@ -502,7 +511,8 @@ def judge_before(
     *,
     check: str | None = None,
     found: Any = None,
-    cache: dict[str, Any] | None = None) -> list[Verdict]:
+    cache: dict[str, Any] | None = None,
+    parameters: Mapping[str, Any] | None = None) -> list[Verdict]:
     """Checks the conditions of techniques with their pretests.
 
     The real training rows are profiled once (see `auto.profile`), and
@@ -520,6 +530,10 @@ def judge_before(
             to `None`, which makes it.
         cache: results that are slow to find, which every condition checked
             shares, if some were already found. Defaults to `None`.
+        parameters: the parameters that the techniques are applied with
+            (such as the "treatment" of an inferer), which some pretests
+            need. They are kept in the cache as "parameters" (see
+            `parameters_of`). Defaults to `None`.
 
     Returns:
         A verdict for each condition checked, in the order of the
@@ -549,6 +563,8 @@ def judge_before(
         from . import auto  # noqa: PLC0415
         found = auto.profile(item)
     cache = {} if cache is None else cache
+    if parameters is not None:
+        cache[_PARAMETERS] = dict(parameters)
     verdicts = []
     for technique, condition in chosen:
         verdict = _safely(
@@ -576,6 +592,27 @@ def name_of(technique: Any) -> str:
         return str(camina.snakify(technique.__name__))
     return str(getattr(technique, 'name', '') or camina.snakify(
         type(technique).__name__))
+
+
+def parameters_of(technique: Any, cache: Mapping[str, Any]) -> dict[str, Any]:
+    """Returns the parameters that a technique is applied with.
+
+    Args:
+        technique: the technique (a class or an instance), or `None`.
+        cache: the results shared by the conditions checked together, which
+            hold the parameters passed when they were checked.
+
+    Returns:
+        The `parameters` of an instance, updated with those passed when the
+            conditions were checked (which take precedence).
+
+    """
+    own = (
+        getattr(technique, 'parameters', None)
+        if technique is not None and not isinstance(technique, type) else None)
+    found = dict(own) if isinstance(own, Mapping) else {}
+    found.update(cache.get(_PARAMETERS, {}))
+    return found
 
 
 def record(

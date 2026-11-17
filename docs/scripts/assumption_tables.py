@@ -29,6 +29,8 @@ FIRST = '## Every assumption'
 # The modules whose conditions the page lists (not those that a user or a
 # test adds).
 MODULES: tuple[str, ...] = ('amos.core.assumptions', 'amos.core.needs')
+# What the "Tests Used" column says of an assumption that cannot be tested.
+UNTESTED = 'none: it cannot be tested from the data'
 
 
 def _catalog() -> types.ModuleType:
@@ -74,15 +76,17 @@ def tables() -> str:
     out = io.StringIO()
     out.write(f'{FIRST}\n\n')
     out.write(
-        '| Name | The technique assumes that | Pretest | Audit | Harms |\n')
+        '| Name | The technique assumes that | Pretest | Audit | '
+        'Tests Used |\n')
     out.write('| --- | --- | --- | --- | --- |\n')
     for name, kind in known.items():
         if kind.kind != 'assumption':
             continue
+        tests = kind.tests_used or UNTESTED
         out.write(
             f'| {_condition(name, kind)} | {kind.description} | '
             f'{_check(kind.pretested_by)} | {_check(kind.audited_by)} | '
-            f'{kind.affects} |\n')
+            f'{tests} |\n')
     out.write('\n## Every need\n\n')
     out.write('| Name | The technique needs | Pretest | Hard |\n')
     out.write('| --- | --- | --- | --- |\n')

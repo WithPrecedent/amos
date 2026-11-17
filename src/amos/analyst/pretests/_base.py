@@ -65,7 +65,8 @@ class Pretest(base.Operation, abc.ABC):
                 the workflow that is being applied, or (if there is none)
                 every condition that this pretest checks, for no technique
                 in particular.
-            **kwargs: not used.
+            **kwargs: parameters of the techniques that some pretests need
+                (such as the "treatment" and "instrument" of an inferer).
 
         Raises:
             KeyError: if a technique is not in the library.
@@ -75,7 +76,8 @@ class Pretest(base.Operation, abc.ABC):
 
         """
         kinds = _techniques(techniques)
-        verdicts = conditions.judge_before(item, kinds, check = self._check())
+        verdicts = conditions.judge_before(
+            item, kinds, check = self._check(), parameters = kwargs)
         item.tables[self.name] = conditions.tabulate(verdicts)
         failed = [
             verdict.describe() for verdict in verdicts if verdict.violated]

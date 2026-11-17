@@ -237,14 +237,21 @@ Every model has a pipeline of its own for each task that it can do. The
 | Name | Description |
 | --- | --- |
 | [`check_assumptions`][amos.pretests.CheckAssumptions] | Checks every assumption and need of the techniques that has a pretest. |
+| [`check_continuity`][amos.pretests.CheckContinuity] | Checks whether rows bunch on one side of a cutoff. |
 | [`check_dispersion`][amos.pretests.CheckDispersion] | Checks whether counts vary as a Poisson model assumes. |
 | [`check_features`][amos.pretests.CheckFeatures] | Checks whether the features have missing values or are not numbers. |
+| [`check_instrument`][amos.pretests.CheckInstrument] | Checks whether an instrument is strong enough. |
 | [`check_label`][amos.pretests.CheckLabel] | Checks whether the label is the kind that techniques are for. |
 | [`check_linearity`][amos.pretests.CheckLinearity] | Checks whether the label (or its log-odds) is linear in the features. |
+| [`check_missingness`][amos.pretests.CheckMissingness] | Checks whether values are missing completely at random. |
 | [`check_multicollinearity`][amos.pretests.CheckMulticollinearity] | Checks whether any feature is nearly a linear function of the others. |
 | [`check_normality`][amos.pretests.CheckNormality] | Checks whether the errors of a regression and the features are normal. |
+| [`check_overlap`][amos.pretests.CheckOverlap] | Checks whether every row could have been treated or not. |
+| [`check_parallel_trends`][amos.pretests.CheckParallelTrends] | Checks whether treated units trended differently before treatment. |
+| [`check_proportional_odds`][amos.pretests.CheckProportionalOdds] | Checks whether features have the same effect at every cutoff. |
 | [`check_sample_size`][amos.pretests.CheckSampleSize] | Checks whether there are enough (or too many) rows and features. |
 | [`check_scales`][amos.pretests.CheckScales] | Checks whether the features are on similar scales. |
+| [`check_stationarity`][amos.pretests.CheckStationarity] | Checks whether each time series is stationary. |
 
 ## Models (analyst)
 
@@ -331,6 +338,7 @@ Every model has a pipeline of its own for each task that it can do. The
 | [`audit_assumptions`][amos.audits.AuditAssumptions] | Checks every assumption of the model that has an audit. |
 | [`audit_errors`][amos.audits.AuditErrors] | Checks whether the model's errors have constant variance. |
 | [`audit_independence`][amos.audits.AuditIndependence] | Checks whether the model's errors are independent. |
+| [`audit_proportional_hazards`][amos.audits.AuditProportionalHazards] | Checks whether each feature's effect on a Cox model's hazard is constant. |
 | [`audit_residuals`][amos.audits.AuditResiduals] | Checks whether the model's errors are normal. |
 
 ## Inferers (critic)

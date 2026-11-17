@@ -33,17 +33,27 @@ Contents:
         of techniques before they are applied.
     CheckAssumptions: checks every assumption and need of the techniques
         that has a pretest.
+    CheckContinuity: checks whether rows bunch on one side of a cutoff.
     CheckDispersion: checks whether counts vary as a Poisson model assumes.
     CheckFeatures: checks whether the features have missing values or are
         not numbers.
+    CheckInstrument: checks whether an instrument is strong enough.
     CheckLabel: checks whether the label is the kind that techniques are
         for.
     CheckLinearity: checks whether the label is linear in the features.
+    CheckMissingness: checks whether values are missing completely at
+        random.
     CheckMulticollinearity: checks whether features are nearly collinear.
     CheckNormality: checks whether the errors and the features are normal.
+    CheckOverlap: checks whether every row could have been treated or not.
+    CheckParallelTrends: checks whether treated units trended differently
+        before treatment.
+    CheckProportionalOdds: checks whether features have the same effect at
+        every cutoff between ordered classes.
     CheckSampleSize: checks whether there are enough (or too many) rows and
         features.
     CheckScales: checks whether the features are on similar scales.
+    CheckStationarity: checks whether each time series is stationary.
 
 """
 
@@ -53,27 +63,41 @@ import types
 
 __all__: list[str] = [
     'CheckAssumptions',
+    'CheckContinuity',
     'CheckDispersion',
     'CheckFeatures',
+    'CheckInstrument',
     'CheckLabel',
     'CheckLinearity',
+    'CheckMissingness',
     'CheckMulticollinearity',
     'CheckNormality',
+    'CheckOverlap',
+    'CheckParallelTrends',
+    'CheckProportionalOdds',
     'CheckSampleSize',
     'CheckScales',
+    'CheckStationarity',
     'Pretest']
 
 from ._base import Pretest
 from ._checks import (
     CheckAssumptions,
+    CheckContinuity,
     CheckDispersion,
     CheckFeatures,
+    CheckInstrument,
     CheckLabel,
     CheckLinearity,
+    CheckMissingness,
     CheckMulticollinearity,
     CheckNormality,
+    CheckOverlap,
+    CheckParallelTrends,
+    CheckProportionalOdds,
     CheckSampleSize,
     CheckScales,
+    CheckStationarity,
 )
 
 # The public names say that they are in `amos.pretests` (rather than in the

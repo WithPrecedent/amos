@@ -29,6 +29,8 @@ Contents:
         audit.
     AuditErrors: checks whether the model's errors have constant variance.
     AuditIndependence: checks whether the model's errors are independent.
+    AuditProportionalHazards: checks whether each feature's effect on the
+        hazard of a Cox model is constant over time.
     AuditResiduals: checks whether the model's errors are normal.
 
 """
@@ -42,12 +44,14 @@ __all__: list[str] = [
     'AuditAssumptions',
     'AuditErrors',
     'AuditIndependence',
+    'AuditProportionalHazards',
     'AuditResiduals']
 
 from ._audits import (
     AuditAssumptions,
     AuditErrors,
     AuditIndependence,
+    AuditProportionalHazards,
     AuditResiduals,
 )
 from ._base import Audit

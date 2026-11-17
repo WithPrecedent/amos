@@ -28,6 +28,20 @@ All notable changes to this project will be documented in this file.
   `audit_independence` (Breusch-Godfrey and Durbin-Watson in the dataset's
   order, and the intraclass correlation within its groups), and
   `audit_assumptions`, which runs every audit that the model needs.
+* More pretests test the assumptions of imputers, ordinal models, and
+  inferers: `check_missingness` (missing completely at random, by Little's
+  test), `check_proportional_odds` (Brant's test), `check_overlap` (the
+  propensity scores of a treatment), `check_instrument` (the first-stage F
+  statistic of an instrument), `check_parallel_trends` (the trends before a
+  treatment), `check_continuity` (a density test at a regression
+  discontinuity's cutoff), and `check_stationarity` (the augmented
+  Dickey-Fuller and KPSS tests). `audit_proportional_hazards` applies
+  Grambsch and Therneau's test to a fitted `cox` model. The pretests of an
+  inferer read its parameters (such as its "treatment"), and a pretest step
+  passes its own parameters to them. Some of these assumptions can only be
+  tested in part (such as the relevance, but not the exclusion, of an
+  instrument), and three cannot be tested at all (`unconfoundedness`,
+  `causal_sufficiency`, and `missing_at_random`).
 * amos runs the pretests of a technique just before it is applied, records
   them in the dataset's "assumptions" table and `history`, and does what the
   new "assumption_violations" setting of the "general" section says when
@@ -47,7 +61,8 @@ All notable changes to this project will be documented in this file.
 * The "general" section can set an `order`: the column that puts the rows
   in order (such as a date), which is not a feature.
 * A new page of the documentation, Assumptions, lists every assumption and
-  need, and those of each technique.
+  need (with the tests that decide each, or whether it cannot be tested),
+  and those of each technique.
 
 ## 0.9.0
 

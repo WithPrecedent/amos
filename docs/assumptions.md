@@ -33,18 +33,23 @@ print(amos.models.Linear.needs)
 amos tests each assumption and need that it can, at the time when it can:
 
 * **Pretests** (in the analyst stage) test an assumption before a technique
-  is applied, on the real training rows. `check_normality`,
-  `check_multicollinearity`, `check_linearity`, `check_scales`,
-  `check_dispersion`, `check_features`, `check_label`, and
-  `check_sample_size` each test some of them, and `check_assumptions` runs
-  every pretest that the techniques of the workflow need.
+  is applied, on the real training rows (or, for an inferer, on every real
+  row). `check_normality`, `check_multicollinearity`, `check_linearity`,
+  `check_scales`, `check_dispersion`, `check_features`, `check_label`,
+  `check_sample_size`, `check_missingness`, `check_proportional_odds`,
+  `check_overlap`, `check_instrument`, `check_parallel_trends`,
+  `check_continuity`, and `check_stationarity` each test some of them, and
+  `check_assumptions` runs every pretest that the techniques of the
+  workflow need. The pretests of an inferer's assumptions read its
+  parameters (such as its "treatment" and "instrument").
 * **Audits** (in the critic stage) test an assumption that can only be
-  tested from the errors of a fitted model. `audit_residuals` tests whether
-  the errors are normal, `audit_errors` whether they have constant variance,
-  and `audit_independence` whether they are independent (in the dataset's
-  `order`, and within its groups). `audit_assumptions` runs every audit that
-  the dataset's model needs, and `auto_evaluator` applies it to a regression
-  whose model makes such assumptions.
+  tested from a fitted model. `audit_residuals` tests whether the errors are
+  normal, `audit_errors` whether they have constant variance,
+  `audit_independence` whether they are independent (in the dataset's
+  `order`, and within its groups), and `audit_proportional_hazards` whether
+  a Cox model's hazards are proportional. `audit_assumptions` runs every
+  audit that the dataset's model needs, and `auto_evaluator` applies it to
+  a regression whose model makes such assumptions.
 
 Whether or not a workflow names a pretest, amos runs the pretests of a
 technique just before it is applied, so that they test the data that the
@@ -53,9 +58,24 @@ are in the dataset's "assumptions" table and its `history`. `auto_model`
 uses the same pretests to rule out the models whose assumptions the data
 does not meet.
 
-Some assumptions cannot be tested from the data (such as that every
-confounder is measured). They are listed below, but amos does not check
-them.
+Not every assumption can be tested, and the "Tests Used" column below says
+how each one is:
+
+* **Fully testable** assumptions (such as normal errors, overlap, or
+  proportional hazards) are decided by their tests.
+* **Partly testable** assumptions are tested in the part that the data can
+  show. A test can find evidence against them, but it cannot confirm them.
+  The relevance of an instrument is tested, but not that it affects the
+  outcome only through the treatment; the trends before a treatment are
+  compared, but not what would have happened after it; the number of rows
+  at a cutoff is tested for a jump, but not the outcome; and Little's test
+  can reject that values are missing completely at random, but not prove
+  it.
+* **Untestable** assumptions (that every confounder is measured, that every
+  common cause in causal discovery is measured, and that whether a value
+  is missing does not depend on the missing value itself) are claims about
+  what the data does not hold. They are listed so that a study can argue
+  for them, but amos cannot check them.
 
 With many rows, a test rejects even trivial departures from an assumption,
 so an assumption fails only if its test rejects it (at the 5% level) and
@@ -142,27 +162,27 @@ techniques have none are left out).
 
 ## Every assumption
 
-| Name | The technique assumes that | Pretest | Audit | Harms |
+| Name | The technique assumes that | Pretest | Audit | Tests Used |
 | --- | --- | --- | --- | --- |
-| [`causal_sufficiency`][amos.core.assumptions.CausalSufficiency] | every common cause of the variables is measured |  |  | inference |
-| [`constant_variance`][amos.core.assumptions.ConstantVariance] | the errors have the same variance for every row |  | [`audit_errors`][amos.audits.AuditErrors] | inference |
-| [`continuity`][amos.core.assumptions.Continuity] | the outcome would change smoothly at the cutoff without the treatment |  |  | inference |
-| [`equidispersion`][amos.core.assumptions.Equidispersion] | the variance of counts equals their mean | [`check_dispersion`][amos.pretests.CheckDispersion] |  | inference |
-| [`independent_errors`][amos.core.assumptions.IndependentErrors] | the errors of different rows are independent |  | [`audit_independence`][amos.audits.AuditIndependence] | inference |
-| [`linearity`][amos.core.assumptions.Linearity] | the label (or its log-odds) is a linear function of the features | [`check_linearity`][amos.pretests.CheckLinearity] |  | both |
-| [`missing_at_random`][amos.core.assumptions.MissingAtRandom] | whether a value is missing depends only on values that are observed |  |  | both |
-| [`missing_completely_at_random`][amos.core.assumptions.MissingCompletelyAtRandom] | whether a value is missing has nothing to do with any value |  |  | both |
-| [`no_multicollinearity`][amos.core.assumptions.NoMulticollinearity] | no feature is nearly a linear function of the others | [`check_multicollinearity`][amos.pretests.CheckMulticollinearity] |  | both |
-| [`normal_errors`][amos.core.assumptions.NormalErrors] | the errors of a regression are normal | [`check_normality`][amos.pretests.CheckNormality] | [`audit_residuals`][amos.audits.AuditResiduals] | inference |
-| [`normal_features`][amos.core.assumptions.NormalFeatures] | the features are normal | [`check_normality`][amos.pretests.CheckNormality] |  | both |
-| [`overlap`][amos.core.assumptions.Overlap] | every row could have been treated or not |  |  | inference |
-| [`parallel_trends`][amos.core.assumptions.ParallelTrends] | without the treatment, the treated and other rows would have changed alike |  |  | inference |
-| [`proportional_hazards`][amos.core.assumptions.ProportionalHazards] | each feature multiplies the hazard by the same amount at every time |  |  | both |
-| [`proportional_odds`][amos.core.assumptions.ProportionalOdds] | each feature has the same effect on the odds of being above every class |  |  | both |
-| [`similar_scales`][amos.core.assumptions.SimilarScales] | the features are on similar scales | [`check_scales`][amos.pretests.CheckScales] |  | prediction |
-| [`stationarity`][amos.core.assumptions.Stationarity] | the distribution of each series does not change over time |  |  | both |
-| [`unconfoundedness`][amos.core.assumptions.Unconfoundedness] | every common cause of the treatment and the outcome is a feature |  |  | inference |
-| [`valid_instrument`][amos.core.assumptions.ValidInstrument] | the instrument changes the treatment and affects the outcome only through it |  |  | inference |
+| [`causal_sufficiency`][amos.core.assumptions.CausalSufficiency] | every common cause of the variables is measured |  |  | none: it cannot be tested from the data |
+| [`constant_variance`][amos.core.assumptions.ConstantVariance] | the errors have the same variance for every row |  | [`audit_errors`][amos.audits.AuditErrors] | Breusch and Pagan's test, with the squares of the features (as in White's test) |
+| [`continuity`][amos.core.assumptions.Continuity] | the outcome would change smoothly at the cutoff without the treatment | [`check_continuity`][amos.pretests.CheckContinuity] |  | a binomial test of the numbers of rows just above and just below the cutoff (a simple form of McCrary's density test, which cannot show that the outcome would change smoothly) |
+| [`equidispersion`][amos.core.assumptions.Equidispersion] | the variance of counts equals their mean | [`check_dispersion`][amos.pretests.CheckDispersion] |  | the Pearson dispersion of a Poisson regression |
+| [`independent_errors`][amos.core.assumptions.IndependentErrors] | the errors of different rows are independent |  | [`audit_independence`][amos.audits.AuditIndependence] | Breusch and Godfrey's test and Durbin and Watson's statistic (in the dataset's order), and the intraclass correlation of the errors (within its groups) |
+| [`linearity`][amos.core.assumptions.Linearity] | the label (or its log-odds) is a linear function of the features | [`check_linearity`][amos.pretests.CheckLinearity] |  | Ramsey's RESET test (for a regressed label) or Box and Tidwell's test (for two classes) |
+| [`missing_at_random`][amos.core.assumptions.MissingAtRandom] | whether a value is missing depends only on values that are observed |  |  | none: it cannot be tested from the data |
+| [`missing_completely_at_random`][amos.core.assumptions.MissingCompletelyAtRandom] | whether a value is missing has nothing to do with any value | [`check_missingness`][amos.pretests.CheckMissingness] |  | Little's test, and the standardized differences in the means of the features between the rows with and without each missing value |
+| [`no_multicollinearity`][amos.core.assumptions.NoMulticollinearity] | no feature is nearly a linear function of the others | [`check_multicollinearity`][amos.pretests.CheckMulticollinearity] |  | the variance inflation factor of each numeric feature |
+| [`normal_errors`][amos.core.assumptions.NormalErrors] | the errors of a regression are normal | [`check_normality`][amos.pretests.CheckNormality] | [`audit_residuals`][amos.audits.AuditResiduals] | D'Agostino and Pearson's test, with the skewness and excess kurtosis of the errors |
+| [`normal_features`][amos.core.assumptions.NormalFeatures] | the features are normal | [`check_normality`][amos.pretests.CheckNormality] |  | the skewness and excess kurtosis of each feature |
+| [`overlap`][amos.core.assumptions.Overlap] | every row could have been treated or not | [`check_overlap`][amos.pretests.CheckOverlap] |  | the share of rows whose propensity score (from a logistic regression of the treatment on the features) is below 0.05 or above 0.95 |
+| [`parallel_trends`][amos.core.assumptions.ParallelTrends] | without the treatment, the treated and other rows would have changed alike | [`check_parallel_trends`][amos.pretests.CheckParallelTrends] |  | a t test of whether the treated and other units trended differently before the treatment (which cannot show how they would have changed after it) |
+| [`proportional_hazards`][amos.core.assumptions.ProportionalHazards] | each feature multiplies the hazard by the same amount at every time |  | [`audit_proportional_hazards`][amos.audits.AuditProportionalHazards] | Grambsch and Therneau's test of the correlation of each feature's Schoenfeld residuals with the rank of the time |
+| [`proportional_odds`][amos.core.assumptions.ProportionalOdds] | each feature has the same effect on the odds of being above every class | [`check_proportional_odds`][amos.pretests.CheckProportionalOdds] |  | Brant's test, which compares the coefficients of a logistic regression for each cutoff between ordered classes |
+| [`similar_scales`][amos.core.assumptions.SimilarScales] | the features are on similar scales | [`check_scales`][amos.pretests.CheckScales] |  | the ratio of the largest to the smallest standard deviation of the numeric features |
+| [`stationarity`][amos.core.assumptions.Stationarity] | the distribution of each series does not change over time | [`check_stationarity`][amos.pretests.CheckStationarity] |  | the augmented Dickey-Fuller and KPSS tests of each series (it is not stationary if the first does not reject a unit root and the second rejects stationarity) |
+| [`unconfoundedness`][amos.core.assumptions.Unconfoundedness] | every common cause of the treatment and the outcome is a feature |  |  | none: it cannot be tested from the data |
+| [`valid_instrument`][amos.core.assumptions.ValidInstrument] | the instrument changes the treatment and affects the outcome only through it | [`check_instrument`][amos.pretests.CheckInstrument] |  | the F statistic of the instruments in the first-stage regression of the treatment (whether the instrument affects the outcome only through the treatment cannot be tested) |
 
 ## Every need
 

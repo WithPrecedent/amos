@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
-from conftest import SEED, make_regression
+from conftest import SEED, make_regression, requires
 
 import amos
 from amos import assumptions, audits
@@ -47,7 +47,7 @@ def test_audit_errors_finds_errors_whose_variance_changes() -> None:
     with pytest.warns(amos.AmosWarning, match = 'constant variance'):
         audits.AuditErrors().apply(dataset)
     row = _verdict(dataset, 'audit_errors', 'constant_variance')
-    assert not row['passed']
+    assert row['passed'] is False
     assert row['p_value'] < 0.05
 
 
@@ -66,7 +66,7 @@ def test_audit_independence_finds_correlated_errors_in_order() -> None:
     with pytest.warns(amos.AmosWarning, match = 'next to each other'):
         audits.AuditIndependence().apply(dataset)
     row = _verdict(dataset, 'audit_independence', 'independent_errors')
-    assert not row['passed']
+    assert row['passed'] is False
     assert row['statistic'] < 1.5
 
 
@@ -81,7 +81,7 @@ def test_audit_independence_finds_errors_correlated_within_groups() -> None:
         warnings.simplefilter('ignore')
         audits.AuditIndependence().apply(dataset)
     row = _verdict(dataset, 'audit_independence', 'independent_errors')
-    assert not row['passed']
+    assert row['passed'] is False
     assert 'intraclass correlation' in row['detail']
 
 
@@ -146,3 +146,53 @@ def test_the_tests_of_errors() -> None:
     icc, _, p_value = assumptions.clustering_test(errors, groups)
     assert icc < 0.1
     assert assumptions.clustering_test(errors[:1], groups[:1]) is None
+
+
+def test_audit_proportional_hazards_finds_an_effect_that_changes() -> None:
+    requires('statsmodels')
+    rng = np.random.default_rng(SEED)
+    rows = 600
+    x = rng.binomial(1, 0.5, rows).astype(float)
+    # The hazard of x doubles early and is the same later: early times come
+    # from a higher rate for x, and later ones from the same rate.
+    early = rng.exponential(1 / (1 + 3 * x))
+    late = 1 + rng.exponential(1.0, rows)
+    days = np.where(early < 1, early, late)
+    data = pd.DataFrame({
+        'x': x, 'z': rng.normal(size = rows), 'days': days,
+        'event': np.ones(rows, dtype = int)})
+    dataset = amos.Dataset(
+        data, label = 'days', seed = SEED, groups = ['event'])
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        amos.models.Cox().apply(dataset, event = 'event')
+        audits.AuditProportionalHazards().apply(dataset)
+    row = _verdict(
+        dataset, 'audit_proportional_hazards', 'proportional_hazards')
+    assert row['technique'] == 'cox'
+    assert row['passed'] is False
+    assert "['x']" in row['detail']
+    # It is not a Cox model's, so it cannot be tested.
+    fitted = _fitted(make_regression())
+    audits.AuditProportionalHazards().apply(fitted)
+    row = _verdict(
+        fitted, 'audit_proportional_hazards', 'proportional_hazards')
+    assert row['passed'] is None
+
+
+def test_the_tests_of_causes_and_time() -> None:
+    rng = np.random.default_rng(SEED)
+    z = rng.normal(size = 400)
+    f_value, p_value = assumptions.first_stage_test(
+        z + rng.normal(size = 400), z[:, None], np.empty((400, 0)))
+    assert f_value > 100
+    assert p_value < 0.001
+    assert assumptions.density_test(np.zeros(5), 0.0) is None
+    treated = np.array([0, 1] * 50)
+    assert assumptions.overlap_test(treated, np.empty((100, 0))) == 0
+    values = rng.normal(size = (300, 3))
+    values[rng.random(300) < 0.3, 1] = np.nan
+    statistic, p_value, freedom = assumptions.little_test(values)
+    assert freedom == 2
+    assert p_value > 0.01
+    assert assumptions.little_test(np.full((5, 2), np.nan)) is None

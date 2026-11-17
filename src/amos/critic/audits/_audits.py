@@ -5,6 +5,8 @@ Contents:
         audit.
     AuditErrors: checks whether the model's errors have constant variance.
     AuditIndependence: checks whether the model's errors are independent.
+    AuditProportionalHazards: checks whether each feature's effect on the
+        hazard of a Cox model is constant over time.
     AuditResiduals: checks whether the model's errors are normal.
 
 """
@@ -61,6 +63,18 @@ class AuditIndependence(Audit):
     and with the intraclass correlation of the errors within its first
     group column (see `assumptions.IndependentErrors`). A dataset with
     neither an order nor groups cannot be tested.
+
+    """
+
+
+@dataclasses.dataclass
+class AuditProportionalHazards(Audit):
+    """Checks whether each feature's effect on a Cox model's hazard is constant.
+
+    It checks "proportional_hazards" of a fitted `cox` model with Grambsch
+    and Therneau's test of the correlation of each feature's Schoenfeld
+    residuals with the rank of the time (see
+    `assumptions.ProportionalHazards`).
 
     """
 
