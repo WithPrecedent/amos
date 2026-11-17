@@ -137,6 +137,20 @@ def test_the_catalog_is_up_to_date() -> None:
         '"uv run python docs/scripts/technique_catalog.py"')
 
 
+def test_the_assumptions_page_is_up_to_date() -> None:
+    """Checks that the assumptions page matches the techniques' conditions."""
+    path = ROOT / 'docs' / 'scripts' / 'assumption_tables.py'
+    spec = importlib.util.spec_from_file_location('assumption_tables', path)
+    assert spec is not None
+    assert spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    text = script.PAGE.read_text(encoding = 'utf-8')
+    assert text[text.index(script.FIRST):] == script.tables(), (
+        'docs/assumptions.md is out of date: run '
+        '"uv run python docs/scripts/assumption_tables.py"')
+
+
 def test_the_pipeline_chart_draws_every_pipeline() -> None:
     """Checks that the pipeline chart draws each pipeline in a family."""
     path = ROOT / 'docs' / 'scripts' / 'pipeline_chart.py'

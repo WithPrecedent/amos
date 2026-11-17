@@ -118,13 +118,19 @@ def make_numeric(
     rows: int = 200,
     classes: int = 2,
     weights: list[float] | None = None,
-    seed: int = 7) -> pd.DataFrame:
-    """Returns numeric features and an integer label of `classes` classes."""
+    seed: int = 7,
+    redundant: int = 2) -> pd.DataFrame:
+    """Returns numeric features and an integer label of `classes` classes.
+
+    `redundant` of the 6 features are linear combinations of the others
+    (so they are perfectly collinear), and the rest are informative.
+    """
     datasets = importlib.import_module('sklearn.datasets')
     x, y = datasets.make_classification(
         n_samples = rows,
         n_features = 6,
-        n_informative = 4,
+        n_informative = 6 - redundant,
+        n_redundant = redundant,
         n_classes = classes,
         weights = weights,
         random_state = seed)

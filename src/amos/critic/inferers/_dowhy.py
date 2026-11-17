@@ -65,6 +65,8 @@ class Dowhy(Inferer, abc.ABC):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('unconfoundedness', 'overlap')
+
     # The name of DoWhy's method of estimation.
     method: ClassVar[str] = 'backdoor.linear_regression'
     # Whether DoWhy finds the method's standard error by bootstrapping.
@@ -285,6 +287,8 @@ class InstrumentalVariable(Dowhy):
         from DoWhy.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('valid_instrument',)
 
     contents: Any = (
         'dowhy.causal_estimators.instrumental_variable_estimator.'

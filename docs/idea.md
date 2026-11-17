@@ -213,6 +213,8 @@ Every setting in it is optional.
 | `use_gpu` | true or false | false | Whether to fit the models that can use a GPU on an NVIDIA GPU. |
 | `visualize_explorers` | true or false | Not set (false) | Whether every explorer draws a figure of its table, whatever its own `visualize` parameter. |
 | `visualize_critics` | true or false | Not set (false) | Whether every critic draws a figure of its table, whatever its own `visualize` parameter. |
+| `order` | A column name | None | The column that puts the rows in order (such as a date), which is not used as a feature. `audit_independence` tests whether the errors of rows next to each other in this order are correlated. |
+| `assumption_violations` | "warn", "raise", "ignore", or "skip" | "warn" | What amos does when the data does not meet an assumption of a technique (see [Assumptions](assumptions.md)). |
 | `conserve_memory` | true or false | false | Whether every experiment keeps only the best combination's whole dataset while it tries them. |
 | `pipeline` | The name of a pipeline | None | Fills in the settings of the analyst, critic, and artist for a kind of study. |
 
@@ -223,9 +225,9 @@ data:
 * If you pass data (such as a `DataFrame` or the path to a data file), the
   dataset is made with these settings.
 * If you pass a `Dataset`, it keeps its own label, task, seed, and groups,
-  and the settings fill in only those it lacks. "use_gpu",
-  "visualize_explorers", and "visualize_critics" replace the dataset's own
-  if they are set.
+  and the settings fill in only those it lacks (and its order).
+  "use_gpu", "visualize_explorers", "visualize_critics", and
+  "assumption_violations" replace the dataset's own if they are set.
 * If the workflow loads its own data with a loader (such as `load_file`),
   "label", "task", and "groups" are the loader's default parameters, and
   "seed" is the dataset's seed. Parameters in the loader's own section take

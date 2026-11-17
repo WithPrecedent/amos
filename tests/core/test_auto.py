@@ -560,12 +560,13 @@ def test_best_prefers_the_simplest_model_within_one_standard_error() -> None:
 def test_auto_model_chooses_inference_models_by_the_classes() -> None:
     requires('statsmodels')
     choices = ['ordinal_regression', 'logit_sm', 'mnlogit']
-    dataset = _split(make_numeric(rows = 300))
+    # The features are not collinear, which these models assume.
+    dataset = _split(make_numeric(rows = 300, redundant = 0))
     auto.AutoModel().apply(dataset, choices = choices, folds = 1)
     table = dataset.tables['auto_model']
     assert _chosen(dataset, 'auto_model') == ['logit_sm']
     assert table.loc['mnlogit', 'reason'] == 'is for 3 or more classes, not 2'
-    data = make_numeric(rows = 300, classes = 3)
+    data = make_numeric(rows = 300, classes = 3, redundant = 0)
     data['target'] = data['target'].map({0: 'a', 1: 'b', 2: 'c'})
     dataset = _split(data)
     auto.AutoModel().apply(dataset, choices = choices, folds = 1)
@@ -776,12 +777,14 @@ def test_an_experiment_can_compare_auto_with_other_techniques() -> None:
         'stratified_split > auto_model', 'stratified_split > baseline_model']
 
 
-def test_every_model_that_auto_model_prefers_has_traits() -> None:
+def test_every_model_that_auto_model_prefers_has_a_package() -> None:
     for name in auto._MODELS:
         kind = amos.library.borrow(name, genre = 'model')
-        assert isinstance(kind.traits, amos.models.ModelTraits), name
-    assert auto._traits_of('ols') is not None
-    assert auto._traits_of('not_a_model') is None
+        assert kind.package, name
+        for condition in amos.conditions.conditions_of(kind):
+            amos.conditions.borrow(condition)
+    assert auto._complexity('ols') == 1
+    assert auto._complexity('not_a_model') == 3
     assert auto._tasks_of('random_forest') == ('classify', 'regress')
 
 

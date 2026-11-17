@@ -32,6 +32,8 @@ class IterativeImpute(Imputer):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('missing_at_random',)
+
     contents: str = 'sklearn.impute.IterativeImputer'
 
     def apply(
@@ -65,6 +67,8 @@ class KnnImpute(Imputer):
 
     """
 
+    assumptions: ClassVar[tuple[str, ...]] = ('missing_at_random',)
+
     contents: str = 'sklearn.impute.KNNImputer'
 
 
@@ -77,6 +81,8 @@ class MeanImpute(Imputer):
         from scikit-learn.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('missing_completely_at_random',)
 
     contents: str = 'sklearn.impute.SimpleImputer'
     parameters: base.GenericDict = dataclasses.field(
@@ -92,6 +98,8 @@ class MedianImpute(Imputer):
         from scikit-learn.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('missing_completely_at_random',)
 
     contents: str = 'sklearn.impute.SimpleImputer'
     parameters: base.GenericDict = dataclasses.field(
@@ -109,6 +117,8 @@ class ModeImpute(Imputer):
         from scikit-learn.
 
     """
+
+    assumptions: ClassVar[tuple[str, ...]] = ('missing_completely_at_random',)
 
     kinds: ClassVar[tuple[str, ...]] = ('numerics', 'categoricals', 'booleans')
 

@@ -41,7 +41,7 @@ def _data(kind: type[amos.Model]) -> tuple[amos.Dataset, dict[str, str]]:
         data['target'] = np.digitize(score, cuts)
     else:
         data = make_regression(rows = 300)
-        if kind.counts:
+        if 'count_label' in kind.needs:
             data['target'] = rng.poisson(np.exp(0.3 * data['x0'].clip(-2, 2)))
     data['court'] = np.resize(list('abcdef'), len(data))
     data['weight'] = rng.uniform(0.5, 2, len(data))

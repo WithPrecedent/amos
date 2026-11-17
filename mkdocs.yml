@@ -28,6 +28,7 @@ nav:
   - Idea File: idea.md
   - Advanced User Guide: advanced.md
   - Technique Catalog: catalog.md
+  - Assumptions: assumptions.md
   - Pipeline Chart: pipelines.md
   - Recipes: recipes.md
 - API: reference/

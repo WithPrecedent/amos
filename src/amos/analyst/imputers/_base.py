@@ -25,6 +25,10 @@ class Imputer(Transformer, abc.ABC):
     """
 
     kinds: ClassVar[tuple[str, ...]] = ('numerics',)
+    # The names of what the technique assumes about the data (see the
+    # `assumptions` module) and needs from it (see the `needs` module).
+    assumptions: ClassVar[tuple[str, ...]] = ()
+    needs: ClassVar[tuple[str, ...]] = ()
 
     def select(self, item: base.Dataset) -> list[str]:
         """Returns the features of `kinds` that have missing values.

@@ -9,8 +9,17 @@ Contents:
         what they found.
     IncompatibleTechniqueError: raised by a technique that does not suit the
         dataset's model.
+    AssumptionError: raised when the data does not meet an assumption or a
+        need of a technique.
+    SkippedBranchError: raised to leave a branch out of an experiment, when
+        the data does not meet an assumption or a need of one of its
+        techniques.
     skipping_incompatible_techniques: skips those techniques, rather than
         raising their errors, in a workflow.
+    in_experiment: marks the code that is running as a branch of an
+        experiment.
+    listing_workflow_techniques: tells pretests which techniques the
+        workflow that is being applied uses.
     using_model_specific_techniques: replaces the plots, evaluators, and
         inferers of a workflow with those that the dataset's model names.
     WorkflowState: the settings that last while a workflow is applied.
@@ -27,6 +36,12 @@ Contents:
         workflow, by the name of the model and the setting.
     _OPERATION_DEPTH: how many operations are being applied, one inside
         another.
+    _IN_EXPERIMENT: whether the code that is running is a branch of an
+        experiment.
+    _WORKFLOW_TECHNIQUES: the name and class of each technique of the
+        workflow that is being applied.
+    _VIOLATION_POLICIES: what amos can do when the data does not meet an
+        assumption of a technique.
 
 """
 
@@ -84,6 +99,22 @@ _MODEL_SPECIFIC_TECHNIQUES: contextvars.ContextVar[_TechniquesByModel] = (
 # applies, such as a plot that `auto_plot` chose) is replaced.
 _OPERATION_DEPTH: contextvars.ContextVar[int] = contextvars.ContextVar(
     'operation_depth', default = 0)
+# Whether the code that is running is a branch of an experiment, which can be
+# left out when the data does not meet an assumption of one of its
+# techniques.
+_IN_EXPERIMENT: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    'in_experiment', default = False)
+# The name and class of each technique of the workflow that is being applied,
+# which `check_assumptions` checks when it is not told which techniques to
+# check.
+_WORKFLOW_TECHNIQUES: contextvars.ContextVar[
+    tuple[tuple[str, type[Any]], ...]] = contextvars.ContextVar(
+        'workflow_techniques', default = ())
+# What amos does when the data does not meet an assumption of a technique (or
+# a need that the technique could still be applied without): raise an error,
+# warn and go on, go on without a warning, or leave the branch out of an
+# experiment (and warn outside of one).
+_VIOLATION_POLICIES: tuple[str, ...] = ('raise', 'warn', 'ignore', 'skip')
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +148,74 @@ class IncompatibleTechniqueError(ValueError):
     this error.
 
     """
+
+
+class AssumptionError(ValueError):
+    """Raised when the data does not meet an assumption or need of a technique.
+
+    It is raised before the technique is applied (by a pretest) or after
+    its model is fitted (by an audit) if the dataset's
+    `assumption_violations` is "raise", and for a need that the technique
+    cannot be applied without (such as a model that cannot use missing
+    values), whatever the setting, outside of an experiment. It is not an
+    `IncompatibleTechniqueError`, so a workflow does not skip it.
+
+    """
+
+
+class SkippedBranchError(AssumptionError):
+    """Raised to leave a branch out of an experiment.
+
+    In a branch of an `Experiment`, a technique raises it before it is
+    applied if the data does not meet one of its assumptions and the
+    dataset's `assumption_violations` is "skip", or if the data does not
+    meet a need that the technique cannot be applied without. The experiment
+    leaves the branch out of its comparison and records why.
+
+    """
+
+
+@contextlib.contextmanager
+def in_experiment() -> Generator[None, None, None]:
+    """Marks the code in the context as a branch of an experiment.
+
+    An `Experiment` applies each of its paths in this context, so a technique
+    whose assumptions the data does not meet can leave its branch out (see
+    `SkippedBranchError`).
+
+    Yields:
+        None: control, to the code in the context.
+
+    """
+    token = _IN_EXPERIMENT.set(True)
+    try:
+        yield
+    finally:
+        _IN_EXPERIMENT.reset(token)
+
+
+@contextlib.contextmanager
+def listing_workflow_techniques(
+    techniques: Iterable[tuple[str, type[Any]]],
+) -> Generator[None, None, None]:
+    """Tells pretests which techniques the workflow in the context uses.
+
+    A `Project` applies its workflow in this context, so that
+    `check_assumptions` checks the assumptions and needs of its techniques
+    when it is not told which to check.
+
+    Args:
+        techniques: the name and class of each technique of the workflow.
+
+    Yields:
+        None: control, to the code in the context.
+
+    """
+    token = _WORKFLOW_TECHNIQUES.set(tuple(techniques))
+    try:
+        yield
+    finally:
+        _WORKFLOW_TECHNIQUES.reset(token)
 
 
 @contextlib.contextmanager
@@ -159,10 +258,14 @@ def restored_workflow_state(
     tokens = (
         _SKIPS_INCOMPATIBLE.set(state.skips_incompatible),
         _MODEL_SPECIFIC_TECHNIQUES.set(state.model_specific_techniques),
-        _OPERATION_DEPTH.set(state.operation_depth))
+        _OPERATION_DEPTH.set(state.operation_depth),
+        _IN_EXPERIMENT.set(state.in_experiment),
+        _WORKFLOW_TECHNIQUES.set(state.workflow_techniques))
     try:
         yield
     finally:
+        _WORKFLOW_TECHNIQUES.reset(tokens[4])
+        _IN_EXPERIMENT.reset(tokens[3])
         _OPERATION_DEPTH.reset(tokens[2])
         _MODEL_SPECIFIC_TECHNIQUES.reset(tokens[1])
         _SKIPS_INCOMPATIBLE.reset(tokens[0])
@@ -202,14 +305,18 @@ def workflow_state() -> WorkflowState:
 
     Returns:
         Whether techniques that do not suit the model are skipped, which
-            techniques the models name, and how many operations are being
-            applied, one inside another (see `restored_workflow_state`).
+            techniques the models name, how many operations are being
+            applied, one inside another, whether the code is a branch of an
+            experiment, and the techniques of the workflow (see
+            `restored_workflow_state`).
 
     """
     return WorkflowState(
         skips_incompatible = _SKIPS_INCOMPATIBLE.get(),
         model_specific_techniques = _MODEL_SPECIFIC_TECHNIQUES.get(),
-        operation_depth = _OPERATION_DEPTH.get())
+        operation_depth = _OPERATION_DEPTH.get(),
+        in_experiment = _IN_EXPERIMENT.get(),
+        workflow_techniques = _WORKFLOW_TECHNIQUES.get())
 
 
 @dataclasses.dataclass(frozen = True)
@@ -224,12 +331,19 @@ class WorkflowState:
             `using_model_specific_techniques`).
         operation_depth: how many operations are being applied, one inside
             another.
+        in_experiment: whether the code is a branch of an experiment (see
+            `in_experiment`). Defaults to `False`.
+        workflow_techniques: the name and class of each technique of the
+            workflow (see `listing_workflow_techniques`). Defaults to an
+            empty tuple.
 
     """
 
     skips_incompatible: bool
     model_specific_techniques: _TechniquesByModel
     operation_depth: int
+    in_experiment: bool = False
+    workflow_techniques: tuple[tuple[str, type[Any]], ...] = ()
 
 
 # `eq` is `False` so that comparing datasets does not compare their data
@@ -310,6 +424,18 @@ class Dataset:
             a figure of its table, whatever its own `visualize` argument.
             Defaults to `None`, which leaves it to each critic's argument
             (which is `False` unless it is passed).
+        order: name of a column that puts the rows in order (such as a date
+            or the sequence in which they were collected). Like the groups,
+            it stays in the data but is not a feature. `audit_independence`
+            tests whether the errors of rows next to each other in this
+            order are correlated. Defaults to `None`, which means that the
+            rows have no order.
+        assumption_violations: what amos does when the data does not meet
+            an assumption of a technique (or a need that the technique could
+            still be applied without): "raise" an `AssumptionError`, "warn"
+            and go on, "ignore" it (it is still recorded), or "skip" the
+            branch of an experiment that uses the technique (and warn
+            outside of one). Defaults to "warn".
 
     A label that is not yet a column of the data is pending: the dataset keeps
     its name, and its task is inferred once a technique (such as
@@ -341,25 +467,31 @@ class Dataset:
     kinds: dict[str, str] = dataclasses.field(default_factory = dict)
     visualize_explorers: bool | None = None
     visualize_critics: bool | None = None
+    order: str | None = None
+    assumption_violations: str = 'warn'
 
     """ Initialization Methods """
 
     def __post_init__(self) -> None:
-        """Validates `data`, `label`, `groups`, the switches, and `task`.
+        """Validates the data, label, groups, order, switches, and task.
 
         The switches are `use_gpu`, `visualize_explorers`, and
-        `visualize_critics`.
+        `visualize_critics`. `assumption_violations` is validated too.
 
         Raises:
             KeyError: if a group is not a column of the data.
             TypeError: if a switch is not true or false.
-            ValueError: if the label is a group, or `task` is not
-                "classify" or "regress".
+            ValueError: if the label is a group, the order is the label or
+                a group, `task` is not "classify" or "regress", or
+                `assumption_violations` is not a policy that amos knows.
 
         """
         if not isinstance(self.data, pd.DataFrame):
             self.data = pd.DataFrame(self.data)
         self.groups = _validate_groups(self.groups, self.data, self.label)
+        self.order = _validate_order(self.order, self.label, self.groups)
+        self.assumption_violations = _validate_policy(
+            self.assumption_violations)
         self.use_gpu = _validate_use_gpu(self.use_gpu)
         self.visualize_explorers = _validate_switch(
             self.visualize_explorers, 'visualize_explorers')
@@ -384,7 +516,9 @@ class Dataset:
         groups: Sequence[str] | str | None = None,
         use_gpu: bool | None = None,
         visualize_explorers: bool | None = None,
-        visualize_critics: bool | None = None) -> Dataset:
+        visualize_critics: bool | None = None,
+        order: str | None = None,
+        assumption_violations: str | None = None) -> Dataset:
         """Returns a `Dataset` made from `item`.
 
         Args:
@@ -409,6 +543,12 @@ class Dataset:
             visualize_critics: whether every critic draws a figure of its
                 table. Defaults to `None`, which leaves it to each critic's
                 `visualize` argument.
+            order: name of the column that puts the rows in order. Defaults
+                to `None`.
+            assumption_violations: what amos does when the data does not
+                meet an assumption of a technique ("raise", "warn",
+                "ignore", or "skip"). Defaults to `None`, which is "warn"
+                for a new `Dataset`.
 
         Raises:
             FileNotFoundError: if `item` is a path and there is no file there.
@@ -418,9 +558,10 @@ class Dataset:
 
         Returns:
             A `Dataset`. If `item` is already a `Dataset`, it is returned
-                with any of `label`, `task`, `seed`, and `groups` that it
-                lacks, and with `use_gpu`, `visualize_explorers`, and
-                `visualize_critics` if they are passed.
+                with any of `label`, `task`, `seed`, `groups`, and `order`
+                that it lacks, and with `use_gpu`, `visualize_explorers`,
+                `visualize_critics`, and `assumption_violations` if they are
+                passed.
 
         """
         if isinstance(item, Dataset):
@@ -442,6 +583,11 @@ class Dataset:
             if visualize_critics is not None:
                 item.visualize_critics = _validate_switch(
                     visualize_critics, 'visualize_critics')
+            if item.order is None and order is not None:
+                item.order = _validate_order(order, item.label, item.groups)
+            if assumption_violations is not None:
+                item.assumption_violations = _validate_policy(
+                    assumption_violations)
             return item
         if isinstance(item, str | pathlib.Path):
             # `loaders` imports this module, so it is imported here. The file
@@ -478,7 +624,9 @@ class Dataset:
             groups = camina.listify(groups),
             use_gpu = _validate_use_gpu(use_gpu),
             visualize_explorers = visualize_explorers,
-            visualize_critics = visualize_critics)
+            visualize_critics = visualize_critics,
+            order = order,
+            assumption_violations = assumption_violations or 'warn')
 
     """ Properties """
 
@@ -515,10 +663,10 @@ class Dataset:
 
     @property
     def features(self) -> list[str]:
-        """Returns the names of every column except the label and groups."""
+        """Returns every column except the label, groups, and order."""
         return [
             c for c in self.data.columns
-            if c != self.label and c not in self.groups]
+            if c not in (self.label, self.order) and c not in self.groups]
 
     @property
     def has_label(self) -> bool:
@@ -736,25 +884,28 @@ class Dataset:
             x: features of the new training rows.
             y: labels of the new training rows.
             origins: for each new row, the position (in the training rows) of
-                the row it copies, which gives it that row's groups, or -1 for
-                a synthetic row, which has no groups. Defaults to `None`, in
-                which case no new row has groups and every new row is real.
+                the row it copies, which gives it that row's groups (and
+                order), or -1 for a synthetic row, which has none. Defaults
+                to `None`, in which case no new row has groups and every new
+                row is real.
 
         """
         label = self.require_label()
         made_up = self.train_rows.isin(self.synthetic)
         rows = x.copy()
         rows[label] = np.asarray(y)
-        if self.groups:
-            training = self.data.loc[self.train_rows, self.groups]
+        kept = [*self.groups, *self._order_column()]
+        if kept:
+            training = self.data.loc[self.train_rows, kept]
             positions = np.full(len(rows), -1) if origins is None else (
                 np.asarray(origins))
             copied = positions >= 0
-            for group in self.groups:
+            for column in kept:
                 values = pd.Series(
-                    pd.NA, index = rows.index, dtype = training[group].dtype)
-                values[copied] = training[group].to_numpy()[positions[copied]]
-                rows[group] = values
+                    pd.NA, index = rows.index, dtype = training[column].dtype)
+                values[copied] = training[column].to_numpy()[
+                    positions[copied]]
+                rows[column] = values
         rows.index = self._new_labels(len(rows))
         rows = rows[self.data.columns]
         test = self.data.loc[self.test_rows] if self.is_split else None
@@ -851,6 +1002,18 @@ class Dataset:
             if found == kind:
                 names.append(column)
         return names
+
+    def _order_column(self) -> list[str]:
+        """Returns the order column in a list, if it is a column of the data.
+
+        Returns:
+            `[order]`, or an empty `list` if there is no order or it is not
+                (or not yet) a column of the data.
+
+        """
+        if self.order is None or self.order not in self.data.columns:
+            return []
+        return [self.order]
 
     def _new_labels(self, count: int) -> pd.Index:
         """Returns `count` index labels that are not used by the test rows.
@@ -992,6 +1155,12 @@ class Operation(chrisjen.Technique, abc.ABC):
     techniques that the dataset's model names in its parameters (see
     `using_model_specific_techniques`).
 
+    A technique can list, by name, the `assumptions` it makes about the
+    data and the `needs` it has of it (see the `conditions` module), as
+    every model does. Before it is applied, the pretests of each are run on
+    the data, and the dataset's `assumption_violations` decides what is done
+    if the data does not meet one (see `_check_conditions`).
+
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
             an empty `str`, in which case it is the snake case name of the
@@ -1049,8 +1218,14 @@ class Operation(chrisjen.Technique, abc.ABC):
                 `parameters`.
 
         Raises:
+            AssumptionError: if the data does not meet an assumption or need
+                of the technique, and amos is told to raise (see
+                `_check_conditions`).
             IncompatibleTechniqueError: if `method` raised it outside of a
                 workflow.
+            SkippedBranchError: if the data does not meet an assumption or
+                need of the technique in a branch of an experiment that is
+                told to leave out such branches.
 
         Returns:
             The changed `Dataset`, or, in a workflow, the `Dataset` with a
@@ -1064,6 +1239,8 @@ class Operation(chrisjen.Technique, abc.ABC):
         replaced = self._replace_with_model_specific(dataset)
         if replaced is not None:
             return replaced
+        violations = self._check_conditions(
+            dataset, {**self._keywords(), **kwargs})
         count = len(dataset.history)
         token = _OPERATION_DEPTH.set(_OPERATION_DEPTH.get() + 1)
         try:
@@ -1081,7 +1258,45 @@ class Operation(chrisjen.Technique, abc.ABC):
         if len(result.history) == count:
             result.record(self.name, tool = utilities.describe_tool(
                 self.contents))
+        if violations:
+            _entry_of(result, self.name, count)['violations'] = violations
         return result
+
+    def _check_conditions(
+        self,
+        item: Dataset,
+        parameters: Mapping[str, Any]) -> list[str]:
+        """Checks the assumptions and needs of the technique before it works.
+
+        Only a technique that a workflow (or a caller) applies itself is
+        checked, not one that another operation applies (such as a model
+        that `auto_model` chose, which it has already checked). The
+        pretests of the technique's `assumptions` and `needs` (see
+        `conditions.check_before`) are run on the real training rows, their
+        results are added to the dataset's "assumptions" table, and the
+        dataset's `assumption_violations` decides what is done about those
+        that fail. Those that fail are added to the technique's entry in
+        `history` (as "violations") once it is applied.
+
+        Args:
+            item: the dataset that the technique is about to work on.
+            parameters: the parameters that the technique is applied with,
+                which may name columns that it uses apart from the features
+                (see `conditions.check_before`).
+
+        Returns:
+            The conditions that the data does not meet, in words.
+
+        """
+        if _OPERATION_DEPTH.get():
+            return []
+        if not (
+            getattr(self, 'assumptions', ()) or getattr(self, 'needs', ())):
+            return []
+        # `conditions` imports the techniques that its pretests use, which
+        # import this module.
+        from . import conditions  # noqa: PLC0415
+        return conditions.check_before(item, self, parameters)
 
     def _make_tool(
         self,
@@ -1331,6 +1546,27 @@ class Visualizer:
 """ Private Functions """
 
 
+def _entry_of(item: Dataset, technique: str, start: int) -> dict[str, Any]:
+    """Returns the entry of `history` that a technique made.
+
+    Args:
+        item: the dataset.
+        technique: the name of the technique.
+        start: how many entries `history` had before the technique was
+            applied.
+
+    Returns:
+        The last entry since `start` with the technique's name, or else the
+            last entry.
+
+    """
+    entries = item.history[start:]
+    return next(
+        (entry for entry in reversed(entries)
+         if entry.get('technique') == technique),
+        item.history[-1])
+
+
 def _model_and_replaced(
     item: Dataset,
     setting: str) -> tuple[str | None, bool]:
@@ -1501,6 +1737,62 @@ def _validate_groups(
         message = f'the label {label!r} cannot also be a group'
         raise ValueError(message)
     return names
+
+
+def _validate_order(
+    order: str | None,
+    label: str | None,
+    groups: Sequence[str]) -> str | None:
+    """Returns the name of the order column, checking it.
+
+    Like a pending label, the order need not be a column of the data yet
+    (a loader or munger may make it), so that is not checked.
+
+    Args:
+        order: name of the column that puts the rows in order, or `None`.
+        label: name of the label, which cannot be the order.
+        groups: names of the group columns, which cannot be the order.
+
+    Raises:
+        ValueError: if the order is the label or a group.
+
+    Returns:
+        The name of the order column, or `None`.
+
+    """
+    if order is None:
+        return None
+    order = str(order)
+    if order == label or order in groups:
+        message = f'the order {order!r} cannot also be the label or a group'
+        raise ValueError(message)
+    return order
+
+
+def _validate_policy(value: Any) -> str:
+    """Returns the "assumption_violations" setting, checking it.
+
+    Args:
+        value: "raise", "warn", "ignore", or "skip" (in any case), or `None`
+            (which means "warn").
+
+    Raises:
+        ValueError: if `value` is anything else.
+
+    Returns:
+        What amos does when the data does not meet an assumption of a
+            technique.
+
+    """
+    if value is None:
+        return 'warn'
+    policy = str(value).strip().lower()
+    if policy not in _VIOLATION_POLICIES:
+        message = (
+            f'assumption_violations must be one of {_VIOLATION_POLICIES}, '
+            f'not {value!r}')
+        raise ValueError(message)
+    return policy
 
 
 def _kind_of(column: pd.Series) -> str:

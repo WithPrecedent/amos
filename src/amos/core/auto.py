@@ -36,6 +36,10 @@ dataset's `history`, so a paper can report how each technique was chosen.
 Contents:
     Profile: what the training rows are like.
     profile: returns the profile of a dataset.
+    profiled_rows: returns the training rows that `profile` describes.
+    ErrorShape: how far the distribution of a regression's errors is from
+        normal.
+    error_shape: returns the shape of a regression's errors.
     resolve: tells each "auto" technique in a workflow which kind of
         technique to choose, from the name of its step or worker.
     Chooser: base class for techniques that choose other techniques.
@@ -72,7 +76,7 @@ import pandas as pd
 
 from ..analyst import encoders, imputers, models
 from ..artist import plots
-from . import base, utilities
+from . import base, conditions, utilities
 
 # Share of the values of a numeric feature that must be missing (in the
 # training rows) for `auto_imputer` to model each feature from the others
@@ -167,14 +171,14 @@ _NONLINEAR: frozenset[str] = _TREES | {
 # which may do either.
 _BOTH: tuple[str, ...] = ('classify', 'regress')
 # The models that `auto_model` considers, in the order it prefers them.
-# What each needs and assumes is its `traits` (see `models.ModelTraits`).
-# Other models with traits (such as `ols`, `logit_sm`, `probit`, and
-# `mnlogit`, which report coefficients with standard errors and so suit
-# a study of the features more than a prediction) are only considered
-# when they are named in "choices". `ols` does not need normal errors:
-# its estimates are unbiased without them, and with enough rows its
-# standard errors are about right (the Q-Q plot of `auto_plot` checks
-# them).
+# What each assumes and needs are its `assumptions` and `needs` (see the
+# `conditions` module). Other models that `auto_model` knows (those with a
+# `package`, such as `ols`, `logit_sm`, `probit`, and `mnlogit`, which report
+# coefficients with standard errors and so suit a study of the features more
+# than a prediction) are only considered when they are named in "choices".
+# `ols` does not assume normal errors: its estimates are unbiased without
+# them, and with enough rows its standard errors are about right (the Q-Q
+# plot of `auto_plot` checks them).
 _MODELS: tuple[str, ...] = (
     'poisson',
     'negative_binomial',
@@ -194,6 +198,21 @@ _MODELS: tuple[str, ...] = (
     'svm',
     'knn',
     'neural_network')
+# The needs and assumptions that `auto_model` checks first, in order, before
+# what a model is for (see `_preference`) and its other conditions.
+_SCREEN_ORDER: tuple[str, ...] = (
+    'no_missing_values',
+    'numeric_features',
+    'more_rows_than_features',
+    'similar_scales',
+    'binary_label',
+    'multiclass_label',
+    'ordinal_label',
+    'count_label',
+    'equidispersion')
+# Stands for what a model is for, in the order in which `auto_model` checks a
+# model's conditions.
+_PREFERRED: str = '__preferred__'
 # The samplers that `auto_sampler` considers, in the order it prefers them.
 _SAMPLERS: tuple[str, ...] = (
     'random_under', 'smote_tomek', 'smote', 'random_over')
@@ -304,6 +323,31 @@ class Profile:
             for k, v in dataclasses.asdict(self).items()}
 
 
+@dataclasses.dataclass(frozen = True)
+class ErrorShape:
+    """How far the distribution of a regression's errors is from normal.
+
+    Args:
+        skewness: the skewness of the errors.
+        kurtosis: their excess kurtosis.
+        normality: p-value of D'Agostino and Pearson's test that they are
+            normal, or `None` if there are too few to test.
+        normal: whether they are normal: they are not if the test rejects
+            normality (or there are too few to test) and they are
+            materially skewed or heavy-tailed.
+        outliers: the share of the errors that are outliers (with a robust
+            z-score, from the median and the median absolute deviation,
+            beyond 3.5).
+
+    """
+
+    skewness: float
+    kurtosis: float
+    normality: float | None
+    normal: bool
+    outliers: float
+
+
 def profile(item: base.Dataset) -> Profile:
     """Returns what the real training rows of `item` are like.
 
@@ -314,11 +358,7 @@ def profile(item: base.Dataset) -> Profile:
         The profile of the training rows that a sampler did not make up.
 
     """
-    rows = item.real_train_rows
-    if len(rows) > _PROFILE_ROWS:
-        generator = np.random.default_rng(item.seed)
-        rows = pd.Index(generator.choice(
-            rows.to_numpy(), size = _PROFILE_ROWS, replace = False))
+    rows = profiled_rows(item)
     x = item.data.loc[rows, item.features]
     kinds = {column: base._kind_of(x[column]) for column in x.columns}
     numerics = [c for c, k in kinds.items() if k == 'numerics']
@@ -349,6 +389,65 @@ def profile(item: base.Dataset) -> Profile:
     elif item.task == 'regress':
         _profile_errors(found, y, matrix)
     return found
+
+
+def profiled_rows(item: base.Dataset) -> pd.Index:
+    """Returns the training rows that `profile` describes.
+
+    Args:
+        item: the dataset to profile.
+
+    Returns:
+        The real training rows (those that a sampler did not make up), or a
+            random sample of 10,000 of them (with the dataset's seed) if
+            there are more.
+
+    """
+    rows = item.real_train_rows
+    if len(rows) > _PROFILE_ROWS:
+        generator = np.random.default_rng(item.seed)
+        rows = pd.Index(generator.choice(
+            rows.to_numpy(), size = _PROFILE_ROWS, replace = False))
+    return rows
+
+
+def error_shape(residuals: np.ndarray) -> ErrorShape | None:
+    """Returns how far the distribution of errors is from a normal one.
+
+    Args:
+        residuals: the errors of a regression.
+
+    Returns:
+        Their skewness, excess kurtosis, the p-value of D'Agostino and
+            Pearson's test of normality (if there are enough of them),
+            whether they are normal, and the share that are outliers, or
+            `None` if there are fewer than three or they do not vary.
+
+    """
+    values = np.asarray(residuals, dtype = float)
+    values = values[np.isfinite(values)]
+    if len(values) <= 2 or np.std(values) == 0:  # noqa: PLR2004
+        return None
+    stats = importlib.import_module('scipy.stats')
+    skewness = float(stats.skew(values))
+    kurtosis = float(stats.kurtosis(values))
+    normality = (
+        float(stats.normaltest(values).pvalue)
+        if len(values) >= _TESTABLE else None)
+    material = abs(skewness) > _SKEW or abs(kurtosis) > _KURTOSIS
+    rejected = normality is None or normality < _ALPHA
+    median = np.median(values)
+    spread = 1.4826 * np.median(np.abs(values - median))
+    outliers = 0.0
+    if spread > 0:
+        scores = np.abs(values - median) / spread
+        outliers = float(np.mean(scores > _OUTLIER_SCORE))
+    return ErrorShape(
+        skewness = skewness,
+        kurtosis = kurtosis,
+        normality = normality,
+        normal = not (material and rejected),
+        outliers = outliers)
 
 
 def resolve(worker: Any) -> None:
@@ -975,7 +1074,9 @@ class AutoModel(Chooser):
         names = (
             [n for n in _MODELS if found.task in _tasks_of(n)]
             if choices is None else camina.listify(choices))
-        reasons = {name: _screen_model(name, found) for name in names}
+        cache: dict[str, Any] = {}
+        reasons = {
+            name: _screen_model(name, found, item, cache) for name in names}
         suited = [name for name, reason in reasons.items() if reason is None]
         if not suited:
             message = (
@@ -1270,11 +1371,14 @@ def _complexity(name: str) -> int:
         name: name of a model.
 
     Returns:
-        Its complexity in its `traits`, or 3 for a model without them.
+        Its `complexity`, or 3 for a technique without one.
 
     """
-    traits = _traits_of(name)
-    return 3 if traits is None else traits.complexity
+    try:
+        kind = _borrow(name)
+    except KeyError:
+        return 3
+    return int(getattr(kind, 'complexity', 3))
 
 
 def _cross_validate(
@@ -1633,11 +1737,7 @@ def _overlap(item: base.Dataset) -> float | None:
             missing values.
 
     """
-    rows = item.real_train_rows
-    if len(rows) > _PROFILE_ROWS:
-        generator = np.random.default_rng(item.seed)
-        rows = pd.Index(generator.choice(
-            rows.to_numpy(), size = _PROFILE_ROWS, replace = False))
+    rows = profiled_rows(item)
     x = item.data.loc[rows, item.features]
     if any(base._kind_of(x[c]) not in {'numerics', 'booleans'} for c in x):
         return None
@@ -1889,7 +1989,6 @@ def _profile_errors(
         matrix: the numeric and boolean features of the same rows, as floats.
 
     """
-    stats = importlib.import_module('scipy.stats')
     complete = matrix.join(y.rename('__label__').astype(float)).dropna()
     labels = complete.pop('__label__').to_numpy()
     complete = complete.loc[:, complete.std() > 0]
@@ -1899,21 +1998,13 @@ def _profile_errors(
         residuals = labels - design @ coefficients
     else:
         residuals = labels - labels.mean()
-    if len(residuals) > 2 and np.std(residuals) > 0:  # noqa: PLR2004
-        found.skewness = float(stats.skew(residuals))
-        found.kurtosis = float(stats.kurtosis(residuals))
-        if len(residuals) >= _TESTABLE:
-            found.normality = float(stats.normaltest(residuals).pvalue)
-        material = (
-            abs(found.skewness) > _SKEW or abs(found.kurtosis) > _KURTOSIS)
-        rejected = found.normality is None or found.normality < _ALPHA
-        found.normal = not (material and rejected)
-        median = np.median(residuals)
-        spread = 1.4826 * np.median(np.abs(residuals - median))
-        if spread > 0:
-            scores = np.abs(residuals - median) / spread
-            found.outliers = bool(
-                np.mean(scores > _OUTLIER_SCORE) > _OUTLIERS)
+    shape = error_shape(residuals)
+    if shape is not None:
+        found.skewness = shape.skewness
+        found.kurtosis = shape.kurtosis
+        found.normality = shape.normality
+        found.normal = shape.normal
+        found.outliers = shape.outliers > _OUTLIERS
     values = y.dropna().astype(float)
     found.counts = bool(
         len(values) > 0 and (values >= 0).all()
@@ -2071,12 +2162,82 @@ def _screen_imputer(
     return None
 
 
-def _screen_model(name: str, found: Profile) -> str | None:
-    """Returns why a model does not suit the data, or `None` if it does.
+def _preference(name: str, found: Profile) -> str | None:
+    """Returns why the data lacks what a model is for, or `None` if it has it.
+
+    Some models are valid for more data than they suit: a negative binomial
+    model is valid for counts that are not overdispersed, but a Poisson
+    model fits them as well with fewer parameters. These are not needs or
+    assumptions (applying the model to other data is not a mistake), so they
+    are only used to choose a model.
 
     Args:
         name: name of the model.
         found: the profile of the dataset.
+
+    Returns:
+        The reason the model is not chosen, or `None`.
+
+    """
+    if name == 'negative_binomial' and not found.overdispersed:
+        return (
+            f'is for overdispersed counts, but the dispersion is '
+            f'{found.dispersion or 0.0:.2f}')
+    if name == 'zero_inflated_poisson' and not found.excess_zeros:
+        return 'is for counts with more zeros than a Poisson model expects'
+    if name == 'robust_regression':
+        if found.counts:
+            return 'is for continuous errors, but the label is counts'
+        if not found.outliers:
+            return 'is for errors with outliers, and there are few'
+    return None
+
+
+def _preferred_because(name: str, found: Profile) -> str | None:
+    """Returns why a model is for the data, if it is for data like it.
+
+    Args:
+        name: name of the model.
+        found: the profile of the dataset.
+
+    Returns:
+        What the model is for (see `_preference`), or `None` if it is not
+            only for some data.
+
+    """
+    if name == 'negative_binomial':
+        return (
+            f'the label is counts that vary more than a Poisson model '
+            f'assumes (dispersion {found.dispersion or 0.0:.2f})')
+    if name == 'zero_inflated_poisson':
+        return (
+            'the label is counts with more zeros than a Poisson model '
+            'expects')
+    if name == 'robust_regression':
+        return 'the errors have outliers, which it weighs less'
+    return None
+
+
+def _screen_model(
+    name: str,
+    found: Profile,
+    item: base.Dataset,
+    cache: dict[str, Any]) -> str | None:
+    """Returns why a model does not suit the data, or `None` if it does.
+
+    A model is ruled out if it cannot do the task, its package is not
+    installed, the features include text or dates, the data does not meet
+    one of its `needs` or `assumptions` (by their pretests, see
+    `conditions.judge_before`), or the data does not have what it is for
+    (see `_preference`). The conditions are checked in the order of
+    `_SCREEN_ORDER`, so the reason given is the first that fails.
+
+    Args:
+        name: name of the model.
+        found: the profile of the dataset.
+        item: the dataset.
+        cache: results of pretests that are slow to find, which every model
+            screened shares.
 
     Returns:
         The reason the model is ruled out, or `None`.
@@ -2090,86 +2251,29 @@ def _screen_model(name: str, found: Profile) -> str | None:
         return 'is not a model'
     task = found.task or ''
     tools = getattr(kind, 'tools', {})
-    traits = kind.traits or models.ModelTraits(
-        'sklearn', 3, missing = True, categories = True)
     if task not in (tuple(tools) or _BOTH):
         return f'cannot {task}'
-    reason = None
-    if not utilities.importable(traits.package):
-        reason = f'needs {traits.package}, which is not installed'
-    elif found.text:
-        reason = 'cannot use text or dates (encode them first)'
-    elif found.missing and not traits.missing:
-        reason = 'cannot use missing values (impute them first)'
-    elif found.categories and not traits.categories:
-        reason = 'cannot use categorical features (encode them first)'
-    elif not traits.wide and found.wide:
-        reason = (
-            f'needs more rows than features ({found.rows} rows and '
-            f'{found.features} features)')
-    elif traits.scaled and found.unscaled:
-        reason = 'needs features on similar scales (scale them first)'
-    else:
-        reason = _screen_assumptions(traits, found)
-    return reason
-
-
-def _screen_assumptions(
-    traits: models.ModelTraits,
-    found: Profile) -> str | None:
-    """Returns which assumption of a model the data does not meet, if any.
-
-    Args:
-        traits: what the model needs and assumes.
-        found: the profile of the dataset.
-
-    Returns:
-        The reason the model is ruled out, or `None`.
-
-    """
-    classes = found.classes or 0
-    if traits.max_classes is not None and classes > traits.max_classes:
-        return f'is for {traits.max_classes} classes, not {classes}'
-    if classes < traits.min_classes:
-        return f'is for {traits.min_classes} or more classes, not {classes}'
-    if traits.ordinal and not found.ordinal:
-        return 'is for three or more ordered classes'
-    if traits.counts is not None and not found.counts:
-        return 'is for a label of counts'
-    if traits.counts == 'equidispersed' and found.overdispersed:
-        return (
-            f'assumes that the variance of the counts equals their mean, but '
-            f'they are overdispersed (dispersion {found.dispersion:.2f})')
-    if traits.counts == 'overdispersed' and not found.overdispersed:
-        return (
-            f'is for overdispersed counts, but the dispersion is '
-            f'{found.dispersion or 0.0:.2f}')
-    if traits.counts == 'zero_inflated' and not found.excess_zeros:
-        return 'is for counts with more zeros than a Poisson model expects'
-    if traits.outliers and found.counts:
-        return 'is for continuous errors, but the label is counts'
-    if traits.outliers and not found.outliers:
-        return 'is for errors with outliers, and there are few'
-    if traits.normal_errors and found.normal is False:
-        return (
-            f'assumes normal errors, but they are not (skewness '
-            f'{found.skewness or 0.0:.2f}, excess kurtosis '
-            f'{found.kurtosis or 0.0:.2f})')
-    if traits.normal_features and found.skewed > 0.5:  # noqa: PLR2004
-        return (
-            f'assumes normal features, but {found.skewed:.0%} of them are '
-            f'not')
-    if traits.independent and found.collinear:
-        return (
-            f'assumes features that are not collinear, but the largest '
-            f'variance inflation factor is {found.vif:.1f}')
-    if found.rows < traits.min_rows:
-        return f'needs at least {traits.min_rows} rows, not {found.rows}'
-    if traits.max_rows is not None and found.rows > traits.max_rows:
-        return f'is too slow for more than {traits.max_rows} rows'
-    if traits.max_features is not None and found.features > traits.max_features:
-        return (
-            f'works poorly with more than {traits.max_features} features')
+    package = kind.package or 'sklearn'
+    if not utilities.importable(package):
+        return f'needs {package}, which is not installed'
+    if found.text:
+        return 'cannot use text or dates (encode them first)'
+    verdicts = {
+        verdict.condition: verdict
+        for verdict in conditions.judge_before(
+            item, [kind], found = found, cache = cache)}
+    names = conditions.conditions_of(kind)
+    first = [n for n in _SCREEN_ORDER if n in names]
+    later = [n for n in names if n not in _SCREEN_ORDER]
+    for condition in [*first, _PREFERRED, *later]:
+        if condition == _PREFERRED:
+            reason = _preference(name, found)
+            if reason is not None:
+                return reason
+            continue
+        verdict = verdicts.get(condition)
+        if verdict is not None and verdict.passed is False:
+            return verdict.detail
     return None
 
 
@@ -2277,32 +2381,28 @@ def _suits(name: str, found: Profile) -> str:
         The reason.
 
     """
-    traits = _traits_of(name)
-    if traits is None:
+    kind = _borrow(name)
+    if not getattr(kind, 'package', ''):
         return 'was named in "choices"'
-    if traits.counts == 'equidispersed':
+    made = set(conditions.conditions_of(kind))
+    if 'equidispersion' in made:
         return (
             f'the label is counts that vary about as a Poisson model assumes '
             f'(dispersion {found.dispersion or 0.0:.2f})')
-    if traits.counts == 'overdispersed':
-        return (
-            f'the label is counts that vary more than a Poisson model '
-            f'assumes (dispersion {found.dispersion or 0.0:.2f})')
-    if traits.counts == 'zero_inflated':
-        return 'the label is counts with more zeros than a Poisson model expects'
-    if traits.ordinal:
+    preferred = _preferred_because(name, found)
+    if preferred is not None:
+        return preferred
+    if 'ordinal_label' in made:
         return f'the {found.classes} classes are ordered'
-    if traits.outliers:
-        return 'the errors have outliers, which it weighs less'
-    if traits.normal_errors:
+    if 'normal_errors' in made:
         return 'the errors are about normal and the features are not collinear'
-    if traits.independent and not traits.normal_features:
+    if 'no_multicollinearity' in made and 'normal_features' not in made:
         return 'the features are not collinear'
-    if traits.max_classes is not None or traits.min_classes:
+    if made & {'binary_label', 'multiclass_label'}:
         return f'the label has {found.classes} classes'
-    if traits.missing and found.missing:
+    if 'no_missing_values' not in made and found.missing:
         return 'uses missing values directly'
-    if traits.categories and found.categories:
+    if 'numeric_features' not in made and found.categories:
         return 'uses categorical features directly'
     return 'its needs and assumptions are met'
 
@@ -2320,24 +2420,6 @@ def _tasks_of(name: str) -> tuple[str, ...]:
     """
     kind = _borrow(name)
     return tuple(getattr(kind, 'tools', {})) or _BOTH
-
-
-def _traits_of(name: str) -> models.ModelTraits | None:
-    """Returns what a model needs from the data and assumes about it.
-
-    Args:
-        name: name of a model.
-
-    Returns:
-        Its `traits`, or `None` if it has none (or is not a model).
-
-    """
-    try:
-        kind = _borrow(name)
-    except KeyError:
-        return None
-    traits: models.ModelTraits | None = getattr(kind, 'traits', None)
-    return traits
 
 
 def _unscaled(continuous: pd.DataFrame) -> bool:

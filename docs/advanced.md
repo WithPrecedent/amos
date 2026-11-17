@@ -48,7 +48,7 @@ import sklearn.datasets
 import amos
 
 print(sorted(amos.library["vertex"]["operation"]))
-# ['chooser', 'cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'model', 'munger', 'parser', 'plot', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
+# ['audit', 'chooser', 'cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'model', 'munger', 'parser', 'plot', 'pretest', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
 print(amos.library.classify("smote"), amos.library.classify("one_hot"))
 # sampler encoder
 print(amos.library.all["random_forest"])
@@ -76,6 +76,8 @@ describes the "general" section in detail.
 | | `use_gpu` | Whether to fit the models that can use a GPU (`xgboost`, `catboost`, `lightgbm`, and `tabpfn`) on an NVIDIA GPU. Defaults to false (see "Fitting models on a GPU" below). |
 | | `visualize_explorers` | Whether every explorer (describer) draws a figure of its table. If it is set, it replaces each explorer's `visualize` parameter; if not (the default), each explorer's own parameter (false unless set) decides (see "Figures of explorers and critics" below). |
 | | `visualize_critics` | Whether every critic (evaluator or inferer) draws a figure of its table. If it is set, it replaces each critic's `visualize` parameter; if not (the default), each critic's own parameter (false unless set) decides. |
+| | `order` | The column that puts the rows in order (such as a date). It is not a feature. `audit_independence` tests the errors of rows next to each other in this order. |
+| | `assumption_violations` | What amos does when the data does not meet an assumption of a technique: "warn" (the default), "raise" an error, "ignore" it, or "skip" the branch of an experiment. See [Assumptions](assumptions.md). |
 | | `conserve_memory` | Whether every experiment keeps only the best combination's whole dataset, rather than every combination's, while it tries them. A worker's own `conserve_memory` setting wins. Defaults to false (see "Experiments" below). |
 | | `pipeline` | A named pipeline (such as `classification` or `regression_inference`) that fills in the settings of the analyst, critic, and artist. It can also be in the project's section, or in the section of one of those workers for that worker alone. Settings that you write win. See [pipeline](idea.md#pipeline). |
 | `files` | `root_folder` | The workspace, which the other folders are in. Defaults to the folder that holds the "code" folder (see "Where data and results are kept" below). |
@@ -157,6 +159,8 @@ A `Dataset` has these attributes:
 | `groups` | Columns that identify groups of rows. They stay in the data but are not features. |
 | `use_gpu` | Whether the models that can use a GPU are fitted on one. |
 | `visualize_explorers`, `visualize_critics` | Whether every explorer (or critic) draws a figure of its table, or `None` to leave it to each technique's `visualize`. |
+| `order` | The column that puts the rows in order, or `None`. Like the groups, it stays in the data but is not a feature. |
+| `assumption_violations` | What amos does when the data does not meet an assumption of a technique: "warn", "raise", "ignore", or "skip". |
 | `train`, `test` | Index labels of the training and test rows. `test` is `None` until the data is split. |
 | `synthetic` | Index labels of the training rows that a sampler made up (synthetic rows and extra copies of a row). |
 | `model` | The fitted model. |
@@ -1909,7 +1913,9 @@ be named in settings right away.
 | `Evaluator` | `evaluate(self, item, **kwargs)` | A table, stored in `tables`. |
 | `Inferer` | `infer(self, item, **kwargs)` | An `amos.Inference`: the table of estimates (with a "coefficient" column), stored in `tables`, the fitted estimator, stored in `fitted`, and any other tables and details to record. |
 | `Plot` | `draw(self, item, figure, **kwargs)` | Nothing: it draws on `figure`. |
-| `Transformer`, `Sampler`, `Model`, `Validator`, `Metric` | Set `contents` to a tool. A `Model` can also set `traits` (an `amos.models.ModelTraits`) to say what it needs and assumes, so that `auto_model` can choose it. | |
+| `Transformer`, `Sampler`, `Model`, `Validator`, `Metric` | Set `contents` to a tool. A `Model` can also name its `assumptions` and `needs` (see [Assumptions](assumptions.md)), and set its `package` and `complexity`, so that `auto_model` can choose it. | |
+| `Pretest` | Nothing: name the pretest in the `pretested_by` of an `amos.Assumption` or `amos.Need` (see [Assumptions](assumptions.md#writing-your-own)). | |
+| `Audit` | Nothing: name the audit in the `audited_by` of an `amos.Assumption`. | |
 | `Chooser` | `apply(self, item, **kwargs)`, and set `chooses` to a genre and `step_names` to the names of the steps that "auto" stands in for it in. | The changed `Dataset`. |
 | `Operation` | `apply(self, item, **kwargs)` | The changed `Dataset`. |
 
@@ -2081,7 +2087,7 @@ print(sorted(project.result.figures), "scorecard" in project.result.tables)
 settings["analyst"]["model_techniques"] = ["random_forest"]
 forest = amos.Project.create(settings, item = cancer)
 print(sorted(forest.result.figures), sorted(forest.result.tables))
-# ['importance_plot'] ['permutation_importance']
+# ['importance_plot'] ['assumptions', 'permutation_importance']
 ```
 
 The first technique of a genre that the workflow applies after the model is

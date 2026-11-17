@@ -60,7 +60,13 @@ class Project(chrisjen.Project):
       settings set it to true), and "visualize_explorers" and
       "visualize_critics", which (if they are set) decide whether every
       explorer and critic draws a figure of its table, whatever its own
-      `visualize` argument (see `base.Visualizer`).
+      `visualize` argument (see `base.Visualizer`). It can also set the
+      dataset's "order" (the column that puts the rows in order) and
+      "assumption_violations" (what amos does when the data does not meet
+      an assumption of a technique: "raise", "warn", "ignore", or "skip").
+    * The workflow is applied knowing its techniques, so that
+      `check_assumptions` checks their assumptions and needs (see the
+      `pretests` module).
     * A "pipeline" named in the settings (such as `pipeline =
       classification` in the "general" section) fills in the settings of the
       analyst, critic, and artist (see the `pipelines` module).
@@ -215,8 +221,12 @@ class Project(chrisjen.Project):
 
         """
         dataset = self._validate_item(self.item if item is None else item)
+        techniques = [
+            (str(node.name), type(node)) for node in _nodes(self.workflow)
+            if isinstance(node, base.Operation)]
         with (
             base.skipping_incompatible_techniques(),
+            base.listing_workflow_techniques(techniques),
             base.using_model_specific_techniques(
                 self.model_specific_techniques)):
             result = super().apply(copy.deepcopy(dataset), **kwargs)
@@ -561,19 +571,23 @@ class Project(chrisjen.Project):
         Returns:
             A `Dataset`, with the "label", "task", "seed", and "groups" from
                 the "general" section of the settings if it did not have them,
-                and the "use_gpu", "visualize_explorers", and
-                "visualize_critics" of the settings. If the settings do not
-                set "use_gpu", a `Dataset` keeps its own (which is `False`
-                unless it was made with `use_gpu = True`), and other data is
-                `False`. The same goes for the other two, which are `None`
-                (not set) unless the settings or the `Dataset` set them.
+                and the "use_gpu", "visualize_explorers",
+                "visualize_critics", "order", and "assumption_violations" of
+                the settings. If the settings do not set "use_gpu", a
+                `Dataset` keeps its own (which is `False` unless it was made
+                with `use_gpu = True`), and other data is `False`. The same
+                goes for the two switches of figures, which are `None` (not
+                set) unless the settings or the `Dataset` set them, the
+                order (`None`), and "assumption_violations" ("warn").
 
         """
         general = self.idea.get('general', {})
         use_gpu = general.get('use_gpu')
         switches = {
             name: general.get(name)
-            for name in ('visualize_explorers', 'visualize_critics')}
+            for name in (
+                'visualize_explorers', 'visualize_critics', 'order',
+                'assumption_violations')}
         if item is None:
             if not self._has_loader():
                 message = (
