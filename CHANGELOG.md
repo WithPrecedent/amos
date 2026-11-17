@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## Unreleased
+
+* The README's table of techniques lists the pretests (in the analyst) and
+  the audits (in the critic), and its list of extras notes that
+  `check_stationarity` needs the `statistics` extra.
+
 ## 0.10.0
 
 * Techniques name what they **assume** about the data in `assumptions` and
