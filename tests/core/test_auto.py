@@ -591,6 +591,8 @@ def test_auto_evaluator_suits_a_classifier() -> None:
         dataset.tables)
     reason = dataset.tables['auto_evaluator'].loc['regression_table', 'reason']
     assert reason == 'random_forest has no coefficients with standard errors'
+    reason = dataset.tables['auto_evaluator'].loc['audit_assumptions', 'reason']
+    assert reason == 'the audits test the errors of a regression'
 
 
 def test_auto_evaluator_tabulates_coefficients() -> None:
@@ -603,6 +605,34 @@ def test_auto_evaluator_tabulates_coefficients() -> None:
     assert 'classification_report' not in chosen
     assert 'permutation_importance' not in chosen
     assert 'regression_table' in dataset.tables
+
+
+def test_auto_evaluator_audits_the_assumptions_of_a_regression() -> None:
+    dataset = _split(make_regression())
+    amos.models.Linear().apply(dataset)
+    auto.AutoEvaluator().apply(dataset)
+    assert 'audit_assumptions' in _chosen(dataset, 'auto_evaluator')
+    table = dataset.tables['audit_assumptions']
+    assert set(table['condition']) == {
+        'normal_errors', 'constant_variance', 'independent_errors'}
+    reason = dataset.tables['auto_evaluator'].loc['audit_assumptions', 'reason']
+    assert 'normal_errors, constant_variance, independent_errors' in reason
+    dataset = _split(make_regression())
+    amos.models.RandomForest().apply(dataset, n_estimators = 10)
+    auto.AutoEvaluator().apply(dataset)
+    assert 'audit_assumptions' not in _chosen(dataset, 'auto_evaluator')
+
+
+def test_auto_evaluator_raises_an_audit_that_fails_when_told() -> None:
+    rng = np.random.default_rng(SEED)
+    data = pd.DataFrame({'x': rng.normal(size = 400)})
+    data['target'] = data['x'] + rng.exponential(size = 400) ** 2
+    dataset = amos.Dataset(
+        data, label = 'target', seed = SEED, assumption_violations = 'ignore')
+    amos.models.Linear().apply(dataset)
+    dataset.assumption_violations = 'raise'
+    with pytest.raises(amos.AssumptionError, match = 'normal errors'):
+        auto.AutoEvaluator().apply(dataset)
 
 
 def test_auto_evaluator_needs_predictions() -> None:

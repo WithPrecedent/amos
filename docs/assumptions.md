@@ -43,7 +43,8 @@ amos tests each assumption and need that it can, at the time when it can:
   the errors are normal, `audit_errors` whether they have constant variance,
   and `audit_independence` whether they are independent (in the dataset's
   `order`, and within its groups). `audit_assumptions` runs every audit that
-  the dataset's model needs.
+  the dataset's model needs, and `auto_evaluator` applies it to a regression
+  whose model makes such assumptions.
 
 Whether or not a workflow names a pretest, amos runs the pretests of a
 technique just before it is applied, so that they test the data that the

@@ -37,6 +37,10 @@ All notable changes to this project will be documented in this file.
 * An experiment's comparison table has a "violations" column when a branch
   did not meet an assumption, and lists the branches it left out. The
   `Findings` report ends with the assumptions that were not met.
+* `auto_evaluator` applies `audit_assumptions` to a regression whose model
+  makes assumptions that only its errors can test (such as `linear` and
+  `ols`), and the pipelines of least squares and statistical models include
+  it. An `AssumptionError` from an evaluator is raised, not left out.
 * `auto_model` screens models with the same pretests, so it now also rules
   out models whose label is not linear in the features, and statistical
   models (such as `logit_sm`) with collinear features.

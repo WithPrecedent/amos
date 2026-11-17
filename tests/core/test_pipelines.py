@@ -260,6 +260,9 @@ def test_model_pipelines_choose_the_tools_that_explain_their_models() -> None:
     assert 'shap_beeswarm' in forest.parameters['auto_plot']['choices']
     ols = pipelines.PIPELINES['ols_regression']
     assert 'regression_table' in ols.parameters['auto_evaluator']['choices']
+    assert 'audit_assumptions' in ols.parameters['auto_evaluator']['choices']
+    linear = pipelines.PIPELINES['linear_regression']
+    assert 'audit_assumptions' in linear.parameters['auto_evaluator']['choices']
     assert {'qq_plot', 'influence_plot', 'coefficient_plot'} <= set(
         ols.parameters['auto_plot']['choices'])
     assert pipelines.PIPELINES['neural_network_regression'].artist == {

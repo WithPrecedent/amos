@@ -568,6 +568,10 @@ class Chooser(base.Operation, abc.ABC):
         for name in table.index[table['chosen'].to_numpy(dtype = bool)]:
             try:
                 _borrow(name)().apply(item, **parameters)
+            # An assumption that the data does not meet is acted on as the
+            # dataset says (see `conditions.enforce`), not left out.
+            except base.AssumptionError:
+                raise
             # A technique that cannot be applied (because its tool is
             # missing or cannot handle this model, for example) is left out,
             # and the reason is kept.
@@ -821,6 +825,10 @@ class AutoEvaluator(Chooser):
       data came from an experiment. The table would have a column for each
       of its models, and estimate the effects of each model without
       coefficients by refitting it many times.
+    * `audit_assumptions`, for a regression whose model makes assumptions
+      that only its errors can test (such as `linear` or `ols`, which assume
+      normal and independent errors of constant variance; see the `audits`
+      module).
     * `feature_importance`, for a model with its own importances (or
       coefficients).
     * `permutation_importance`, which works for any scikit-learn model,
@@ -832,7 +840,10 @@ class AutoEvaluator(Chooser):
 
     Apply it before `auto_plot`, which draws the importances it finds.
     Evaluators that cannot be applied are left out, with a warning, and the
-    reason is in the table (named "auto_evaluator").
+    reason is in the table (named "auto_evaluator"). An audit that finds an
+    assumption that the data does not meet does what the dataset's
+    `assumption_violations` says (it may raise an `AssumptionError`, which
+    is not left out).
 
     """
 
@@ -1321,6 +1332,29 @@ def _best(
     return min(close, key = _complexity)
 
 
+def _audited(model: str | None) -> list[str]:
+    """Returns the assumptions of a model that an audit tests.
+
+    Args:
+        model: the name of the dataset's model, or `None`.
+
+    Returns:
+        The names of the model's assumptions that have an audit (see the
+            `audits` module), or an empty `list` if the model is not in the
+            library.
+
+    """
+    if model is None:
+        return []
+    try:
+        kind = _borrow(model)
+    except (KeyError, ValueError):
+        return []
+    return [
+        name for name in conditions.conditions_of(kind)
+        if conditions.borrow(name).audited_by]
+
+
 def _borrow(name: str) -> type[base.Operation]:
     """Returns the technique class named `name`.
 
@@ -1511,6 +1545,7 @@ def _evaluators(
     # estimates the marginal effects of a model without coefficients by
     # refitting it many times, which is slow for several such models.
     tabulated = coefficients and len(item.branches) < 2  # noqa: PLR2004
+    audited = _audited(model) if found.task == 'regress' else []
     # scikit-learn shuffles the features only of its own estimators.
     shuffled = not tabulated and hasattr(item.model, '__sklearn_tags__')
     importances = (
@@ -1535,6 +1570,12 @@ def _evaluators(
          else 'the models of an experiment are compared by the scorecard '
          '(add regression_table to the critic to estimate the effects of '
          'each)'),
+        ('audit_assumptions', bool(audited),
+         f'tests the assumptions of {model} that only its errors can test '
+         f'({", ".join(audited)})' if audited
+         else 'the audits test the errors of a regression'
+         if found.task != 'regress'
+         else f'{model} makes no assumption that an audit tests'),
         ('feature_importance', importances,
          f'reports the importance that {model} gives each feature'
          if importances
