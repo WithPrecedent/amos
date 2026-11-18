@@ -17,6 +17,7 @@ Contents:
     NormalizeText: collapses spaces in text, and optionally changes its case and
         removes accents and punctuation.
     StripText: trims spaces from (and optionally lowercases) text.
+    HtmlToText: converts columns of HTML or XML to plain text.
     AutoCategorize: makes columns with few unique values categorical.
     ConvertTypes: changes the data types of columns.
     SetKinds: sets the kind of each column (dummy, categorical, or numerical),
@@ -26,6 +27,7 @@ Contents:
     DeriveColumns: makes columns from expressions of other columns, such as "a /
         b".
     MapValues: replaces values with others, such as "N/A" with a missing value.
+    html_to_text: converts HTML or XML to plain text.
 
 """
 
@@ -39,13 +41,16 @@ __all__: list[str] = [
     'CombineFlags',
     'ConvertTypes',
     'DeriveColumns',
+    'HtmlToText',
     'MapValues',
     'Munger',
     'NormalizeText',
     'SetKinds',
-    'StripText']
+    'StripText',
+    'html_to_text']
 
 from ._base import Munger
+from ._markup import HtmlToText, html_to_text
 from ._text import NormalizeText, StripText
 from ._types import AutoCategorize, ConvertTypes, SetKinds
 from ._values import Coalesce, CombineFlags, DeriveColumns, MapValues

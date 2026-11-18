@@ -2,47 +2,20 @@
 
 from __future__ import annotations
 
-import functools
-import http.server
 import os
 import pathlib
-import threading
-import urllib.error
 import zipfile
-from collections.abc import Iterator
 from typing import Any
 
 import pandas as pd
 import pytest
+import requests
 import sklearn.utils
-from conftest import SEED, make_numeric, make_regression
+from conftest import SEED, LocalServer, make_numeric, make_regression
 
 import amos
 import nagata
 from amos import loaders
-
-
-class _Server(http.server.ThreadingHTTPServer):
-    """A local web server that counts the requests for each file."""
-
-    requests: list[str]
-
-    @property
-    def url(self) -> str:
-        """Returns the address of the server."""
-        host, port = self.server_address[:2]
-        return f'http://{host!s}:{port}'
-
-
-class _Handler(http.server.SimpleHTTPRequestHandler):
-    """Serves files from a folder and records each request."""
-
-    def do_GET(self) -> None:  # noqa: N802
-        self.server.requests.append(self.path)  # type: ignore[attr-defined]
-        super().do_GET()
-
-    def log_message(self, *args: Any) -> None:
-        """Keeps the test output quiet."""
 
 
 @pytest.fixture(autouse = True)
@@ -57,21 +30,6 @@ def cases() -> pd.DataFrame:
     data = make_numeric(rows = 1500)
     data['court'] = 'Cour d’appel'
     return data
-
-
-@pytest.fixture
-def server(tmp_path: pathlib.Path) -> Iterator[_Server]:
-    """Serves the files in a "web" folder at a local address."""
-    folder = tmp_path / 'web'
-    folder.mkdir()
-    handler = functools.partial(_Handler, directory = str(folder))
-    served = _Server(('127.0.0.1', 0), handler)
-    served.requests = []
-    thread = threading.Thread(target = served.serve_forever, daemon = True)
-    thread.start()
-    yield served
-    served.shutdown()
-    served.server_close()
 
 
 def test_load_file_reads_every_row_as_utf_8(cases: pd.DataFrame) -> None:
@@ -168,7 +126,7 @@ def test_a_loader_needs_a_source() -> None:
 
 
 def test_download_saves_the_file_once(
-    server: _Server,
+    server: LocalServer,
     tmp_path: pathlib.Path,
     cases: pd.DataFrame) -> None:
     cases.to_csv(tmp_path / 'web' / 'cases.csv', index = False)
@@ -186,7 +144,7 @@ def test_download_saves_the_file_once(
 
 
 def test_download_names_and_unpacks_the_file(
-    server: _Server,
+    server: LocalServer,
     tmp_path: pathlib.Path,
     cases: pd.DataFrame) -> None:
     with zipfile.ZipFile(tmp_path / 'web' / 'bundle.zip', 'w') as archive:
@@ -203,8 +161,8 @@ def test_download_names_and_unpacks_the_file(
     assert pathlib.Path('data/raw/cases/cases.csv').is_file()
 
 
-def test_download_errors_leave_no_file(server: _Server) -> None:
-    with pytest.raises(urllib.error.HTTPError):
+def test_download_errors_leave_no_file(server: LocalServer) -> None:
+    with pytest.raises(requests.HTTPError):
         loaders.Download().apply(None, source = f'{server.url}/missing.csv')
     assert list(pathlib.Path().glob('missing.csv*')) == []
     with pytest.raises(ValueError, match = 'http and https'):

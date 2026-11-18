@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import copy
+import functools
+import http.server
 import importlib
 import pathlib
+import threading
 from collections.abc import Iterator
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -237,3 +241,41 @@ def fitted(classified: amos.Dataset) -> amos.Dataset:
 def fitted_regression(regressed: amos.Dataset) -> amos.Dataset:
     """The `regressed` dataset with a fitted linear regression."""
     return amos.models.Linear().apply(regressed)
+
+
+class LocalServer(http.server.ThreadingHTTPServer):
+    """A local web server that counts the requests for each file."""
+
+    requests: list[str]
+
+    @property
+    def url(self) -> str:
+        """Returns the address of the server."""
+        host, port = self.server_address[:2]
+        return f'http://{host!s}:{port}'
+
+
+class _RecordingHandler(http.server.SimpleHTTPRequestHandler):
+    """Serves files from a folder and records each request."""
+
+    def do_GET(self) -> None:  # noqa: N802
+        self.server.requests.append(self.path)  # type: ignore[attr-defined]
+        super().do_GET()
+
+    def log_message(self, *args: Any) -> None:
+        """Keeps the test output quiet."""
+
+
+@pytest.fixture
+def server(tmp_path: pathlib.Path) -> Iterator[LocalServer]:
+    """Serves the files in a "web" folder at a local address."""
+    folder = tmp_path / 'web'
+    folder.mkdir()
+    handler = functools.partial(_RecordingHandler, directory = str(folder))
+    served = LocalServer(('127.0.0.1', 0), handler)
+    served.requests = []
+    thread = threading.Thread(target = served.serve_forever, daemon = True)
+    thread.start()
+    yield served
+    served.shutdown()
+    served.server_close()

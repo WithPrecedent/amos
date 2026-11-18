@@ -320,3 +320,49 @@ def test_mungers_work_in_a_project(cases: amos.Dataset) -> None:
     assert [h['technique'] for h in result.history] == [
         'strip_text', 'clean_numbers', 'auto_categorize']
     assert amos.library.classify('strip_text') == 'munger'
+
+
+MARKUP = (
+    '<opinion><p>The court <i>held</i> that &sect; 1983 '
+    '<span class="star-pagination">*12</span>applies.</p>'
+    '<page-number>13</page-number><script>var x = 1;</script>'
+    '<p>Second <b>paragraph<p>left open</opinion>')
+
+
+def test_html_to_text() -> None:
+    assert mungers.html_to_text(MARKUP) == (
+        'The court held that § 1983 applies.\nSecond paragraph\nleft open')
+    assert mungers.html_to_text('Smith &amp; Jones') == 'Smith & Jones'
+    assert mungers.html_to_text('') == ''
+    assert mungers.html_to_text('<br/>one<br>two<hr>') == 'one\ntwo'
+
+
+def test_html_to_text_takes_its_tags_and_classes() -> None:
+    text = mungers.html_to_text(
+        MARKUP,
+        skipped_tags = 'SCRIPT, i',
+        skipped_classes = [],
+        block_tags = ['opinion'])
+    assert text == (
+        'The court that § 1983 *12applies.13Second paragraphleft open')
+
+
+def test_html_to_text_munger() -> None:
+    data = pd.DataFrame({
+        'html': [MARKUP, None, '<p> </p>', 'plain &lt;text&gt;'],
+        'title': ['<b>A</b>', 'B', 'C', 'D']})
+    dataset = amos.Dataset.create(data)
+    mungers.HtmlToText().apply(dataset, columns = ['html'])
+    assert dataset.data['html'].iloc[0].startswith('The court held')
+    assert dataset.data['html'].isna().tolist() == [False, True, True, False]
+    assert dataset.data['html'].iloc[3] == 'plain <text>'
+    assert dataset.data['title'].iloc[0] == '<b>A</b>'
+    assert dataset.history[-1] == {
+        'technique': 'html_to_text', 'changed': ['html'], 'created': []}
+    # Converting in processes gives the same text.
+    again = amos.Dataset.create(data)
+    mungers.HtmlToText().apply(again, workers = 2)
+    pd.testing.assert_frame_equal(
+        again.data[['html']], dataset.data[['html']])
+    assert again.data['title'].tolist() == ['A', 'B', 'C', 'D']
+    assert amos.library.classify('html_to_text') == 'munger'

@@ -5,6 +5,7 @@ can change them before a workflow is built (for example,
 `amos.options._DEFAULT_TEST_SIZE = 0.2`).
 
 Contents:
+    _BLOCK_SIZE: bytes of a CSV file that `read_chunks` parses at a time.
     _CLASSIFY_THRESHOLD: most unique values that an integer label can have
         and still be treated as classes.
     _CATEGORY_THRESHOLD: most unique values that a column can have for
@@ -25,6 +26,8 @@ Contents:
         settings of a `nagata` clerk.
     _PLOT_COLORS: the color cycle of figures.
     _PLOT_STYLE: the style of figures.
+    _REPORT_EVERY: rows that `read_chunks` reads between its reports of
+        progress in the log.
     _REPLICATION_FORMAT: format of the settings file of the winning paths
         that `Project.export` saves.
     _REPLICATION_SUFFIX: added to the name of a project to name the settings
@@ -41,6 +44,10 @@ from __future__ import annotations
 import pathlib
 from typing import Any
 
+# Bytes of a CSV file that `read_chunks` parses at a time. A block must be
+# longer than the longest row, and some rows of court records (with every
+# version of an opinion's text) hold tens of megabytes.
+_BLOCK_SIZE: int = 256 * 1024 * 1024
 # An integer label with this many unique values (or fewer) is treated as a set
 # of classes, so `Dataset.task` is "classify". Above it, "regress".
 _CLASSIFY_THRESHOLD: int = 10
@@ -99,6 +106,8 @@ _PLOT_COLORS: str | None = 'bright'
 # in order, or "xkcd". The default is SciencePlots' style for scientific
 # figures, with the sizes and fonts of figures in Nature.
 _PLOT_STYLE: tuple[str, ...] = ('science', 'nature')
+# Rows that `read_chunks` reads between its reports of progress in the log.
+_REPORT_EVERY: int = 1_000_000
 # Format of the settings file of the winning paths that `Project.export`
 # saves: the extension of a format that `bobbie` writes ("json", "ini",
 # "toml", "yaml", or "py"). The "replication_format" setting of the "files"

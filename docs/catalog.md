@@ -35,6 +35,7 @@ Every model has a pipeline of its own for each task that it can do. The
 | Name | Description |
 | --- | --- |
 | [`download`][amos.loaders.Download] | Downloads a file from a URL, or a dataset from OpenML, and loads it. |
+| [`load_chunks`][amos.loaders.LoadChunks] | Loads chosen rows and columns of a huge CSV file, a chunk at a time. |
 | [`load_file`][amos.loaders.LoadFile] | Loads a data file in any format that the clerk knows. |
 | [`load_files`][amos.loaders.LoadFiles] | Loads a batch of files into one table. |
 
@@ -78,6 +79,7 @@ Every model has a pipeline of its own for each task that it can do. The
 | [`combine_flags`][amos.mungers.CombineFlags] | Combines flags into one: whether any or all are true, or how many are. |
 | [`convert_types`][amos.mungers.ConvertTypes] | Changes the data types of columns. |
 | [`derive_columns`][amos.mungers.DeriveColumns] | Makes columns from expressions of other columns, such as "a / b". |
+| [`html_to_text`][amos.mungers.HtmlToText] | Converts columns of HTML or XML to plain text. |
 | [`map_values`][amos.mungers.MapValues] | Replaces values with others, such as "N/A" with a missing value. |
 | [`normalize_text`][amos.mungers.NormalizeText] | Normalizes the spaces, case, accents, and punctuation of text. |
 | [`set_kinds`][amos.mungers.SetKinds] | Sets the kind of each column, with the smallest type that holds it. |

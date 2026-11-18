@@ -4,11 +4,35 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
-## Unreleased
+## 0.10.1
 
 * The README's table of techniques lists the pretests (in the analyst) and
   the audits (in the critic), and its list of extras notes that
   `check_stationarity` needs the `statistics` extra.
+* `load_chunks` is a new loader, and `amos.loaders.read_chunks` the
+  function behind it, for CSV files too large to load at once (such as bulk
+  files of court records of many gigabytes, compressed with bzip2). They read
+  a block at a time with pyarrow on every core, decompress bzip2 on every
+  core with indexed_bzip2 (and gzip, xz, and Zstandard as they read), and
+  keep only the chosen `columns` and the rows whose values are in `keep` or
+  that match `where`, with options for the file's dialect (such as
+  `escape_char`), `block_size`, and progress in the log. A URL is read as it
+  arrives or downloaded first.
+* `download` can find its file by the words of a link on a web page
+  (`link`), check that a downloaded zip archive has a file that matches a
+  pattern before saving it (`required_member`), resume a download that
+  stopped (`resume`), and take a `session` (anything with a `get` method
+  like a `requests.Session`). The tools behind it are public in
+  `amos.loaders`: `download_file`, `download_linked_file`, `page_links`,
+  `find_links`, and `open_session`.
+* **Breaking:** downloads use `requests`, so a failed one raises
+  `requests.HTTPError` rather than `urllib.error.HTTPError`.
+* `html_to_text` is a new munger, and `amos.mungers.html_to_text` a function,
+  that converts HTML or XML to plain text, with the tags and classes whose
+  text is left out (`skipped_tags` and `skipped_classes`) and the tags that
+  start lines (`block_tags`) as parameters.
+* pyarrow, indexed-bzip2, and requests are now required, so the `polars`
+  extra installs only Polars.
 
 ## 0.10.0
 

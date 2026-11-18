@@ -3,9 +3,6 @@
 Contents:
     _OPENML: the function that `download` uses to fetch OpenML datasets, unless
         its `contents` names another.
-    _SCHEMES: schemes of the URLs that `download` accepts.
-    _USER_AGENT: sent with each download, since some servers refuse requests
-        without one.
     Download: downloads a file from a URL, or a dataset from OpenML, and loads
         it.
 
@@ -15,24 +12,16 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-import shutil
 import urllib.parse
-import urllib.request
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from ...core import options, utilities
-
-if TYPE_CHECKING:
-    pass
+from ...core import utilities
+from . import _web
 from ._base import Loader
 
 # The function that `download` uses to fetch OpenML datasets, unless its
 # `contents` names another.
 _OPENML: str = 'sklearn.datasets.fetch_openml'
-# Schemes of the URLs that `download` accepts.
-_SCHEMES: frozenset[str] = frozenset({'http', 'https'})
-# Sent with each download, since some servers refuse requests without one.
-_USER_AGENT: str = 'amos (https://github.com/WithPrecedent/amos)'
 
 
 @dataclasses.dataclass
@@ -48,6 +37,11 @@ class Download(Loader):
     datasets for research. scikit-learn saves each one in an "openml" folder
     in the clerk's input folder, so it is only downloaded once, and the
     dataset's default target is the label unless "label" is set.
+
+    With "link", the source is instead a web page, and the file is the one
+    that the link with those words leads to (see
+    `amos.loaders.download_linked_file`), which suits sites that link to the
+    newest release of their data from the same page.
 
     Wraps:
         [`nagata.FileManager`](https://github.com/WithPrecedent/nagata)
@@ -65,21 +59,40 @@ class Download(Loader):
         file_name: str | None = None,
         refresh: bool = False,
         timeout: float | None = None,
+        link: str | None = None,
+        required_member: str | None = None,
+        resume: bool = False,
+        session: Any = None,
         **kwargs: Any) -> Any:
         """Downloads the data at `source` (unless it was before) and loads it.
 
         Args:
-            source: the URL of a file (http or https), or the name or id of
-                an OpenML dataset.
+            source: the URL of a file (http or https), of a web page that
+                links to the file (with `link`), or the name or id of an
+                OpenML dataset.
             file_name: name to save a URL's file as in the clerk's input
                 folder, which may include folders. Defaults to `None`, in
-                which case the last part of the URL's path is used. Not used
-                for OpenML.
+                which case the last part of the path of the file's URL is
+                used. Not used for OpenML.
             refresh: whether to download a URL's file again even if it was
                 downloaded before. Defaults to `False`. Not used for OpenML.
             timeout: seconds to wait for the server of a URL to answer.
                 Defaults to `None`, which uses `options._DOWNLOAD_TIMEOUT`
                 (read when the file is downloaded). Not used for OpenML.
+            link: the words of the link on the page at `source` that leads
+                to the file, compared without regard to case or spacing
+                (such as "CSV Organized by Supreme Court Citation").
+                Defaults to `None`, in which case `source` is the file.
+            required_member: a pattern (with "*" and "?") that the name of a
+                file in the downloaded zip archive must match before it is
+                saved, such as "*caseCentered*". With `link`, each link with
+                its words is tried until one passes. Defaults to `None`, in
+                which case the download is not checked.
+            resume: whether to continue a download of a URL's file that
+                stopped, instead of starting over. Defaults to `False`.
+            session: an object with a `get` method like a `requests.Session`.
+                Defaults to `None`, in which case one that identifies `amos`
+                is made.
             **kwargs: for a URL, parameters for `read`, such as
                 "file_format", "member", and parameters for the reader. For
                 OpenML, parameters for `fetch_openml`, such as "version" or
@@ -98,20 +111,33 @@ class Download(Loader):
         scheme = urllib.parse.urlparse(text).scheme
         if not scheme:
             return self._fetch_openml(text, **kwargs)
-        if scheme not in _SCHEMES:
+        if scheme not in _web._SCHEMES:
             message = (
                 f'only http and https URLs can be downloaded, not {text!r} '
                 f'(any other source must be the name or id of an OpenML '
                 f'dataset)'
             )
             raise ValueError(message)
-        name = file_name or _name_of(text)
-        path = pathlib.Path(self._get_clerk().input_folder) / name
-        if refresh or not path.is_file():
-            _download(
+        folder = pathlib.Path(self._get_clerk().input_folder)
+        if link is not None:
+            path = _web.download_linked_file(
                 text,
-                path,
-                options._DOWNLOAD_TIMEOUT if timeout is None else timeout)
+                str(link),
+                folder,
+                file_name = file_name,
+                refresh = refresh,
+                timeout = timeout,
+                session = session,
+                required_member = required_member)
+        else:
+            path = _web.download_file(
+                text,
+                folder / (file_name or _web._name_of(text)),
+                refresh = refresh,
+                timeout = timeout,
+                session = session,
+                resume = resume,
+                required_member = required_member)
         return self.read(path, **kwargs)
 
     """ Private Methods """
@@ -141,57 +167,3 @@ class Download(Loader):
         extra = utilities.accepted_parameters(fetch, kwargs)
         return fetch(**fixed, **{
             k: v for k, v in extra.items() if k not in fixed})
-
-
-""" Private Functions """
-
-
-def _download(url: str, path: pathlib.Path, timeout: float) -> None:
-    """Saves the file at `url` to `path`.
-
-    The file is written beside `path` and then renamed, so a download that
-    fails leaves no file behind to be mistaken for the data.
-
-    Args:
-        url: the URL of the file. Its scheme must be in `_SCHEMES`.
-        path: where to save the file.
-        timeout: seconds to wait for the server to answer.
-
-    """
-    path.parent.mkdir(parents = True, exist_ok = True)
-    partial = path.with_name(f'{path.name}.part')
-    # `Download.load` checks that the scheme of `url` is http or https.
-    request = urllib.request.Request(  # noqa: S310
-        url, headers = {'User-Agent': _USER_AGENT})
-    try:
-        with (
-            urllib.request.urlopen(request, timeout = timeout) as response,  # noqa: S310
-            partial.open('wb') as file):
-            shutil.copyfileobj(response, file)
-        partial.replace(path)
-    finally:
-        partial.unlink(missing_ok = True)
-
-
-def _name_of(url: str) -> str:
-    """Returns the name of the file at `url`.
-
-    Args:
-        url: a URL.
-
-    Raises:
-        ValueError: if the URL's path does not end in a name.
-
-    Returns:
-        The last part of the URL's path.
-
-    """
-    path = urllib.parse.unquote(urllib.parse.urlparse(url).path)
-    name = pathlib.PurePosixPath(path).name
-    if not name:
-        message = (
-            f'{url!r} does not end in a file name: set "file_name" (such as '
-            f'"data.csv")'
-        )
-        raise ValueError(message)
-    return name

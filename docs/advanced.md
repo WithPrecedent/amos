@@ -220,7 +220,8 @@ downloads are saved in the input folder.
 | --- | --- | --- |
 | `load_file` | The path of a data file. | |
 | `load_files` | A folder, a pattern of paths (such as "reports/*.txt"), or a list of paths. Files of tables add their rows, and files of text add a row each, with the text in a "text" column. Every row names its file in a "file" column. | `pattern` (of the names of a folder's files, such as "*.txt"), `recursive` (whether to look in subfolders), `file_column`, `text_column`, `limit` (most files), and `workers` (threads that read at once) |
-| `download` | The URL of a file (http or https), or the name (such as "credit-g") or id (such as 31) of an [OpenML](https://www.openml.org) dataset. Both are saved in the input folder and only downloaded again if they are missing. An OpenML dataset's default target is the label unless "label" is set. | For a URL, `file_name` (what to save it as), `refresh` (to download it again), and `timeout` (in seconds). For OpenML, `version`, `target_column`, and the other parameters of `sklearn.datasets.fetch_openml` |
+| `download` | The URL of a file (http or https), or of a web page that links to it (with `link`), or the name (such as "credit-g") or id (such as 31) of an [OpenML](https://www.openml.org) dataset. Both are saved in the input folder and only downloaded again if they are missing. An OpenML dataset's default target is the label unless "label" is set. | For a URL, `file_name` (what to save it as), `refresh` (to download it again), `timeout` (in seconds), `link` (the words of the link on the page at the URL that leads to the file), `required_member` (a pattern that a file in a downloaded zip archive must match), `resume` (to continue a download that stopped), and `session` (such as a `requests.Session`). For OpenML, `version`, `target_column`, and the other parameters of `sklearn.datasets.fetch_openml` |
+| `load_chunks` | The path or URL of a CSV file too large to load at once (which may be compressed, such as "opinions.csv.bz2"). A URL's file is downloaded to the input folder first, unless `stream` is true. | `columns`, `keep` (the values to keep of some columns), `where` (an expression that rows must match), the dialect of the file (such as `delimiter` and `escape_char`), `block_size`, `processes`, `limit` (most rows), and the parameters of `download` for a URL (see "Reading huge CSV files" below) |
 
 Every loader takes a `source`, and the `label`, `task`, and `groups` of the
 data, which default to those in the "general" section. The dataset's history
@@ -311,6 +312,101 @@ print(amos.Dataset.create("calls.psv"))
 
 To write a loader for another source, see "Writing your own techniques"
 below.
+
+### Reading huge CSV files
+
+Some data comes as CSV files far too large to load at once, such as the bulk
+files of court records, which reach 55 GB compressed. `load_chunks` reads such
+a file a block at a time with pyarrow, which parses each block on every core,
+and keeps only the columns in `columns` and the rows whose values are in
+`keep`. The rows that are not wanted are dropped before their text becomes
+Python objects, so reading the file takes about as long as decompressing it.
+A file compressed with bzip2 (".bz2") is decompressed on every core with
+indexed_bzip2, and one compressed with gzip, xz, or Zstandard as it is read.
+Every value is read as text, so that ids and dates keep their exact form, and
+`where` (an expression for `DataFrame.query`) then chooses among the rows that
+are kept. Each block (`block_size` bytes, 256 MB by default) must be longer
+than the longest row.
+
+<!-- file: data/rulings.csv -->
+```csv
+id,court,filed,text
+1,ca1,2009-05-01,"plain"
+2,ca2,2011-02-03,"He said \"no\""
+3,ca1,2012-07-08,"two
+lines"
+4,ca9,2013-01-01,
+```
+
+```python
+settings = {
+    "files": {"input_folder": "data"},
+    "rulings_project": {"rulings_workers": "wrangler"},
+    "wrangler": {"techniques": "load_chunks"},
+    "load_chunks_parameters": {
+        "source": "rulings.csv",
+        "columns": ["id", "text"],
+        "keep": {"court": ["ca1", "ca2"]},
+        "where": "id != '1'",
+        # The file escapes quotes with a backslash, as PostgreSQL writes them.
+        "escape_char": "\\",
+        "double_quote": False,
+    },
+}
+project = amos.Project.create(settings, id = "rulings")
+print(project.result.data.to_dict("list"))
+# {'id': ['2', '3'], 'text': ['He said "no"', 'two\nlines']}
+```
+
+A file online is downloaded to the input folder the first time (and a
+download that stops is resumed the next time), unless `stream` is true, in
+which case it is read as it arrives and not saved. `limit` stops reading once
+that many rows are kept, which is quick for trying out a workflow.
+
+Outside of a project, `amos.loaders.read_chunks` yields the kept rows of each
+block as a `DataFrame`, labeled by their places in the file, so a program can
+work through a file of any size with little memory. `where` can also be a
+function of a chunk:
+
+```python
+chunks = amos.loaders.read_chunks(
+    "data/rulings.csv",
+    keep = {"court": "ca1"},
+    where = lambda chunk: chunk["filed"] >= "2010-01-01",
+    escape_char = "\\",
+    double_quote = False)
+for chunk in chunks:
+    print(chunk[["id", "court"]].to_dict("index"))
+# {2: {'id': '3', 'court': 'ca1'}}
+```
+
+### Downloading files
+
+`download` and `load_chunks` download with tools that work outside of a
+project too, in `amos.loaders`. Each takes a `session`: anything with a `get`
+method like a `requests.Session` (such as one that a package built on `amos`
+sets up with its own headers, or a fake one in tests). Without one, they use
+a `requests.Session` that names `amos` to the server.
+
+| Function | Does |
+| --- | --- |
+| `download_file(url, path)` | Downloads a file unless `path` has it (or `refresh` is true), a piece at a time, so that a download that stops leaves no file behind (or, with `resume`, is continued the next time). `required_member` is a pattern (such as `"*caseCentered*"`) that a file in a downloaded zip archive must match before the archive is saved. |
+| `page_links(url)` | Returns the full address and the words of each link on a web page. |
+| `find_links(url, words)` | Returns the addresses of the links on a page with those words (without regard to case or spacing). |
+| `download_linked_file(url, link, folder)` | Downloads the file that the link with the words `link` leads to. If several links have those words, each is tried until one leads to an archive that has `required_member`. |
+| `open_session(session)` | Returns `session`, or a new `requests.Session` that names `amos`. |
+
+Some sites link to the newest release of their data from the same page, with
+the same words but a new address each year. `download` finds such a file
+with `link`:
+
+```ini
+[download_parameters]
+source = https://scdb.la.psu.edu/data/2025-release-01/
+link = CSV Organized by Supreme Court Citation
+required_member = *caseCentered_Citation*
+member = SCDB_2025_01_caseCentered_Citation.csv
+```
 
 ## Parsing documents
 
@@ -560,9 +656,25 @@ cleaners, they belong in the wrangler, before the data is split. The
 
 | Kind | Mungers |
 | --- | --- |
-| Text | `strip_text`, `normalize_text` |
+| Text | `strip_text`, `normalize_text`, `html_to_text` |
 | Values and types | `map_values`, `convert_types`, `auto_categorize`, `set_kinds` |
 | Combining columns | `coalesce`, `combine_flags`, `derive_columns` |
+
+`html_to_text` converts web pages and other markup (HTML or XML) to plain
+text: each paragraph and other block on a line of its own, with character
+references (such as "&amp;") as characters, and without the text of scripts,
+styles, and the page numbers that publishers insert. Its `skipped_tags`,
+`skipped_classes`, and `block_tags` change which elements are left out and
+which start lines, and `workers` converts in that many processes. The same
+conversion is `amos.mungers.html_to_text` for one piece of text:
+
+```python
+print(amos.mungers.html_to_text(
+    '<p>Smith &amp; Jones<span class="star-pagination">*12</span></p>'
+    '<p>Affirmed.</p>'))
+# Smith & Jones
+# Affirmed.
+```
 
 To search text for patterns, use the parsers (see [Parsing
 documents](#parsing-documents)). Each munger records the columns whose

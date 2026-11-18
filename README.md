@@ -47,10 +47,10 @@ your methods:
 <tr><th>Stage</th><th>Steps</th><th>Techniques</th></tr>
 </thead>
 <tbody>
-<tr><td rowspan="6" valign="middle">wrangler</td><td>Loaders</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.Download"><code>download</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.LoadFile"><code>load_file</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.LoadFiles"><code>load_files</code></a></td></tr>
+<tr><td rowspan="6" valign="middle">wrangler</td><td>Loaders</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.Download"><code>download</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.LoadChunks"><code>load_chunks</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.LoadFile"><code>load_file</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/loaders/#amos.loaders.LoadFiles"><code>load_files</code></a></td></tr>
 <tr><td>Parsers</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseAll"><code>parse_all</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseCategories"><code>parse_categories</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseCategory"><code>parse_category</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseCounts"><code>parse_counts</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseFields"><code>parse_fields</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseFlags"><code>parse_flags</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseMatch"><code>parse_match</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseMatches"><code>parse_matches</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseNames"><code>parse_names</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseReplace"><code>parse_replace</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/parsers/#amos.parsers.ParseSplit"><code>parse_split</code></a></td></tr>
 <tr><td>Cleaners</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.CleanBooleans"><code>clean_booleans</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.CleanDates"><code>clean_dates</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.CleanNumbers"><code>clean_numbers</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropColumns"><code>drop_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropConstant"><code>drop_constant</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropDuplicates"><code>drop_duplicates</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.DropMissing"><code>drop_missing</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.FilterRows"><code>filter_rows</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.KeepColumns"><code>keep_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/cleaners/#amos.cleaners.RenameColumns"><code>rename_columns</code></a></td></tr>
-<tr><td>Mungers</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.AutoCategorize"><code>auto_categorize</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.Coalesce"><code>coalesce</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.CombineFlags"><code>combine_flags</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.ConvertTypes"><code>convert_types</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.DeriveColumns"><code>derive_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.MapValues"><code>map_values</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.NormalizeText"><code>normalize_text</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.StripText"><code>strip_text</code></a></td></tr>
+<tr><td>Mungers</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.AutoCategorize"><code>auto_categorize</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.Coalesce"><code>coalesce</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.CombineFlags"><code>combine_flags</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.ConvertTypes"><code>convert_types</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.DeriveColumns"><code>derive_columns</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.HtmlToText"><code>html_to_text</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.MapValues"><code>map_values</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.NormalizeText"><code>normalize_text</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mungers/#amos.mungers.StripText"><code>strip_text</code></a></td></tr>
 <tr><td>Mergers</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/mergers/#amos.mergers.MergeKeys"><code>merge_keys</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mergers/#amos.mergers.MergeNearest"><code>merge_nearest</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mergers/#amos.mergers.MergeRanges"><code>merge_ranges</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/mergers/#amos.mergers.MergeSummary"><code>merge_summary</code></a></td></tr>
 <tr><td>Shapers</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/shapers/#amos.shapers.GroupRows"><code>group_rows</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/shapers/#amos.shapers.ListsToRows"><code>lists_to_rows</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/shapers/#amos.shapers.LongToWide"><code>long_to_wide</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/shapers/#amos.shapers.WideToLong"><code>wide_to_long</code></a></td></tr>
 <tr><td>explorer</td><td>Describers</td><td><a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.AssociationRules"><code>association_rules</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.Correlations"><code>correlations</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.Describe"><code>describe</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.Frequencies"><code>frequencies</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.KaplanMeier"><code>kaplan_meier</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.LabelBalance"><code>label_balance</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.MissingValues"><code>missing_values</code></a>, <a href="https://WithPrecedent.github.io/amos/reference/amos/describers/#amos.describers.Summarize"><code>summarize</code></a></td></tr>
@@ -166,7 +166,9 @@ of a class name as the default key for accessing it from the stored technique li
 
 `amos` requires Python 3.11 or later. It runs on Linux, macOS, and Windows. It
 is built on [`chrisjen`](https://github.com/WithPrecedent/chrisjen), `numpy`,
-`pandas`, and `scikit-learn`, which are installed automatically.
+`pandas`, and `scikit-learn`, which are installed automatically, with
+`pyarrow` and `indexed_bzip2` (which read huge CSV files on every core) and
+`requests` (which downloads files).
 
 On a computer with an NVIDIA GPU, set `use_gpu = true` in the "general"
 section of the settings, and the `xgboost`, `catboost`, `lightgbm`, and
@@ -196,7 +198,7 @@ amos[all]`, or choose:
 | `fairness` | fairlearn | Fairness metrics and the `fairness` table. |
 | `mlxtend` | mlxtend | `sequential_selection`, `exhaustive_selection`, `association_rules`, `bias_variance`, and `decision_regions`. |
 | `plots` | matplotlib, seaborn, SciencePlots | The artist's figures, and scorecards and regression tables as images. |
-| `polars` | Polars, pyarrow | Reading Polars data frames. |
+| `polars` | Polars | Reading Polars data frames. |
 | `sampling` | imbalanced-learn | Samplers such as `smote`. |
 | `settings` | tomli-w, PyYAML | Saving the settings of the winning paths of an experiment as a TOML or YAML file. |
 | `statistics` | statsmodels, pyfixest | `ols`, `glm`, `logit_sm`, `fixest`, and the other models with inference (such as `poisson`, `probit`, and `mixedlm`), and `check_stationarity`. |
@@ -383,9 +385,10 @@ The result includes a `Dataset`, the fitted `model`, its `predictions`,
 `metrics`, `tables`, `figures`, and the `history` of every technique.
 
 The settings can also say where the data comes from. A loader in the
-wrangler (`load_file`, `load_files`, or `download`) loads a data file or a
-batch of files, or downloads a file or an OpenML dataset first, with the
-project's file manager, and then the project needs no `item`. See [loading
+wrangler (`load_file`, `load_files`, `load_chunks`, or `download`) loads a
+data file, a batch of files, or the chosen rows and columns of a CSV file too
+large to load at once, or downloads a file or an OpenML dataset first, with
+the project's file manager, and then the project needs no `item`. See [loading
 data](https://WithPrecedent.github.io/amos/advanced/#loading-data).
 
 #### Compare every branch
@@ -520,7 +523,7 @@ repository" button reads the same information from
 @software{yung_amos,
   author  = {Yung, Corey Rayburn},
   title   = {amos: Automated Modeling for Open Scholarship},
-  version = {0.10.0},
+  version = {0.10.1},
   year    = {2026},
   url     = {https://github.com/WithPrecedent/amos},
   license = {Apache-2.0}
