@@ -68,8 +68,8 @@ class _LinkExtractor(html.parser.HTMLParser):
 
     """ Initialization Methods """
 
+    # pydoclint wants `__init__` documented in the class's docstring.
     def __init__(self) -> None:
-        """Starts with no links."""
         super().__init__(convert_charrefs = True)
         self.links: list[tuple[str, list[str]]] = []
         self.inside: bool = False

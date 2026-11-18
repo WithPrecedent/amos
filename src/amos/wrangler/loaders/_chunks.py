@@ -333,7 +333,7 @@ def _batches(reader: Any, name: str) -> Iterator[Any]:
         ValueError: if a row is longer than the size of a block.
 
     Yields:
-        pyarrow.RecordBatch: each part of the file.
+        Any: each part of the file, as a `pyarrow.RecordBatch`.
 
     """
     while True:
@@ -484,8 +484,8 @@ def _open(
         timeout: seconds to wait for the server of a URL, or `None`.
 
     Yields:
-        The decompressed file. It (and the connection to a server) is closed
-            when the `with` statement ends.
+        IO[bytes]: the decompressed file. It (and the connection to a server)
+            is closed when the `with` statement ends.
 
     """
     text = str(source)

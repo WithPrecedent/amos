@@ -33,6 +33,8 @@ All notable changes to this project will be documented in this file.
   start lines (`block_tags`) as parameters.
 * pyarrow, indexed-bzip2, and requests are now required, so the `polars`
   extra installs only Polars.
+* The docstrings of the new modules follow pydoclint's rules, so the checks
+  of continuous integration pass.
 
 ## 0.10.0
 

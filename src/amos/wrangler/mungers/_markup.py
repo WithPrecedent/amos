@@ -60,6 +60,11 @@ class _TextExtractor(html.parser.HTMLParser):
     Character references (such as "&sect;") are converted to characters by
     the parser (`convert_charrefs`).
 
+    Args:
+        block_tags: tags that start a new line, in lower case.
+        skipped_tags: tags whose text is left out, in lower case.
+        skipped_classes: classes of elements whose text is left out.
+
     Attributes:
         parts: the pieces of text found so far, in order, with a line break
             for the start and end of each block.
@@ -74,20 +79,13 @@ class _TextExtractor(html.parser.HTMLParser):
 
     """ Initialization Methods """
 
+    # pydoclint wants `__init__` documented in the class's docstring.
     def __init__(
         self,
         *,
         block_tags: frozenset[str],
         skipped_tags: frozenset[str],
         skipped_classes: frozenset[str]) -> None:
-        """Starts with no text.
-
-        Args:
-            block_tags: tags that start a new line, in lower case.
-            skipped_tags: tags whose text is left out, in lower case.
-            skipped_classes: classes of elements whose text is left out.
-
-        """
         super().__init__(convert_charrefs = True)
         self.parts: list[str] = []
         self.stack: list[tuple[str, bool]] = []
