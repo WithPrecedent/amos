@@ -6,6 +6,7 @@ import copy
 import functools
 import http.server
 import importlib
+import os
 import pathlib
 import threading
 from collections.abc import Iterator
@@ -14,6 +15,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+
+# Figures are drawn without a window, so the tests do not need Tk (whose
+# libraries are sometimes broken on Windows runners).
+os.environ.setdefault('MPLBACKEND', 'Agg')
 
 import amos
 import chrisjen

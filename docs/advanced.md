@@ -333,8 +333,7 @@ than the longest row.
 id,court,filed,text
 1,ca1,2009-05-01,"plain"
 2,ca2,2011-02-03,"He said \"no\""
-3,ca1,2012-07-08,"two
-lines"
+3,ca1,2012-07-08,"Reversed, in part"
 4,ca9,2013-01-01,
 ```
 
@@ -355,7 +354,7 @@ settings = {
 }
 project = amos.Project.create(settings, id = "rulings")
 print(project.result.data.to_dict("list"))
-# {'id': ['2', '3'], 'text': ['He said "no"', 'two\nlines']}
+# {'id': ['2', '3'], 'text': ['He said "no"', 'Reversed, in part']}
 ```
 
 A file online is downloaded to the input folder the first time (and a

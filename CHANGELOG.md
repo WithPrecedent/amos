@@ -35,6 +35,10 @@ All notable changes to this project will be documented in this file.
   extra installs only Polars.
 * The docstrings of the new modules follow pydoclint's rules, so the checks
   of continuous integration pass.
+* Continuous integration uploads test coverage to Codecov, for the README's
+  coverage badge. The tests draw figures with matplotlib's Agg backend, so
+  they do not need Tk, and the guide's example of `load_chunks` gives the
+  same output on Windows.
 
 ## 0.10.0
 
