@@ -556,7 +556,8 @@ class Project(chrisjen.Project):
         A path to a data file is read as `load_file` reads it, with the
         project's clerk: a relative path is looked for in the current folder
         and then in the clerk's input folder, and the file may be in any
-        format that the clerk knows.
+        format that the clerk knows. A file that holds a whole `Dataset`
+        (such as one that `save_data` saved) is that `Dataset`.
 
         Args:
             item: the data, or anything that `Dataset.create` accepts. If it

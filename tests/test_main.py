@@ -81,7 +81,8 @@ def test_public_names_exist() -> None:
 def test_every_genre_is_in_the_operation_layer() -> None:
     operations = chrisjen.library['vertex']['operation']
     for genre in (
-        'loader', 'cleaner', 'munger', 'merger', 'shaper', 'describer',
+        'loader', 'cleaner', 'munger', 'merger', 'shaper', 'saver',
+        'describer',
         'splitter', 'transformer', 'sampler', 'model', 'validator',
         'evaluator', 'inferer', 'plot'):
         assert isinstance(operations[genre], dict), genre
@@ -108,7 +109,7 @@ def test_every_concrete_operation_is_in_the_library() -> None:
     # the step's package is.
     names = (
         'loaders', 'parsers', 'cleaners', 'mungers', 'mergers', 'shapers',
-        'describers', 'splitters', 'imputers', 'scalers', 'encoders',
+        'savers', 'describers', 'splitters', 'imputers', 'scalers', 'encoders',
         'mixers', 'selectors', 'reducers', 'samplers', 'models',
         'validators', 'metrics', 'evaluators', 'plots', 'inferers', 'auto')
     for name in names:

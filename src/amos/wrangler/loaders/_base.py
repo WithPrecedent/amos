@@ -59,6 +59,11 @@ class Loader(base.Operation, abc.ABC):
     "label", "task", and "groups" of the "general" section are its default
     parameters.
 
+    A file that holds a whole `Dataset` (such as one that `save_data` saved)
+    goes on from where it was saved: it keeps its own label, task, seed,
+    groups, split, and everything it learned, and its history follows the
+    history of the dataset that the loader is applied to.
+
     Args:
         name: name used to refer to the technique in a workflow. Defaults to
             an empty `str`, which uses the snake case name of the class.
@@ -135,7 +140,9 @@ class Loader(base.Operation, abc.ABC):
 
         Returns:
             The loaded data, with the seed, history, and switches (such as
-                `use_gpu` and `visualize_critics`) of `item`.
+                `use_gpu` and `visualize_critics`) of `item`. A saved
+                `Dataset` keeps its own seed, and its history follows that of
+                `item`.
 
         """
         source = kwargs.pop('source', None)
@@ -150,8 +157,11 @@ class Loader(base.Operation, abc.ABC):
         # unless "task" is set, it is inferred from the label.
         task = kwargs.pop('task', None)
         groups = kwargs.pop('groups', None) or item.groups or None
+        data = self.load(source, **kwargs)
+        # A saved dataset keeps its own history, after that of `item`.
+        saved = list(data.history) if isinstance(data, base.Dataset) else []
         loaded = base.Dataset.create(
-            self.load(source, **kwargs),
+            data,
             label = label,
             task = task,
             seed = item.seed,
@@ -159,7 +169,7 @@ class Loader(base.Operation, abc.ABC):
             use_gpu = item.use_gpu,
             visualize_explorers = item.visualize_explorers,
             visualize_critics = item.visualize_critics)
-        loaded.history = item.history
+        loaded.history = [*item.history, *saved]
         rows, columns = loaded.data.shape
         loaded.record(
             self.name, source = str(source), rows = rows, columns = columns)

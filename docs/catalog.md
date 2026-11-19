@@ -103,6 +103,12 @@ Every model has a pipeline of its own for each task that it can do. The
 | [`long_to_wide`][amos.shapers.LongToWide] | Spreads the rows of each group into columns, such as one for each year. |
 | [`wide_to_long`][amos.shapers.WideToLong] | Stacks columns into rows, such as a row for each year. |
 
+## Savers (wrangler)
+
+| Name | Description |
+| --- | --- |
+| [`save_data`][amos.savers.SaveData] | Saves the whole dataset, so that a later run can go on from it. |
+
 ## Describers (explorer)
 
 | Name | Description |

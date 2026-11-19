@@ -22,7 +22,8 @@ PACKAGE = SRC / 'amos'
 # after them, in alphabetical order.
 STAGES: dict[str, tuple[str, ...]] = {
     'wrangler': (
-        'loaders', 'parsers', 'cleaners', 'mungers', 'mergers', 'shapers'),
+        'loaders', 'parsers', 'cleaners', 'mungers', 'mergers', 'shapers',
+        'savers'),
     'explorer': ('describers',),
     'analyst': (
         'splitters', 'transformers', 'imputers', 'scalers', 'encoders',

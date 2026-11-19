@@ -332,7 +332,9 @@ def _apply_path(
     """Applies copies of the nodes of a path to a copy of `item`.
 
     This may run in another process (or thread), so it first restores the
-    settings of the workflow that the experiment is in.
+    settings of the workflow that the experiment is in, with the label of
+    the path as the label of the branch (after the label of the branch that
+    the experiment is in, if it is in one).
 
     Args:
         path: the nodes of the path.
@@ -346,6 +348,9 @@ def _apply_path(
 
     """
     result = copy.deepcopy(item)
+    label = chrisjen.utilities.label_path(path)
+    branch = f'{state.branch} | {label}' if state.branch else label
+    state = dataclasses.replace(state, branch = branch)
     with base.restored_workflow_state(state):
         try:
             for node in path:

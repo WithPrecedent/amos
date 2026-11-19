@@ -24,7 +24,7 @@ guide](https://WithPrecedent.github.io/chrisjen/advanced/) applies here too.
 | `Project` | A `chrisjen.Project` that makes your data into a `Dataset`, applies the workflow to a copy of it, and can `export` the results. |
 | `Dataset` | The item that flows through the workflow: the data, the label, the split, the model, and everything learned. |
 | `Operation` | Base class for every `amos` technique (a `chrisjen.Technique` that works on a `Dataset`). |
-| `Loader`, `Parser`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, `Selector`, and `Reducer`, `Parser` has the genre `PatternParser`, and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
+| `Loader`, `Parser`, `Cleaner`, `Munger`, `Merger`, `Shaper`, `Saver`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`, `Evaluator`, `Inferer`, `Plot` | The genres of techniques. `Transformer` has the genres `Imputer`, `Scaler`, `Encoder`, `Mixer`, `Selector`, and `Reducer`, `Parser` has the genre `PatternParser`, and `Inferer` has a genre for each package of causal inference (`Doubleml`, `Dowhy`, `Causalml`, and `Tigramite`). |
 | `Metric` | Base class for metrics, which score a model's predictions. A metric is a `chrisjen.Criteria`, not a technique, so it is not a step of a workflow: name it as a `criterion`, or in the `metrics` of a technique such as `scorecard` or a validator. `GroupMetric` is its genre of fairness metrics. |
 | `Chooser` | The genre of the techniques that choose other techniques to suit the data (`auto`, `auto_sampler`, `auto_model`, and `auto_plot`). See [Choosing techniques automatically](#choosing-techniques-automatically). |
 | `Experiment` | A design that compares every combination of techniques and keeps a table of how each did. |
@@ -48,7 +48,7 @@ import sklearn.datasets
 import amos
 
 print(sorted(amos.library["vertex"]["operation"]))
-# ['audit', 'chooser', 'cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'model', 'munger', 'parser', 'plot', 'pretest', 'sampler', 'shaper', 'splitter', 'transformer', 'validator']
+# ['audit', 'chooser', 'cleaner', 'describer', 'evaluator', 'inferer', 'loader', 'merger', 'model', 'munger', 'parser', 'plot', 'pretest', 'sampler', 'saver', 'shaper', 'splitter', 'transformer', 'validator']
 print(amos.library.classify("smote"), amos.library.classify("one_hot"))
 # sampler encoder
 print(amos.library.all["random_forest"])
@@ -1060,6 +1060,93 @@ Stone was a contractor from another company, so no row of the table of
 employees matches Stone, and the means of the third team leave Stone out.
 The "found" column says so, which is why an `indicator` is worth keeping.
 
+## Saving and going on later
+
+A workflow whose first steps are slow (such as loading and parsing huge
+files) can save its dataset once they are done, so that a later run can go
+on from there rather than start again. *Savers* save the dataset at their
+point in the workflow and pass it on unchanged. `save_data` saves the whole
+`Dataset` (its data, label, task, seed, groups, split, fitted tools, model,
+metrics, tables, figures, and history) in a joblib file, and its data as a
+table that other tools can read. Savers are a step of the wrangler, but
+they can come anywhere in a workflow, such as after a model is fitted.
+
+| Parameter | What it does | Default |
+| --- | --- | --- |
+| `folder` | The folder of the files: one of the clerk's folders ("input", "interim", or "output"), a folder in the workspace, or an absolute path. | The clerk's interim folder (the data folder, unless the "files" section names another). |
+| `file_name` | The name of the files, without an extension. | The names of the project and the saver, such as "cancer_save_data". |
+| `table_format` | The format of the table of the data: any format that the clerk knows, such as "parquet", "csv", or "excel". Set it to false to save only the dataset. | "parquet" |
+| `compress` | How much joblib compresses the dataset, from 0 (fastest) to 9. | 0 |
+
+Each run saves over the files of the one before. This project saves its
+dataset after the wrangler:
+
+<!-- file: checkpoint.ini -->
+```ini
+[general]
+label = target
+seed = 43
+
+[cancer_project]
+cancer_workers = wrangler, analyst
+
+[wrangler]
+techniques = drop_duplicates, save_data
+
+[analyst]
+steps = split, scale, model
+split_techniques = stratified
+scale_techniques = standard
+model_techniques = logit
+```
+
+```python
+cancer = sklearn.datasets.load_breast_cancer(as_frame = True).frame
+project = amos.Project.create("checkpoint.ini", item = cancer)
+saved = project.result.history[1]
+print(saved["file_name"], [pathlib.Path(f).name for f in saved["files"]])
+# cancer_save_data ['cancer_save_data.joblib', 'cancer_save_data.parquet']
+```
+
+To go on from it, pass the saved file as the `item` of a project whose
+workflow starts after that point. A relative path is looked for in the
+current folder and then in the clerk's input folder, as a data file is. The
+dataset is what it was when it was saved: it keeps its label, seed, and
+everything else, and the settings of the "general" section fill in only
+what it lacks. Its history goes on from where it stopped, so the history of
+the later run (and its export) lists every technique from the start:
+
+<!-- file: resume.ini -->
+```ini
+[cancer_project]
+cancer_workers = analyst
+
+[analyst]
+steps = split, scale, model
+split_techniques = stratified
+scale_techniques = standard
+model_techniques = logit
+```
+
+```python
+later = amos.Project.create("resume.ini", item = "cancer_save_data.joblib")
+print([entry["technique"] for entry in later.result.history])
+# ['drop_duplicates', 'save_data', 'stratified', 'standard', 'logit']
+print(later.result.seed, later.result.metrics == project.result.metrics)
+# 43 True
+```
+
+A loader (such as `load_file`, with the file as its "source") and
+`Dataset.create` load a saved dataset the same way. In a branch of an
+experiment, which applies the saver once for each combination of
+techniques, the label of the branch is added to the file name (such as
+"cancer_save_data_stratified_split-standard_scale"), so that every branch
+is saved.
+
+Loading a joblib file runs code that it holds, so load only files that you,
+or someone you trust, saved. A saved dataset is also tied to the versions
+of the packages that saved it, so go on from it with the same environment.
+
 ## How techniques work
 
 ### Parameters
@@ -2019,6 +2106,7 @@ be named in settings right away.
 | `Munger` | `munge(self, data, **kwargs)` | The `DataFrame` with changed or new columns, and the same rows. |
 | `Merger` | `match(self, data, other, **kwargs)` | For each row of the data, the position of the row of the other table that matches it, or -1 for none. The merger adds the columns of those rows. `prepare(self, other, **kwargs)` can change the other table first. |
 | `Shaper` | `shape(self, data, **kwargs)` | The reshaped `DataFrame`. |
+| `Saver` | `save(self, item, folder, file_name, **kwargs)` | The paths of the files that it saved in `folder`, named `file_name` (without an extension). It must not change `item`. `self._get_clerk()` returns the clerk that saves files. |
 | `Describer` | `describe(self, item, **kwargs)` | A table, stored in `tables`. |
 | `Splitter` | `divide(self, item, test_size, **kwargs)` | The training and test index labels. |
 | `Evaluator` | `evaluate(self, item, **kwargs)` | A table, stored in `tables`. |

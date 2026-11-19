@@ -38,6 +38,7 @@ Contents:
         another.
     _IN_EXPERIMENT: whether the code that is running is a branch of an
         experiment.
+    _BRANCH: the label of the branch of an experiment that is running.
     _WORKFLOW_TECHNIQUES: the name and class of each technique of the
         workflow that is being applied.
     _VIOLATION_POLICIES: what amos can do when the data does not meet an
@@ -104,6 +105,12 @@ _OPERATION_DEPTH: contextvars.ContextVar[int] = contextvars.ContextVar(
 # techniques.
 _IN_EXPERIMENT: contextvars.ContextVar[bool] = contextvars.ContextVar(
     'in_experiment', default = False)
+# The label of the branch of an experiment that is running (the names of the
+# nodes of its path, joined by " > "), or an empty `str` outside of one. The
+# labels of an experiment inside another's branch are joined by " | ". A
+# saver names the file of each branch with it.
+_BRANCH: contextvars.ContextVar[str] = contextvars.ContextVar(
+    'branch', default = '')
 # The name and class of each technique of the workflow that is being applied,
 # which `check_assumptions` checks when it is not told which techniques to
 # check.
@@ -260,10 +267,12 @@ def restored_workflow_state(
         _MODEL_SPECIFIC_TECHNIQUES.set(state.model_specific_techniques),
         _OPERATION_DEPTH.set(state.operation_depth),
         _IN_EXPERIMENT.set(state.in_experiment),
-        _WORKFLOW_TECHNIQUES.set(state.workflow_techniques))
+        _WORKFLOW_TECHNIQUES.set(state.workflow_techniques),
+        _BRANCH.set(state.branch))
     try:
         yield
     finally:
+        _BRANCH.reset(tokens[5])
         _WORKFLOW_TECHNIQUES.reset(tokens[4])
         _IN_EXPERIMENT.reset(tokens[3])
         _OPERATION_DEPTH.reset(tokens[2])
@@ -307,8 +316,8 @@ def workflow_state() -> WorkflowState:
         Whether techniques that do not suit the model are skipped, which
             techniques the models name, how many operations are being
             applied, one inside another, whether the code is a branch of an
-            experiment, and the techniques of the workflow (see
-            `restored_workflow_state`).
+            experiment, the techniques of the workflow, and the label of the
+            branch (see `restored_workflow_state`).
 
     """
     return WorkflowState(
@@ -316,7 +325,8 @@ def workflow_state() -> WorkflowState:
         model_specific_techniques = _MODEL_SPECIFIC_TECHNIQUES.get(),
         operation_depth = _OPERATION_DEPTH.get(),
         in_experiment = _IN_EXPERIMENT.get(),
-        workflow_techniques = _WORKFLOW_TECHNIQUES.get())
+        workflow_techniques = _WORKFLOW_TECHNIQUES.get(),
+        branch = _BRANCH.get())
 
 
 @dataclasses.dataclass(frozen = True)
@@ -336,6 +346,8 @@ class WorkflowState:
         workflow_techniques: the name and class of each technique of the
             workflow (see `listing_workflow_techniques`). Defaults to an
             empty tuple.
+        branch: the label of the branch of an experiment that is running
+            (see `_BRANCH`). Defaults to an empty `str`, outside of one.
 
     """
 
@@ -344,6 +356,7 @@ class WorkflowState:
     operation_depth: int
     in_experiment: bool = False
     workflow_techniques: tuple[tuple[str, type[Any]], ...] = ()
+    branch: str = ''
 
 
 # `eq` is `False` so that comparing datasets does not compare their data
@@ -527,7 +540,9 @@ class Dataset:
                 columns, the path to a data file in any format that `nagata`
                 knows (see `loaders.LoadFile`), or an object with a `frame`
                 attribute (such as a scikit-learn dataset loaded with
-                `as_frame = True`).
+                `as_frame = True`). A file that holds a whole `Dataset`
+                (such as one that `save_data` saved) is loaded as that
+                `Dataset`.
             label: name of the label column. Defaults to `None`. If `item` has
                 a `target` (as a scikit-learn dataset does), its name is used.
             task: "classify" or "regress". Defaults to `None`, in which case
@@ -595,6 +610,20 @@ class Dataset:
             # folder.
             from ..wrangler import loaders  # noqa: PLC0415
             item = loaders.LoadFile().read(item)
+            if isinstance(item, Dataset):
+                # A file that a saver (such as `save_data`) saved holds a
+                # whole dataset, which goes on from where it was saved.
+                return cls.create(
+                    item,
+                    label = label,
+                    task = task,
+                    seed = seed,
+                    groups = groups,
+                    use_gpu = use_gpu,
+                    visualize_explorers = visualize_explorers,
+                    visualize_critics = visualize_critics,
+                    order = order,
+                    assumption_violations = assumption_violations)
         if type(item).__module__.startswith('polars'):
             # Polars is optional, so its frames are recognized by their module.
             # A `LazyFrame` is collected first.
@@ -1145,10 +1174,10 @@ class Operation(chrisjen.Technique, abc.ABC):
 
     Techniques are grouped into kinds, called genres, each with an abstract
     base class: `Loader`, `Parser`, `Cleaner`, `Munger`, `Merger`, `Shaper`,
-    `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`, `Validator`,
-    `Evaluator`, `Inferer`, and `Plot`. To add a technique, subclass the
-    genre that fits and write the method it requires, or set `contents` to
-    the tool to wrap. To add a new genre, subclass `Operation` and write
+    `Saver`, `Describer`, `Splitter`, `Transformer`, `Sampler`, `Model`,
+    `Validator`, `Evaluator`, `Inferer`, and `Plot`. To add a technique,
+    subclass the genre that fits and write the method it requires, or set
+    `contents` to the tool to wrap. To add a new genre, subclass `Operation` and write
     `apply`. (Metrics are not techniques: see `amos.metrics.Metric`.)
 
     In a project, a plot, evaluator, or inferer can be replaced by the

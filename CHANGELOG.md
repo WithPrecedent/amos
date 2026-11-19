@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.10.2
+
+* Savers are a new genre of the wrangler (`amos.savers`, with the base
+  class `amos.Saver`), which save the dataset at their point in a workflow
+  and pass it on unchanged, so that a later run can go on from there.
+  `save_data` saves the whole `Dataset` (with its split, fitted tools,
+  model, tables, figures, and history) in a joblib file, and its data as a
+  table (parquet by default, or any format of the clerk set by
+  "table_format", or none). The files go in the clerk's interim folder,
+  named for the project and the saver (such as "cancer_save_data"), unless
+  "folder" or "file_name" says otherwise. In a branch of an experiment, the
+  label of the branch is added to the file name, so every branch is saved,
+  in parallel runs too (the branch's label is part of
+  `base.WorkflowState`).
+* A file that holds a saved `Dataset` can be passed as a project's `item`,
+  loaded by a loader (such as `load_file`), or given to `Dataset.create`,
+  and the dataset goes on from where it was saved, history and all.
+
 ## 0.10.1
 
 * The README's table of techniques lists the pretests (in the analyst) and

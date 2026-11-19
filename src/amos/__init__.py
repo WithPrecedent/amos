@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = '0.10.1'
+__version__ = '0.10.2'
 
 __author__: str = 'Corey Rayburn Yung'
 
@@ -41,6 +41,7 @@ __all__: list[str] = [
     'Project',
     'Reducer',
     'Sampler',
+    'Saver',
     'Scaler',
     'Selector',
     'Shaper',
@@ -122,12 +123,21 @@ from .critic.evaluators import Evaluator
 from .critic.inferers import Inference, Inferer
 from .explorer import describers
 from .explorer.describers import Describer
-from .wrangler import cleaners, loaders, mergers, mungers, parsers, shapers
+from .wrangler import (
+    cleaners,
+    loaders,
+    mergers,
+    mungers,
+    parsers,
+    savers,
+    shapers,
+)
 from .wrangler.cleaners import Cleaner
 from .wrangler.loaders import Loader
 from .wrangler.mergers import Merger
 from .wrangler.mungers import Munger
 from .wrangler.parsers import Parser, PatternParser
+from .wrangler.savers import Saver
 from .wrangler.shapers import Shaper
 
 # Each step and each module of the core can be imported from `amos` itself
@@ -137,7 +147,7 @@ from .wrangler.shapers import Shaper
 for _module in (
         assumptions, auto, base, clerks, conditions, interface, metrics, needs,
         options, pipelines, reports, utilities, workers, cleaners, loaders, mergers, mungers, parsers,
-        shapers, describers, encoders, imputers, mixers, models, pretests,
+        shapers, savers, describers, encoders, imputers, mixers, models, pretests,
         reducers, samplers, scalers, selectors, splitters, transformers,
         validators, audits, evaluators, inferers, plots):
     _short = _module.__name__.rpartition('.')[2].removeprefix('_')
