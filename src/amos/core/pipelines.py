@@ -30,7 +30,7 @@ it did in a table of the dataset.
 
 | Pipeline | Task | For |
 | --- | --- | --- |
-| `classification` | classify | Predicting classes: an experiment that compares `logit`, `random_forest`, `gradient_boosting`, and `baseline` by balanced accuracy, after balancing rare classes. |
+| `classification` | classify | Predicting classes: an experiment that compares `logit`, `random_forest`, `gradient_boosting`, and `baseline` by the Matthews correlation coefficient, after balancing rare classes. |
 | `regression` | regress | Predicting a number: an experiment that compares `ridge`, `random_forest`, `gradient_boosting`, and `baseline` by RMSE. |
 | `count_regression` | regress | Predicting counts: an experiment that compares `poisson`, `negative_binomial`, and a random forest and gradient boosting fitted for counts, with `baseline`, by RMSE. |
 | `classification_inference` | classify | The effects of the features on classes: a `logit_sm`, `mnlogit`, or `ordinal_regression` model (whichever suits the classes), with its coefficients in a regression table. |
@@ -61,8 +61,8 @@ needs, and no more:
   for naive Bayes (which assumes that they are). Trees and models for
   inference are not scaled.
 * Missing values are left for the models that handle them (gradient
-  boosting, LightGBM, XGBoost, CatBoost, explainable boosting, and TabPFN),
-  and filled for the others.
+  boosting, LightGBM, XGBoost, CatBoost, GPBoost, explainable boosting, and
+  TabPFN), and filled for the others.
 * Categories are encoded against a reference level for a model with an
   intercept and no penalty, so that their dummy variables are not
   collinear.
@@ -71,7 +71,7 @@ needs, and no more:
   nearest neighbors or XGBoost), and kept as they are for models for
   inference, explainable boosting, and TabPFN.
 * A model that overfits without tuning has a hyperparameter search (scored
-  by balanced accuracy or RMSE), such as a decision tree's depth or the
+  by the Matthews correlation coefficient or RMSE), such as a decision tree's depth or the
   penalty of a lasso. Nearest neighbors keep only the 20 features most
   related to the label, and a neural network stops early.
 
@@ -82,13 +82,13 @@ shap installed): SHAP values and partial dependence for trees, a regression
 table and the plots that check a model's assumptions (normal errors,
 influential rows, calibration) for models for inference, shape functions for
 explainable boosting, a learning curve for a neural network, and survival
-curves for a Cox model. Models of groups (`gee`, `mixedlm`, and
-`binomial_bayes_mixedglm`) need "groups" in the "general" section, and are
-tested on groups that they have not seen. The `cox_regression` pipeline
-needs "event" in the "cox_parameters" section, and `wls_regression` needs
-"weights" in the "wls_parameters" section. See the [technique
-catalog](https://WithPrecedent.github.io/amos/catalog/#pipelines) for every
-pipeline.
+curves for a Cox model. Models of groups (`gee`, `mixedlm`,
+`binomial_bayes_mixedglm`, `gpboost`, and `bambi`) need "groups" in the
+"general" section, and are tested on groups that they have not seen. The
+`cox_regression` pipeline needs "event" in the "cox_parameters" section, and
+`wls_regression` needs "weights" in the "wls_parameters" section. See the
+[technique catalog](https://WithPrecedent.github.io/amos/catalog/#pipelines)
+for every pipeline.
 
 Contents:
     Pipeline: the settings of a named pipeline.
@@ -105,9 +105,9 @@ Contents:
     _OUTCOME_EVALUATORS: the evaluators of how well any model predicts.
     _OUTCOME_PLOTS: the plots of how well any model predicts.
     _TREES, _MISSING_AWARE_TREES, _PENALIZED, _LEAST_SQUARES,
-        _SCALE_SENSITIVE, _GAUSSIAN, _ADDITIVE, _PRETRAINED, _STATISTICAL,
-        _SURVIVAL, _BASELINE: how each family of models is prepared,
-        criticized, and drawn.
+        _SCALE_SENSITIVE, _GAUSSIAN, _ADDITIVE, _GROUPED_TREES, _BAYESIAN,
+        _BAYESIAN_TREES, _PRETRAINED, _STATISTICAL, _SURVIVAL, _BASELINE: how
+        each family of models is prepared, criticized, and drawn.
     _MODEL_PIPELINES: the pipeline of each model for each task.
 
 """
@@ -363,11 +363,12 @@ class _Family:
     reference: bool = False
 
 
-# The scorer of a hyperparameter search, by task. Balanced accuracy is not
-# fooled by a model that predicts only the common class, and RMSE is the
-# criterion of the other pipelines for regression.
+# The scorer of a hyperparameter search, by task. The Matthews correlation
+# coefficient is high only if a model does well on both classes (see
+# `utilities.default_scorer`), and RMSE is the criterion of the other
+# pipelines for regression.
 _SEARCH_SCORING: dict[str, str] = {
-    'classify': 'balanced_accuracy',
+    'classify': 'matthews_corrcoef',
     'regress': 'neg_root_mean_squared_error'}
 # The evaluators and plots of how well any model predicts (those that do not
 # suit the task are left out by the choosers).
@@ -434,6 +435,34 @@ _ADDITIVE = _Family(
         *_OUTCOME_PLOTS, 'importance_plot', 'shape_functions',
         'fairness_plot'),
     impute = False)
+# GPBoost's trees handle missing values, as LightGBM's do, and are fitted
+# together with a random intercept for each group. SHAP's and dtreeviz's
+# explainers of trees cannot read them, so they are explained by their
+# importances and by shuffling the features (which predicts from the trees
+# alone).
+_GROUPED_TREES = _Family(
+    evaluators = (
+        *_OUTCOME_EVALUATORS, 'feature_importance', 'permutation_importance',
+        'fairness'),
+    plots = (
+        *_OUTCOME_PLOTS, 'importance_plot', 'search_plot', 'fairness_plot'),
+    impute = False)
+# Bambi's Bayesian regressions keep the features in their units, as the
+# models for inference do. The posteriors of their coefficients go in a
+# regression table and a coefficient plot, and a Q-Q plot checks the errors.
+_BAYESIAN = _Family(
+    evaluators = (*_OUTCOME_EVALUATORS, 'regression_table', 'fairness'),
+    plots = (
+        *_OUTCOME_PLOTS, 'qq_plot', 'coefficient_plot', 'fairness_plot'),
+    reference = True)
+# BART needs no scaling, but PyMC cannot sample with missing values. Its
+# trees are explained by the share of their splits on each feature and by
+# shuffling the features.
+_BAYESIAN_TREES = _Family(
+    evaluators = (
+        *_OUTCOME_EVALUATORS, 'feature_importance', 'permutation_importance',
+        'fairness'),
+    plots = (*_OUTCOME_PLOTS, 'importance_plot', 'fairness_plot'))
 # TabPFN fills, scales, and weighs the features itself, and refitting it
 # (as shuffling the features does) is slow.
 _PRETRAINED = _Family(
@@ -515,7 +544,8 @@ def _model_pipeline(
         family: how the model is prepared, criticized, and drawn.
         parameters: parameters of techniques, by the name of the technique.
             If the model's parameters have a "search", its "scoring" is
-            balanced accuracy or RMSE (for the task), unless they set one.
+            the Matthews correlation coefficient or RMSE (for the task),
+            unless they set one.
             Defaults to `None`.
         select: name of the selector, or `None` to keep every feature.
             Defaults to `None`.
@@ -634,6 +664,19 @@ _MODEL_PIPELINES: tuple[Pipeline, ...] = (
             'learning_rate': [0.1, 0.5, 1.0]}},
         sample = True),
     *_model_pipelines(
+        'bambi', _BAYESIAN,
+        {'classify': (
+            'Estimates the effects of the features on two classes with a '
+            'Bayesian logit model with a random intercept for each group '
+            '(Bambi), with the posterior of each coefficient, tested on '
+            'groups that it has not seen.'),
+         'regress': (
+            'Estimates the effects of the features on a number with a '
+            'Bayesian linear model with a random intercept for each group '
+            '(Bambi), with the posterior of each coefficient, tested on '
+            'groups that it has not seen.')},
+        grouped = True),
+    *_model_pipelines(
         'baseline', _BASELINE,
         {'classify': (
             'Predicts the most common class for every row: the score that '
@@ -743,6 +786,23 @@ _MODEL_PIPELINES: tuple[Pipeline, ...] = (
             'Estimates the effects of the features on a number with a '
             'gaussian generalized linear model (set "family" for another), '
             'checking its errors and influential rows.')}),
+    *_model_pipelines(
+        'gpboost', _GROUPED_TREES,
+        {'classify': (
+            'Classifies with GPBoost: gradient boosting fitted together with '
+            'a random intercept for each group, which handles missing values '
+            'itself, with a random search of its learning rate and tree '
+            'size, tested on groups that it has not seen.'),
+         'regress': (
+            'Regresses with GPBoost: gradient boosting fitted together with '
+            'a random intercept for each group, which handles missing values '
+            'itself, with a random search of its learning rate and tree '
+            'size, tested on groups that it has not seen.')},
+        parameters = {'gpboost': {
+            'search': 'random', 'n_iter': 10, 'n_estimators': 100,
+            'learning_rate': [0.03, 0.3], 'num_leaves': [7, 31],
+            'min_child_samples': [5, 40]}},
+        grouped = True),
     *_model_pipelines(
         'gradient_boosting', _MISSING_AWARE_TREES,
         {'classify': (
@@ -890,6 +950,17 @@ _MODEL_PIPELINES: tuple[Pipeline, ...] = (
             'probit model, checking that its probabilities are '
             'calibrated.')}),
     *_model_pipelines(
+        'pymc', _BAYESIAN_TREES,
+        {'classify': (
+            'Classifies with Bayesian additive regression trees (PyMC), '
+            'which need no scaling and find curves and interactions '
+            'themselves, explained by the share of their splits on each '
+            'feature.'),
+         'regress': (
+            'Regresses with Bayesian additive regression trees (PyMC), which '
+            'need no scaling and find curves and interactions themselves, '
+            'explained by the share of their splits on each feature.')}),
+    *_model_pipelines(
         'quantile_regression', _STATISTICAL,
         {'regress': (
             'Estimates the effects of the features on the median of the '
@@ -982,10 +1053,11 @@ PIPELINES: dict[str, Pipeline] = {
             task = 'classify',
             description = (
                 'Predicts classes, comparing a logit model, a random forest, '
-                'and gradient boosting by balanced accuracy.'),
+                'and gradient boosting by the Matthews correlation '
+                'coefficient.'),
             analyst = _predicting_analyst(
                 'stratified',
-                'balanced_accuracy',
+                'matthews',
                 ['logit', 'random_forest', 'gradient_boosting', 'baseline'],
                 sample = True),
             critic = _critic('stratified_k_fold'),

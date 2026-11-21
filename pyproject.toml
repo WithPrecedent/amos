@@ -7,7 +7,7 @@ authors = [{name = "Corey Rayburn Yung", email = "coreyrayburnyung@gmail.com"}]
 license = {text = "Apache Software License 2.0"}
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.10.2"
+version = "0.10.3"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -50,7 +50,13 @@ dependencies = [
 # Each extra adds the packages that one group of techniques wraps. A technique
 # imports its package only when it is used, so the extras can be installed in
 # any combination.
-boosting = ["catboost>=1.2", "lightgbm>=4.0", "xgboost>=2.0"]
+boosting = ["catboost>=1.2", "gpboost>=1.5", "lightgbm>=4.0", "xgboost>=2.0"]
+# Bayesian models, which sample their posteriors with PyMC. PyMC 6, and the
+# versions of Bambi and pymc-bart that work with it, need Python 3.12.
+bayesian = [
+    "bambi>=0.21; python_version >= '3.12'",
+    "pymc>=6.0; python_version >= '3.12'",
+    "pymc-bart>=0.13; python_version >= '3.12'"]
 # causalml has no wheels past Python 3.12, and on Python 3.11 and 3.12 the
 # versions of DoWhy that work with pandas 3 need an older scipy than
 # causalml does, so causalml is installed before Python 3.13 and DoWhy after.
@@ -79,7 +85,7 @@ uncertainty = ["mapie>=1.0"]
 word = ["python-docx>=1.1"]
 # TabPFN needs PyTorch, which is large, so it is not part of "all".
 tabpfn = ["tabpfn>=2.0"]
-all = ["amos[boosting,causal,encoders,explain,fairness,mlxtend,plots,polars,sampling,settings,statistics,survival,tables,tuning,uncertainty,word]"]
+all = ["amos[bayesian,boosting,causal,encoders,explain,fairness,mlxtend,plots,polars,sampling,settings,statistics,survival,tables,tuning,uncertainty,word]"]
 
 [project.urls]
 Documentation = "https://WithPrecedent.github.io/amos"
@@ -109,6 +115,7 @@ dev = [
     "types-requests",
     {include-group = "tests"}]
 tests = [
+    "bambi>=0.21; python_version >= '3.12'",
     "catboost>=1.2",
     "category-encoders>=2.6",
     "causalml>=0.17; python_version < '3.13'",
@@ -118,6 +125,7 @@ tests = [
     "dtreeviz>=2.2",
     "eli5>=0.16",
     "fairlearn>=0.12",
+    "gpboost>=1.5",
     "great-tables>=0.15",
     "imbalanced-learn>=0.12",
     "interpret-core>=0.6",
@@ -130,6 +138,8 @@ tests = [
     "optuna-integration[sklearn]>=4.0",
     "polars>=1.0",
     "pyfixest>=0.30",
+    "pymc>=6.0; python_version >= '3.12'",
+    "pymc-bart>=0.13; python_version >= '3.12'",
     "python-docx>=1.1",
     "rdrobust>=2.1",
     "scienceplots>=2.1",

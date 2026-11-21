@@ -156,15 +156,16 @@ _PAIRS: int = 5
 # Models whose standard errors assume normal errors, so a Q-Q plot checks
 # them.
 _NORMAL_ERRORS: frozenset[str] = frozenset({
-    'elastic_net', 'fixest', 'glm', 'lasso', 'linear', 'mixedlm', 'ols',
-    'ridge', 'wls'})
+    'bambi', 'elastic_net', 'fixest', 'glm', 'lasso', 'linear', 'mixedlm',
+    'ols', 'ridge', 'wls'})
 # Models made of decision trees.
 _TREES: frozenset[str] = frozenset({
     'adaboost', 'catboost', 'decision_tree', 'extra_trees',
     'gradient_boosting', 'lightgbm', 'random_forest', 'xgboost'})
 # Models whose predictions are not a linear function of the features.
 _NONLINEAR: frozenset[str] = _TREES | {
-    'explainable_boosting', 'knn', 'neural_network', 'svm', 'tabpfn'}
+    'explainable_boosting', 'gpboost', 'knn', 'neural_network', 'pymc',
+    'svm', 'tabpfn'}
 
 
 # The tasks of a model that wraps a tool of its own (with `contents`),
@@ -1064,8 +1065,9 @@ class AutoModel(Chooser):
                 first model that suits the data is chosen without
                 cross-validation.
             metric: name of the metric to score each model with. Defaults to
-                `None`, which uses "balanced_accuracy" for classification and
-                "rmse" for regression.
+                `None`, which uses "matthews" (the Matthews correlation
+                coefficient; see `utilities.default_scorer` for why) for
+                classification and "rmse" for regression.
             simplest: whether to choose the simplest model whose score is
                 within one standard error of the best. Defaults to `True`.
             **kwargs: parameters for the models. Each model uses those it
@@ -1110,7 +1112,7 @@ class AutoModel(Chooser):
         splits = _splits(item, folds)
         if len(tried) > 1 and splits > 1:
             metric = metric or (
-                'balanced_accuracy' if item.task == 'classify' else 'rmse')
+                'matthews' if item.task == 'classify' else 'rmse')
             scores = {}
             for name in tried:
                 try:

@@ -92,6 +92,7 @@ class Scorecard(_Published, Evaluator):
         'classify': (
             'accuracy',
             'balanced_accuracy',
+            'matthews',
             'precision',
             'recall',
             'f1',

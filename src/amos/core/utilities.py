@@ -2,6 +2,7 @@
 
 Contents:
     accepted_parameters: limits parameters to those that a tool accepts.
+    default_scorer: returns the scikit-learn scorer used when none is named.
     describe_tool: returns a name for a tool that can be stored in a record.
     environment: describes the software used to run a project.
     feature_names: returns the columns of the data that a model was fitted
@@ -107,6 +108,30 @@ def accepted_parameters(
             return dict(parameters)
         return {k: v for k, v in parameters.items() if k in names}
     return chrisjen.utilities.accepted_arguments(tool, parameters)
+
+
+def default_scorer(task: str | None) -> str:
+    """Returns the scikit-learn scorer that amos uses when none is named.
+
+    Classification is scored by the Matthews correlation coefficient, which
+    is high only if the sensitivity, specificity, precision, and negative
+    predictive value are all high, so (unlike accuracy, F1, or the area
+    under the ROC curve) it is not flattered by a model that does well on
+    one class at the other's expense, or by imbalanced classes (Chicco and
+    Jurman, "The Matthews correlation coefficient (MCC) should replace the
+    ROC AUC as the standard metric for assessing binary classification",
+    BioData Mining 16, 4, 2023, https://doi.org/10.1186/s13040-023-00322-4).
+    For more than two classes, scikit-learn's version is Gorodkin's
+    generalization of it. Regression is scored by R².
+
+    Args:
+        task: "classify", "regress", or `None`.
+
+    Returns:
+        "matthews_corrcoef" to classify, and "r2" otherwise.
+
+    """
+    return 'matthews_corrcoef' if task == 'classify' else 'r2'
 
 
 def describe_tool(tool: Any) -> str | None:

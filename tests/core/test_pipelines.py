@@ -56,7 +56,7 @@ def test_a_pipeline_in_general_fills_in_the_whole_project() -> None:
         'classification_workers': ['analyst', 'critic', 'artist']}
     analyst = expanded['analyst']
     assert analyst['design'] == 'experiment'
-    assert analyst['criterion'] == 'balanced_accuracy'
+    assert analyst['criterion'] == 'matthews'
     assert analyst['sample_techniques'] == ['auto']
     assert expanded['critic'] == {
         'techniques': ['stratified_k_fold', 'auto_evaluator']}
@@ -249,7 +249,7 @@ def test_model_pipelines_weigh_or_resample_rare_classes() -> None:
 def test_model_pipelines_score_their_searches_for_the_task() -> None:
     logit = pipelines.PIPELINES['logit_classification'].parameters['logit']
     assert logit['search'] == 'grid'
-    assert logit['scoring'] == 'balanced_accuracy'
+    assert logit['scoring'] == 'matthews_corrcoef'
     lasso = pipelines.PIPELINES['lasso_regression'].parameters['lasso']
     assert lasso['scoring'] == 'neg_root_mean_squared_error'
 
@@ -409,10 +409,13 @@ _LABELS: dict[str, frozenset[str]] = {
 # The columns that the parameters required by a pipeline name.
 _COLUMNS: dict[str, str] = {'event': 'arrested', 'weights': 'weight'}
 # Parameters that make the slowest models quick to test: fewer bags of an
-# explainable boosting machine, and fewer threads for xgboost (whose threads
-# wait on each other for small data on a busy computer).
+# explainable boosting machine, fewer threads for xgboost (whose threads
+# wait on each other for small data on a busy computer), and fewer draws of
+# the Bayesian models.
 _LIGHT: dict[str, dict] = {
+    'bambi': {'draws': 100, 'tune': 100},
     'explainable_boosting': {'outer_bags': 2},
+    'pymc': {'draws': 100, 'tune': 100, 'm': 20},
     'xgboost': {'n_jobs': 2}}
 
 

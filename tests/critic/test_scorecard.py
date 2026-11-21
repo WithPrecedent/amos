@@ -43,7 +43,8 @@ def test_scorecard_has_a_row_for_each_branch(project: amos.Project) -> None:
     table = project.result.tables['scorecard']
     assert list(table.columns) == [
         'rank', 'split', 'scale', 'model', 'roc_auc', 'accuracy',
-        'balanced_accuracy', 'precision', 'recall', 'f1', 'log_loss']
+        'balanced_accuracy', 'matthews', 'precision', 'recall', 'f1',
+        'log_loss']
     assert list(table['rank']) == [1, 2, 3, 4]
     assert set(table['scale']) == {'standard', 'none'}
     assert set(table['split']) == {'stratified'}
@@ -179,7 +180,7 @@ def test_to_markdown(project: amos.Project, tmp_path: pathlib.Path) -> None:
     assert lines[1].startswith('| ---: | --- | --- | --- | ---: |')
     assert len(lines) == 2 + 4
     assert lines[2].startswith('| 1 | stratified | ')
-    assert lines[2].count('|') == 12
+    assert lines[2].count('|') == 13
     assert (tmp_path / 'card.md').read_text(encoding = 'utf-8') == text
 
 

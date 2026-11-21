@@ -122,7 +122,7 @@ def test_recursive_elimination_cv_adds_the_score_of_each_size(
     assert table['score'].is_monotonic_decreasing
     tool = classified.fitted['recursive_elimination_cv']
     assert table['size'].iloc[0] == tool.n_features_
-    assert tool.scoring == 'accuracy'
+    assert tool.scoring == 'matthews_corrcoef'
 
 
 def test_selectors_build_a_model_of_the_library_by_name(
@@ -301,7 +301,7 @@ def test_sequential_selection_keeps_the_best_features(
     assert chosen.split(', ') == classified.features
     selector = classified.fitted['sequential_selection']
     assert selector.estimator.random_state == SEED
-    assert selector.scoring == 'accuracy'
+    assert selector.scoring == 'matthews_corrcoef'
 
 
 def test_selectors_score_by_the_task(regressed: amos.Dataset) -> None:

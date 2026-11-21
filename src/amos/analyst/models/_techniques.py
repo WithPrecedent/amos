@@ -1,13 +1,14 @@
 """The models that amos wraps.
 
 Contents:
-    Adaboost, Baseline, BinomialBayesMixedglm, Catboost, Cox, DecisionTree,
-        ElasticNet, ExplainableBoosting, ExtraTrees, Fixest, GEE,
-        GeneralizedPoisson, GLM, GradientBoosting, KNN, Lasso, Lightgbm, Linear,
-        Logit, LogitSM, Mixedlm, Mnlogit, NaiveBayes, NegativeBinomial,
-        NeuralNetwork, OLS, OrdinalRegression, Poisson, Probit,
-        QuantileRegression, RandomForest, Ridge, RobustRegression, SVM, Tabpfn,
-        WLS, Xgboost, ZeroInflatedPoisson: models.
+    Adaboost, Bambi, Baseline, BinomialBayesMixedglm, Catboost, Cox,
+        DecisionTree, ElasticNet, ExplainableBoosting, ExtraTrees, Fixest,
+        GEE, GeneralizedPoisson, GLM, Gpboost, GradientBoosting, KNN, Lasso,
+        Lightgbm, Linear, Logit, LogitSM, Mixedlm, Mnlogit, NaiveBayes,
+        NegativeBinomial, NeuralNetwork, OLS, OrdinalRegression, Poisson,
+        Probit, Pymc, QuantileRegression, RandomForest, Ridge,
+        RobustRegression, SVM, Tabpfn, WLS, Xgboost, ZeroInflatedPoisson:
+        models.
 
 """
 
@@ -18,7 +19,14 @@ from collections.abc import Mapping
 from typing import Any, ClassVar
 
 from ...core import base
-from ._adapters import FixedEffects, ProportionalHazards, Statsmodel
+from ._adapters import (
+    BayesianAdditiveTrees,
+    BayesianMixedModel,
+    FixedEffects,
+    GaussianProcessBoosting,
+    ProportionalHazards,
+    Statsmodel,
+)
 from ._base import Model
 
 """ Models """
@@ -69,6 +77,102 @@ class Adaboost(Model):
     tools: ClassVar[Mapping[str, Any]] = {
         'classify': 'sklearn.ensemble.AdaBoostClassifier',
         'regress': 'sklearn.ensemble.AdaBoostRegressor'}
+
+
+@dataclasses.dataclass
+class Bambi(Model):
+    """Fits a Bayesian regression (with random intercepts) with Bambi.
+
+    Bambi writes the model from a formula, as R's brms does, with weakly
+    informative priors, and PyMC samples its posterior. By default, the label
+    is regressed on every feature, with a random intercept for each level of
+    "groups" (by default, the dataset's first group, if it has one). Set
+    "formula" to write the model yourself in Bambi's syntax (such as
+    "outcome ~ age + (age|hospital)"), with the names of the columns. A label
+    of two classes uses the "bernoulli" family by default and a number the
+    "gaussian" (set "family" to "poisson" for counts, for example). Set
+    "draws", "tune", and "chains" for the sampler. Sampling takes longer than
+    fitting most models, so the sampler's defaults are modest.
+
+    The coefficients' posterior means, standard deviations, and 95% credible
+    intervals are stored in the dataset's `tables` as "{name}_coefficients",
+    and those of the standard deviations of the random effects as
+    "{name}_random_effects". The predictions are posterior means. A row of a
+    group that the model has not seen is predicted over the random effects
+    that a new group could have.
+
+    Wraps:
+        [`bambi.Model`](https://bambinos.github.io/bambi/api/Model.html)
+        from Bambi.
+
+    """
+
+    package: ClassVar[str] = 'bambi'
+    complexity: ClassVar[int] = 2
+    assumptions: ClassVar[tuple[str, ...]] = (
+        'linearity', 'no_multicollinearity')
+    needs: ClassVar[tuple[str, ...]] = (
+        'binary_label', 'numeric_features', 'no_missing_values')
+
+    tools: ClassVar[Mapping[str, Any]] = {
+        'classify': BayesianMixedModel,
+        'regress': BayesianMixedModel}
+    column_parameters: ClassVar[tuple[str, ...]] = ('groups',)
+
+    def apply(
+        self,
+        item: base.Dataset,
+        search: str | None = None,
+        cv: int = 5,
+        n_iter: int = 10,
+        scoring: str | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Fits the model and stores the posteriors of its random effects.
+
+        Args:
+            item: the dataset to model.
+            search: as for `Model.apply`.
+            cv: as for `Model.apply`.
+            n_iter: as for `Model.apply`.
+            scoring: as for `Model.apply`.
+            **kwargs: parameters for the model.
+
+        Returns:
+            The dataset, with the fitted model, its predictions, and the
+                posteriors of its coefficients and random effects.
+
+        """
+        item = super().apply(
+            item,
+            search = search,
+            cv = cv,
+            n_iter = n_iter,
+            scoring = scoring,
+            **_with_groups(item, kwargs))
+        effects = item.model.random_effects()
+        if not effects.empty:
+            item.tables[f'{self.name}_random_effects'] = effects
+        return item
+
+    def _prepare(
+        self,
+        item: base.Dataset,
+        parameters: dict[str, Any]) -> dict[str, Any]:
+        """Chooses the family for the task.
+
+        Args:
+            item: the dataset to model.
+            parameters: parameters for the model.
+
+        Returns:
+            The parameters, with a "family".
+
+        """
+        family = _suited(
+            self.name, item, parameters,
+            key = 'family', defaults = ('bernoulli', 'gaussian'),
+            classifiers = {'bernoulli'})
+        return {**parameters, 'family': family}
 
 
 @dataclasses.dataclass
@@ -505,6 +609,110 @@ class GLM(Model):
 
 
 @dataclasses.dataclass
+class Gpboost(Model):
+    """Fits GPBoost: gradient boosting with random effects for groups.
+
+    For rows that are correlated within groups (such as the patients of each
+    hospital) or by place, when the effects of the features may not be
+    linear. The trees (as LightGBM's) and a random intercept for each group
+    are fitted together. Set "groups" to the columns of groups (by default,
+    the dataset's first group) and, for a Gaussian process over places,
+    "coordinates" to the columns of their coordinates (such as a latitude and
+    a longitude). Rows of groups that the model has not seen are predicted
+    with their random effects at zero. A label of two classes uses the
+    "bernoulli_logit" likelihood by default (set "likelihood" to
+    "bernoulli_probit" for a probit). A number uses "gaussian" (set it to
+    "poisson" for counts, for example). The variances of the random effects
+    are stored in the dataset's `tables` as "{name}_random_effects".
+
+    Wraps:
+        - [`gpboost.GPBoostClassifier`](https://gpboost.readthedocs.io/en/latest/pythonapi/gpboost.GPBoostClassifier.html)
+          from GPBoost, to classify.
+        - [`gpboost.GPBoostRegressor`](https://gpboost.readthedocs.io/en/latest/pythonapi/gpboost.GPBoostRegressor.html)
+          from GPBoost, to regress.
+        - [`gpboost.GPModel`](https://gpboost.readthedocs.io/en/latest/pythonapi/gpboost.GPModel.html)
+          from GPBoost, for the random effects.
+
+    """
+
+    package: ClassVar[str] = 'gpboost'
+    complexity: ClassVar[int] = 3
+
+    tools: ClassVar[Mapping[str, Any]] = {
+        'classify': GaussianProcessBoosting,
+        'regress': GaussianProcessBoosting}
+    column_parameters: ClassVar[tuple[str, ...]] = ('groups', 'coordinates')
+    # GPBoost's booster takes "verbose" through `**kwargs`, as lightgbm's
+    # does. It is -1 by default, so it does not warn about each tree it
+    # cannot split further.
+    keyword_parameters: ClassVar[tuple[str, ...]] = ('verbose',)
+    parameters: base.GenericDict = dataclasses.field(
+        default_factory = lambda: {'verbose': -1})
+
+    def apply(
+        self,
+        item: base.Dataset,
+        search: str | None = None,
+        cv: int = 5,
+        n_iter: int = 10,
+        scoring: str | None = None,
+        **kwargs: Any) -> base.Dataset:
+        """Fits the model and stores the variances of its random effects.
+
+        The dataset's first group is "groups" unless "groups" or
+        "coordinates" is set.
+
+        Args:
+            item: the dataset to model.
+            search: as for `Model.apply`.
+            cv: as for `Model.apply`.
+            n_iter: as for `Model.apply`.
+            scoring: as for `Model.apply`.
+            **kwargs: parameters for the model.
+
+        Returns:
+            The dataset, with the fitted model, its predictions, and the
+                variances of its random effects.
+
+        """
+        if kwargs.get('coordinates') is None:
+            kwargs = _with_groups(item, kwargs)
+        item = super().apply(
+            item,
+            search = search,
+            cv = cv,
+            n_iter = n_iter,
+            scoring = scoring,
+            **kwargs)
+        item.tables[f'{self.name}_random_effects'] = (
+            item.model.random_effects())
+        return item
+
+    def _prepare(
+        self,
+        item: base.Dataset,
+        parameters: dict[str, Any]) -> dict[str, Any]:
+        """Chooses the likelihood for the task.
+
+        Args:
+            item: the dataset to model.
+            parameters: parameters for the model.
+
+        Raises:
+            ValueError: if the likelihood does not suit the task.
+
+        Returns:
+            The parameters, with a "likelihood".
+
+        """
+        likelihood = _suited(
+            self.name, item, parameters,
+            key = 'likelihood', defaults = ('bernoulli_logit', 'gaussian'),
+            classifiers = {'bernoulli_logit', 'bernoulli_probit'})
+        return {**parameters, 'likelihood': likelihood}
+
+
+@dataclasses.dataclass
 class GradientBoosting(Model):
     """Fits histogram-based gradient boosting from scikit-learn.
 
@@ -938,6 +1146,58 @@ class Probit(_Statsmodels, Model):
 
 
 @dataclasses.dataclass
+class Pymc(Model):
+    """Fits Bayesian additive regression trees (BART) with PyMC.
+
+    A sum of small trees (50 by default; set "m" for more), each held shallow
+    by its prior, whose posterior PyMC samples. Like a random forest, it needs
+    no scaling and finds curves and interactions itself, and its posterior
+    says how sure it is of each prediction. A label of two classes uses the
+    "bernoulli" likelihood (the trees are its log odds) and a number the
+    "normal" (set "likelihood" to "poisson" for counts). The predictions are
+    posterior means, and the importance of each feature is the share of the
+    trees' splits on it. Set "draws", "tune", and "chains" for the sampler.
+    Sampling trees is slow on large data.
+
+    Wraps:
+        - [`pymc_bart.BART`](https://www.pymc.io/projects/bart/en/latest/api_reference.html)
+          from pymc-bart, for the trees.
+        - [`pymc.sample`](https://www.pymc.io/projects/docs/en/stable/api/generated/pymc.sample.html)
+          from PyMC, to sample their posterior.
+
+    """
+
+    package: ClassVar[str] = 'pymc_bart'
+    complexity: ClassVar[int] = 4
+    needs: ClassVar[tuple[str, ...]] = (
+        'binary_label', 'numeric_features', 'no_missing_values')
+
+    tools: ClassVar[Mapping[str, Any]] = {
+        'classify': BayesianAdditiveTrees,
+        'regress': BayesianAdditiveTrees}
+
+    def _prepare(
+        self,
+        item: base.Dataset,
+        parameters: dict[str, Any]) -> dict[str, Any]:
+        """Chooses the likelihood for the task.
+
+        Args:
+            item: the dataset to model.
+            parameters: parameters for the model.
+
+        Returns:
+            The parameters, with a "likelihood".
+
+        """
+        likelihood = _suited(
+            self.name, item, parameters,
+            key = 'likelihood', defaults = ('bernoulli', 'normal'),
+            classifiers = {'bernoulli'})
+        return {**parameters, 'likelihood': likelihood}
+
+
+@dataclasses.dataclass
 class QuantileRegression(_Statsmodels, Model):
     """Fits a quantile regression from statsmodels, with inference.
 
@@ -1198,6 +1458,46 @@ def _family(name: str, item: base.Dataset, parameters: Mapping[str, Any]) -> str
         )
         raise ValueError(message)
     return family
+
+
+def _suited(
+    name: str,
+    item: base.Dataset,
+    parameters: Mapping[str, Any],
+    *,
+    key: str,
+    defaults: tuple[str, str],
+    classifiers: set[str]) -> str:
+    """Returns a model's distribution of the label, checking it suits the task.
+
+    Args:
+        name: name of the model, for the message of an error.
+        item: the dataset to model.
+        parameters: parameters for the model, which may name the
+            distribution.
+        key: the parameter that names the distribution (such as "family" or
+            "likelihood").
+        defaults: the distribution to classify and the one to regress, if
+            `parameters` names none.
+        classifiers: the distributions that classify (two classes).
+
+    Raises:
+        ValueError: if the distribution does not suit the task.
+
+    Returns:
+        The distribution.
+
+    """
+    classify = item.task == 'classify'
+    chosen = str(parameters.get(key, defaults[0] if classify else defaults[1]))
+    if classify != (chosen in classifiers):
+        task = 'classifies' if classify else 'regresses'
+        message = (
+            f'{name!r} with the {chosen!r} {key} does not suit a label that '
+            f'it {task}: use {sorted(classifiers)} to classify two classes '
+            f'and another to regress')
+        raise ValueError(message)
+    return chosen
 
 
 def _with_groups(

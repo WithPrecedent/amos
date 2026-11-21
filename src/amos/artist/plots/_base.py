@@ -563,6 +563,23 @@ def _model(item: base.Dataset) -> Any:
     return item.model
 
 
+def _register_scienceplots(styles: Any) -> None:
+    """Puts SciencePlots' styles in matplotlib's library.
+
+    Importing SciencePlots registers its styles, but a package that reloads
+    matplotlib's library afterward drops them (as arviz_plots does when it is
+    imported, which Bambi and PyMC do). So if they are missing once
+    SciencePlots is imported, it registers them again.
+
+    Args:
+        styles: the `matplotlib.style` module.
+
+    """
+    module = utilities.import_tool('scienceplots')
+    if 'science' not in styles.library:
+        importlib.reload(module)
+
+
 def _share_ranges(figure: Any, names: str) -> None:
     """Gives the panels of `figure` the same ranges on the axes in `names`.
 
@@ -648,7 +665,7 @@ def _styled(
     sheets = [n for n in names if n != 'xkcd'] + ([cycle] if cycle else [])
     # "default" (the settings `matplotlib` starts with) is not in its library.
     if any(s not in styles.library and s != 'default' for s in sheets):
-        utilities.import_tool('scienceplots')
+        _register_scienceplots(styles)
     unknown = [
         n for n in names
         if n not in styles.library and n not in {'default', 'xkcd'}]

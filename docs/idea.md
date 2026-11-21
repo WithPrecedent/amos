@@ -546,7 +546,7 @@ These are the pipelines:
 
 | Pipeline | Task | What its analyst does |
 | --- | --- | --- |
-| `classification` | classify | Compares `logit`, `random_forest`, `gradient_boosting`, and `baseline` in an experiment, by balanced accuracy, after balancing rare classes. |
+| `classification` | classify | Compares `logit`, `random_forest`, `gradient_boosting`, and `baseline` in an experiment, by the Matthews correlation coefficient, after balancing rare classes. |
 | `regression` | regress | Compares `ridge`, `random_forest`, `gradient_boosting`, and `baseline` in an experiment, by RMSE. |
 | `count_regression` | regress | Compares `poisson`, `negative_binomial`, a random forest and gradient boosting fitted for counts, and `baseline` in an experiment, by RMSE. |
 | `classification_inference` | classify | Fits `logit_sm` for two classes, `ordinal_regression` for ordered classes, or `mnlogit` for others, with `auto_model`. |
@@ -588,7 +588,7 @@ plots that suit it:
   those that cannot (nearest neighbors, neural networks, naive Bayes,
   AdaBoost, and XGBoost), and kept as they are for models for inference.
 * Models that overfit without tuning search for their best settings (by
-  balanced accuracy or RMSE): a decision tree's depth, the penalty of a
+  the Matthews correlation coefficient or RMSE): a decision tree's depth, the penalty of a
   lasso, ridge, elastic net, or logit model, the neighbors of nearest
   neighbors, and so on. Nearest neighbors keep only the 20 features most
   related to the label, and a neural network stops early.
@@ -599,9 +599,10 @@ plots that suit it:
   inference, shape functions for explainable boosting, a learning curve
   for a neural network, and survival curves for a Cox model.
 
-`gee_classification`, `gee_regression`, `mixedlm_regression`, and
-`binomial_bayes_mixedglm_classification` need "groups", and are tested on
-groups that they have not seen. `cox_regression` needs "event" in the
+`gee_classification`, `gee_regression`, `mixedlm_regression`,
+`binomial_bayes_mixedglm_classification`, `gpboost_classification`,
+`gpboost_regression`, `bambi_classification`, and `bambi_regression` need
+"groups", and are tested on groups that they have not seen. `cox_regression` needs "event" in the
 "cox_parameters" section, and `wls_regression` needs "weights" in the
 "wls_parameters" section. The [technique catalog](catalog.md#pipelines)
 lists every pipeline with its steps.

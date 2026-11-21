@@ -219,7 +219,7 @@ scorecard = project.scorecard
 print(len(scorecard.table), scorecard.heading)
 # 6 6 branches ranked by roc_auc
 print(scorecard.to_markdown().splitlines()[0])
-# | rank | split | scale | model | roc_auc | accuracy | balanced_accuracy | precision | recall | f1 | log_loss |
+# | rank | split | scale | model | roc_auc | accuracy | balanced_accuracy | matthews | precision | recall | f1 | log_loss |
 ```
 
 Save it with `to_csv`, `to_markdown`, `to_word` (a Word document), or

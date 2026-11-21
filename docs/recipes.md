@@ -115,7 +115,7 @@ scorecard = project.scorecard
 print(sorted(scorecard.table["sample"]))
 # ['none', 'random_under', 'smote']
 print(list(scorecard.table.columns[4:7]))
-# ['balanced_accuracy', 'accuracy', 'precision']
+# ['balanced_accuracy', 'accuracy', 'matthews']
 ```
 
 Only the training rows are resampled. The test rows keep their real balance,

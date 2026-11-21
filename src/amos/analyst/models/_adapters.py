@@ -5,6 +5,12 @@ Contents:
     FixedEffects: adapts pyfixest regressions to the scikit-learn interface.
     ProportionalHazards: adapts statsmodels' Cox model to the scikit-learn
         interface.
+    GaussianProcessBoosting: adapts GPBoost's boosting with random effects to
+        the scikit-learn interface.
+    BayesianMixedModel: adapts Bambi's Bayesian (mixed) regressions to the
+        scikit-learn interface.
+    BayesianAdditiveTrees: adapts PyMC's Bayesian additive regression trees
+        to the scikit-learn interface.
 
 """
 
@@ -12,6 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import importlib
+import warnings
 from collections.abc import Callable, Sequence
 from typing import Any, cast
 
@@ -1122,6 +1129,1085 @@ class ProportionalHazards:
         return x.drop(columns = [c for c in [self.event] if c in x.columns])
 
 
+# The likelihoods of GPBoost that classify two classes. The others regress.
+_GPBOOST_CLASSIFIERS: frozenset[str] = frozenset({
+    'bernoulli_logit', 'bernoulli_probit'})
+
+
+# It is not a dataclass: scikit-learn rebuilds a model with each of its
+# parameters as a keyword, and GPBoost's booster has many, which are only
+# known once gpboost is imported.
+class GaussianProcessBoosting:
+    """Adapts GPBoost's trees with random effects to scikit-learn.
+
+    GPBoost boosts trees of the features, as LightGBM does, together with a
+    model of the random effects of rows that are not independent: a random
+    intercept for each level of each of `groups` (such as each school), a
+    Gaussian process over `coordinates` (such as a latitude and a longitude),
+    or both. The trees and the variances of the random effects are estimated
+    together, so the trees learn the effects of the features apart from what
+    the rows of a group (or of nearby places) share.
+
+    A row of a group (or at a place) that the model has not seen is predicted
+    with its random effect at zero, their average. Without the columns of
+    `groups` and `coordinates` (as when a critic passes only the features),
+    every row is predicted by the trees alone, as if it were of an unseen
+    group. The `random_effects` method returns the variances of the random
+    effects as a table.
+
+    Wraps:
+        - [`gpboost.GPBoostClassifier`](https://gpboost.readthedocs.io/en/latest/pythonapi/gpboost.GPBoostClassifier.html)
+          from GPBoost, for the "bernoulli_logit" and "bernoulli_probit"
+          likelihoods.
+        - [`gpboost.GPBoostRegressor`](https://gpboost.readthedocs.io/en/latest/pythonapi/gpboost.GPBoostRegressor.html)
+          from GPBoost, for the other likelihoods.
+        - [`gpboost.GPModel`](https://gpboost.readthedocs.io/en/latest/pythonapi/gpboost.GPModel.html)
+          from GPBoost, for the random effects.
+
+    Args:
+        groups: names of the columns whose levels each get a random
+            intercept. Defaults to `None`.
+        coordinates: names of the columns of the coordinates of a Gaussian
+            process. Defaults to `None`.
+        likelihood: the distribution of the label: "gaussian" (a number),
+            "bernoulli_logit" or "bernoulli_probit" (two classes), or another
+            of GPBoost's (such as "poisson" or "gamma"). Defaults to
+            "gaussian".
+        cov_function: the covariance function of the Gaussian process (such
+            as "matern", "exponential", or "gaussian"). Defaults to
+            "matern".
+        gp_parameters: other arguments of GPBoost's `GPModel` (such as
+            "gp_approx" for a large Gaussian process). Defaults to `None`.
+        **parameters: parameters of GPBoost's booster, which are those of
+            LightGBM's scikit-learn models (such as "n_estimators" and
+            "learning_rate").
+
+    Attributes:
+        booster_: the fitted GPBoost booster.
+        gp_model_: the fitted GPBoost `GPModel` of the random effects.
+        classes_: the two classes of a classifier.
+        feature_names_in_: the features (not the groups or coordinates).
+
+    """
+
+    """ Initialization Methods """
+
+    def __init__(
+        self,
+        groups: Sequence[str] | str | None = None,
+        coordinates: Sequence[str] | str | None = None,
+        likelihood: str = 'gaussian',
+        cov_function: str = 'matern',
+        gp_parameters: dict[str, Any] | None = None,
+        **parameters: Any) -> None:
+        # The arguments are described in the class's docstring.
+        self.groups = groups
+        self.coordinates = coordinates
+        self.likelihood = likelihood
+        self.cov_function = cov_function
+        self.gp_parameters = gp_parameters
+        self.parameters = parameters
+        self.booster_: Any = None
+        self.gp_model_: Any = None
+        self.classes_: Any = None
+        self.feature_names_in_: Any = None
+
+    """ Properties """
+
+    @property
+    def feature_importances_(self) -> np.ndarray:
+        """Returns the importance of each feature to the trees."""
+        return np.asarray(self.booster_.feature_importances_)
+
+    @property
+    def is_classifier(self) -> bool:
+        """Returns whether the likelihood classifies two classes."""
+        return self.likelihood in _GPBOOST_CLASSIFIERS
+
+    @property
+    def _estimator_type(self) -> str:
+        """Returns the kind of estimator, for scikit-learn before 1.6."""
+        return 'classifier' if self.is_classifier else 'regressor'
+
+    """ Public Methods """
+
+    def fit(self, x: pd.DataFrame, y: pd.Series) -> GaussianProcessBoosting:
+        """Fits the trees and the random effects together.
+
+        Args:
+            x: features, and the `groups` and `coordinates` columns.
+            y: labels.
+
+        Raises:
+            ValueError: if there are no `groups` or `coordinates`, or if a
+                classifier's label does not have two classes.
+
+        Returns:
+            This adapter.
+
+        """
+        gpboost = utilities.import_tool('gpboost')
+        if not self._extras():
+            message = (
+                'a GPBoost model needs "groups" or "coordinates" columns for '
+                'its random effects (use lightgbm for boosting alone)')
+            raise ValueError(message)
+        features = self._features(x)
+        self.feature_names_in_ = np.asarray(features.columns)
+        target = np.asarray(y)
+        if self.is_classifier:
+            self.classes_, target = _two_classes(
+                target,
+                f'a GPBoost model with the {self.likelihood!r} likelihood')
+        seed = self.parameters.get('random_state')
+        self.gp_model_ = gpboost.GPModel(
+            likelihood = self.likelihood,
+            cov_function = self.cov_function,
+            seed = seed if isinstance(seed, int) else 0,
+            **self._random_effects(x),
+            **(self.gp_parameters or {}))
+        tool = (
+            gpboost.GPBoostClassifier if self.is_classifier
+            else gpboost.GPBoostRegressor)
+        self.booster_ = tool(**self.parameters)
+        self.booster_.fit(features, target, gp_model = self.gp_model_)
+        return self
+
+    def get_params(self, deep: bool = True) -> dict[str, Any]:  # noqa: ARG002
+        """Returns the parameters, as scikit-learn expects.
+
+        The parameters of the booster that are not set are GPBoost's
+        defaults, so that every parameter that the booster accepts is named.
+
+        Args:
+            deep: not used.
+
+        Returns:
+            The parameters.
+
+        """
+        gpboost = utilities.import_tool('gpboost')
+        tool = (
+            gpboost.GPBoostClassifier if self.is_classifier
+            else gpboost.GPBoostRegressor)
+        return {
+            'groups': self.groups,
+            'coordinates': self.coordinates,
+            'likelihood': self.likelihood,
+            'cov_function': self.cov_function,
+            'gp_parameters': self.gp_parameters,
+            **tool().get_params(deep = False),
+            **self.parameters}
+
+    def predict(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns predictions (the predicted class of a classifier).
+
+        Args:
+            x: features, and (to use the random effects) the `groups` and
+                `coordinates` columns.
+
+        Returns:
+            The predictions.
+
+        """
+        values = self._response(x)
+        if self.is_classifier:
+            positive = (values >= 0.5).astype(int)  # noqa: PLR2004
+            return np.asarray(self.classes_[positive])
+        return values
+
+    def predict_proba(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the predicted probability of each class (two classes only).
+
+        Args:
+            x: features, and (to use the random effects) the `groups` and
+                `coordinates` columns.
+
+        Raises:
+            AttributeError: if the model is not a classifier.
+
+        Returns:
+            One column for each class, in the order of `classes_`.
+
+        """
+        if not self.is_classifier:
+            message = (
+                'only a GPBoost model with a bernoulli likelihood predicts '
+                'probabilities')
+            raise AttributeError(message)
+        values = self._response(x)
+        return np.column_stack([1 - values, values])
+
+    def random_effects(self) -> pd.DataFrame:
+        """Returns the estimated variances of the random effects.
+
+        Returns:
+            One row for each variance (or other parameter of the covariance,
+                such as a Gaussian process's range), with its "estimate".
+                GPBoost names a group's variance "Group_1", "Group_2", and so
+                on, in the order of `groups`, which are named here instead.
+
+        """
+        estimates = self.gp_model_.get_cov_pars().iloc[0]
+        names = {
+            f'Group_{position}': name
+            for position, name in enumerate(self._groups(), start = 1)}
+        return pd.DataFrame(
+            {'estimate': estimates.to_numpy(dtype = float)},
+            index = [names.get(str(n), str(n)) for n in estimates.index])
+
+    def score(self, x: pd.DataFrame, y: pd.Series) -> float:
+        """Returns the accuracy of a classifier or the R² of a regression.
+
+        Args:
+            x: features, and the `groups` and `coordinates` columns.
+            y: labels.
+
+        Returns:
+            The score, as scikit-learn's classifiers and regressors score.
+
+        """
+        return _score(self.predict(x), y, classify = self.is_classifier)
+
+    def set_params(self, **parameters: Any) -> GaussianProcessBoosting:
+        """Sets parameters, as scikit-learn expects.
+
+        Args:
+            **parameters: any parameters of the adapter or of the booster.
+
+        Returns:
+            This adapter.
+
+        """
+        own = {
+            'groups', 'coordinates', 'likelihood', 'cov_function',
+            'gp_parameters'}
+        for key, value in parameters.items():
+            if key in own:
+                setattr(self, key, value)
+            else:
+                self.parameters[key] = value
+        return self
+
+    """ Private Methods """
+
+    def _coordinates(self) -> list[str]:
+        """Returns the names of the columns of coordinates.
+
+        Returns:
+            The names in `coordinates`, as a `list`.
+
+        """
+        coordinates: list[str] = camina.listify(self.coordinates)
+        return coordinates
+
+    def _extras(self) -> list[str]:
+        """Returns the names of the columns that are not features.
+
+        Returns:
+            The names in `groups` and then in `coordinates`.
+
+        """
+        return [*self._groups(), *self._coordinates()]
+
+    def _features(self, x: pd.DataFrame) -> pd.DataFrame:
+        """Returns the columns of `x` that are features.
+
+        Args:
+            x: the columns that the model is given.
+
+        Returns:
+            `x` without the `groups` and `coordinates` columns.
+
+        """
+        return x.drop(columns = [c for c in self._extras() if c in x.columns])
+
+    def _groups(self) -> list[str]:
+        """Returns the names of the columns of groups.
+
+        Returns:
+            The names in `groups`, as a `list`.
+
+        """
+        groups: list[str] = camina.listify(self.groups)
+        return groups
+
+    def _random_effects(
+        self,
+        x: pd.DataFrame,
+        suffix: str = '') -> dict[str, np.ndarray]:
+        """Returns GPBoost's arguments of the groups and coordinates of `x`.
+
+        The levels of the groups are passed as text, so that groups of any
+        type (and a missing group, which is a level of its own) can be used.
+
+        Args:
+            x: the columns that the model is given.
+            suffix: the suffix of GPBoost's arguments: "" to fit, or "_pred"
+                to predict. Defaults to "".
+
+        Returns:
+            "group_data" and "gp_coords" (with `suffix`), for those that the
+                model has.
+
+        """
+        arguments: dict[str, np.ndarray] = {}
+        if self._groups():
+            arguments[f'group_data{suffix}'] = (
+                x[self._groups()].astype(str).to_numpy(dtype = str))
+        if self._coordinates():
+            arguments[f'gp_coords{suffix}'] = (
+                x[self._coordinates()].to_numpy(dtype = float))
+        return arguments
+
+    def _response(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the predicted mean (a probability, for a classifier).
+
+        Args:
+            x: features, and (to use the random effects) the `groups` and
+                `coordinates` columns.
+
+        Returns:
+            The predictions on the scale of the label.
+
+        """
+        features = x[list(self.feature_names_in_)]
+        predict = (
+            self.booster_.predict_proba if self.is_classifier
+            else self.booster_.predict)
+        if not all(c in x.columns for c in self._extras()):
+            values = np.asarray(predict(features, ignore_gp_model = True))
+            return values[:, 1] if values.ndim == 2 else values  # noqa: PLR2004
+        predicted = predict(features, **self._random_effects(x, '_pred'))
+        return np.asarray(predicted['response_mean'], dtype = float)
+
+    """ Dunder Methods """
+
+    def __sklearn_tags__(self) -> Any:
+        """Returns scikit-learn's tags for a classifier or regressor.
+
+        A search needs them to choose its folds and scorer.
+
+        Returns:
+            The tags (scikit-learn 1.6 and later).
+
+        """
+        return _estimator_tags(classify = self.is_classifier)
+
+
+# The families of Bambi that classify two classes. The others regress.
+_BAMBI_CLASSIFIERS: frozenset[str] = frozenset({'bernoulli'})
+# The level of a group that a model has not seen, for rows without groups.
+_UNSEEN: str = '__amos_unseen_group__'
+
+
+@dataclasses.dataclass
+class BayesianMixedModel:
+    """Adapts Bambi's Bayesian (mixed) regressions to scikit-learn.
+
+    Bambi writes a PyMC model from a formula, as R's lme4 and brms do, with
+    weakly informative priors, and samples its posterior with PyMC's NUTS.
+    Without a `formula`, the label is regressed on every feature, with a
+    random intercept for each level of each of `groups` (as
+    "label ~ x0 + x1 + (1|group)"). With one, the columns are passed by their
+    own names, and the label is the name of `y`.
+
+    The predictions are the posterior means of the response's mean (the
+    probability of the second class, for a classifier), averaged over the
+    posterior draws. Bambi gives a row of a group that the model has not
+    seen draws of a new group's random effect, so its prediction is averaged
+    over the groups that could have been. Without the `groups` columns (as
+    when a critic passes only the features), every row is of such a group.
+    The `coefficients` method returns the posterior of each common
+    coefficient, and `random_effects` the standard deviation of each group's
+    random effects.
+
+    A fitted Bambi model cannot be pickled, so the adapter keeps the
+    posterior and the training rows, and builds the model again (without
+    sampling) when it is needed.
+
+    Wraps:
+        - [`bambi.Model`](https://bambinos.github.io/bambi/api/Model.html)
+          from Bambi.
+
+    Args:
+        formula: the model's formula, in Bambi's syntax. Defaults to `None`,
+            which regresses the label on every feature, with a random
+            intercept for each of `groups`.
+        groups: names of the columns whose levels each get a random
+            intercept. Defaults to `None`.
+        family: Bambi's family of the label: "gaussian" (a number),
+            "bernoulli" (two classes), or another (such as "poisson",
+            "negativebinomial", "gamma", or "t"). Defaults to "gaussian".
+        priors: Bambi's priors, by term. Defaults to `None`, which uses
+            Bambi's weakly informative priors.
+        draws: number of posterior draws of each chain. Defaults to 1000.
+        tune: number of tuning draws of each chain, which are discarded.
+            Defaults to 1000.
+        chains: number of chains. Defaults to 2.
+        cores: number of chains to sample at once. Defaults to 1, which
+            samples them in turn (and so in amos's parallel runs too).
+        target_accept: NUTS's target acceptance rate, which a hierarchical
+            model needs higher than PyMC's default to avoid divergences.
+            Defaults to 0.9.
+        random_state: seed of the sampler (and of the draws of new groups).
+            Defaults to `None`.
+
+    Attributes:
+        posterior_: the posterior (and Bambi's other groups of results).
+        classes_: the two classes of a classifier.
+        feature_names_in_: the features (not the groups).
+        data_: the training rows, as Bambi was given them.
+
+    """
+
+    formula: str | None = None
+    groups: Sequence[str] | str | None = None
+    family: str = 'gaussian'
+    priors: dict[str, Any] | None = None
+    draws: int = 1000
+    tune: int = 1000
+    chains: int = 2
+    cores: int = 1
+    target_accept: float = 0.9
+    random_state: int | None = None
+    posterior_: Any = dataclasses.field(
+        default = None, init = False, repr = False)
+    classes_: Any = dataclasses.field(
+        default = None, init = False, repr = False)
+    feature_names_in_: Any = dataclasses.field(
+        default = None, init = False, repr = False)
+    data_: pd.DataFrame | None = dataclasses.field(
+        default = None, init = False, repr = False)
+    _model: Any = dataclasses.field(
+        default = None, init = False, repr = False, compare = False)
+
+    """ Properties """
+
+    @property
+    def coef_(self) -> np.ndarray:
+        """Returns the posterior means of the common coefficients."""
+        return np.asarray(self.coefficients()['coefficient'])
+
+    @property
+    def is_classifier(self) -> bool:
+        """Returns whether the family classifies two classes."""
+        return self.family in _BAMBI_CLASSIFIERS
+
+    @property
+    def _estimator_type(self) -> str:
+        """Returns the kind of estimator, for scikit-learn before 1.6."""
+        return 'classifier' if self.is_classifier else 'regressor'
+
+    """ Public Methods """
+
+    def coefficients(self) -> pd.DataFrame:
+        """Returns the posterior of each common coefficient.
+
+        Returns:
+            One row for each coefficient (the intercept is "const", as in
+                statsmodels' tables), with its "coefficient" (the posterior
+                mean), "standard_error" (the posterior standard deviation),
+                "statistic" (their ratio), "p_value" (missing, since a
+                posterior has none), and "ci_lower" and "ci_upper" (the 95%
+                equal-tailed credible interval).
+
+        """
+        model = self._bambi_model()
+        component = model.parameters[model.family.likelihood.parent]
+        posterior = self.posterior_['posterior']
+        names = [
+            name for name in ['Intercept', *component.common_terms]
+            if name in posterior]
+        rows: dict[str, np.ndarray] = {}
+        for name in names:
+            values = posterior[name]
+            draws = np.asarray(values).reshape(
+                values.sizes['chain'] * values.sizes['draw'], -1)
+            levels = [d for d in values.dims if d not in ('chain', 'draw')]
+            label = 'const' if name == 'Intercept' else self._original(name)
+            if not levels:
+                rows[label] = draws[:, 0]
+                continue
+            for position, level in enumerate(
+                np.asarray(values[levels[0]]).ravel()):
+                rows[f'{label}[{level}]'] = draws[:, position]
+        return _posterior_table(rows)
+
+    def fit(self, x: pd.DataFrame, y: pd.Series) -> BayesianMixedModel:
+        """Samples the posterior of the model.
+
+        Args:
+            x: features and the `groups` columns.
+            y: labels.
+
+        Raises:
+            ValueError: if a classifier's label does not have two classes.
+
+        Returns:
+            This adapter.
+
+        """
+        self.feature_names_in_ = np.asarray(
+            [c for c in x.columns if c not in self._groups()])
+        target = np.asarray(y)
+        if self.is_classifier:
+            self.classes_, target = _two_classes(
+                target, f'a Bambi model of the {self.family!r} family')
+        data = self._frame(x)
+        data[self._response_name(y)] = target
+        self.data_ = data
+        self._model = None
+        with utilities.preserved_logging():
+            self.posterior_ = self._bambi_model().fit(
+                draws = self.draws,
+                tune = self.tune,
+                chains = self.chains,
+                cores = self.cores,
+                target_accept = self.target_accept,
+                random_seed = self.random_state,
+                progressbar = False)
+        return self
+
+    def get_params(self, deep: bool = True) -> dict[str, Any]:  # noqa: ARG002
+        """Returns the parameters, as scikit-learn expects.
+
+        Args:
+            deep: not used.
+
+        Returns:
+            The parameters.
+
+        """
+        return {
+            field.name: getattr(self, field.name)
+            for field in dataclasses.fields(self) if field.init}
+
+    def predict(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns predictions (the predicted class of a classifier).
+
+        Args:
+            x: features, and (to use their random effects) the `groups`
+                columns.
+
+        Returns:
+            The predictions.
+
+        """
+        values = self._response(x)
+        if self.is_classifier:
+            positive = (values >= 0.5).astype(int)  # noqa: PLR2004
+            return np.asarray(self.classes_[positive])
+        return values
+
+    def predict_proba(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the predicted probability of each class (two classes only).
+
+        Args:
+            x: features, and (to use their random effects) the `groups`
+                columns.
+
+        Raises:
+            AttributeError: if the model is not a classifier.
+
+        Returns:
+            One column for each class, in the order of `classes_`.
+
+        """
+        if not self.is_classifier:
+            message = 'only a Bambi model of two classes predicts probabilities'
+            raise AttributeError(message)
+        values = self._response(x)
+        return np.column_stack([1 - values, values])
+
+    def random_effects(self) -> pd.DataFrame:
+        """Returns the posterior of the standard deviation of random effects.
+
+        Returns:
+            One row for each group term (such as "1|court"), with the
+                statistics of `coefficients`.
+
+        """
+        posterior = self.posterior_['posterior']
+        rows = {}
+        for name in posterior.data_vars:
+            if '|' in str(name) and str(name).endswith('_sigma'):
+                values = np.asarray(posterior[name]).ravel()
+                rows[self._original(str(name).removesuffix('_sigma'))] = values
+        return _posterior_table(rows)
+
+    def score(self, x: pd.DataFrame, y: pd.Series) -> float:
+        """Returns the accuracy of a classifier or the R² of a regression.
+
+        Args:
+            x: features and the `groups` columns.
+            y: labels.
+
+        Returns:
+            The score, as scikit-learn's classifiers and regressors score.
+
+        """
+        return _score(self.predict(x), y, classify = self.is_classifier)
+
+    def set_params(self, **parameters: Any) -> BayesianMixedModel:
+        """Sets parameters, as scikit-learn expects.
+
+        Args:
+            **parameters: any of the parameters of the adapter.
+
+        Returns:
+            This adapter.
+
+        """
+        for key, value in parameters.items():
+            setattr(self, key, value)
+        return self
+
+    """ Private Methods """
+
+    def _bambi_model(self) -> Any:
+        """Returns the Bambi model of the training rows, building it once.
+
+        Returns:
+            The model (not sampled), which shares the fitted posterior.
+
+        """
+        if self._model is None:
+            bambi = utilities.import_tool('bambi')
+            with utilities.preserved_logging():
+                self._model = bambi.Model(
+                    self._formula(),
+                    self.data_,
+                    family = self.family,
+                    priors = self.priors)
+        return self._model
+
+    def _formula(self) -> str:
+        """Returns the formula of the model.
+
+        Returns:
+            `formula`, or the label regressed on every feature with a random
+                intercept for each of `groups` (with the names of `_frame`).
+
+        """
+        if self.formula is not None:
+            return self.formula
+        features = [f'amos_x{n}' for n in range(len(self.feature_names_in_))]
+        terms = [
+            *(features or ['1']),
+            *(f'(1|amos_g{n})' for n in range(len(self._groups())))]
+        return f'amos_y ~ {" + ".join(terms)}'
+
+    def _frame(self, x: pd.DataFrame) -> pd.DataFrame:
+        """Returns the columns of `x` as Bambi is given them.
+
+        A group column that `x` does not have is given a level that the
+        model has not seen.
+
+        Args:
+            x: features, and any of the `groups` columns.
+
+        Returns:
+            `x` itself, for a `formula`, or else the features as floats
+                named "amos_x{n}" and the groups as text named "amos_g{n}".
+
+        """
+        frame = pd.DataFrame(index = x.index)
+        if self.formula is not None:
+            frame = x.copy()
+            for name in self._groups():
+                if name not in frame.columns:
+                    frame[name] = _UNSEEN
+            return frame
+        for position, name in enumerate(self.feature_names_in_):
+            frame[f'amos_x{position}'] = x[name].astype(float)
+        for position, name in enumerate(self._groups()):
+            frame[f'amos_g{position}'] = (
+                x[name].astype(str) if name in x.columns else _UNSEEN)
+        return frame
+
+    def _groups(self) -> list[str]:
+        """Returns the names of the columns of groups.
+
+        Returns:
+            The names in `groups`, as a `list`.
+
+        """
+        groups: list[str] = camina.listify(self.groups)
+        return groups
+
+    def _original(self, name: str) -> str:
+        """Returns a term of the model with the names of the data.
+
+        Args:
+            name: a term, which may use the names of `_frame` (such as
+                "amos_x0" or "1|amos_g0").
+
+        Returns:
+            The term with the names of the features and groups.
+
+        """
+        if self.formula is not None:
+            return name
+        for position, group in enumerate(self._groups()):
+            name = name.replace(f'amos_g{position}', str(group))
+        if name.startswith('amos_x') and name[6:].isdigit():
+            return str(self.feature_names_in_[int(name[6:])])
+        return name
+
+    def _response(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the posterior mean of the response's mean.
+
+        Args:
+            x: features, and (to use their random effects) the `groups`
+                columns.
+
+        Returns:
+            The mean of each row (the probability of the second class, for a
+                classifier).
+
+        """
+        model = self._bambi_model()
+        parent = model.family.likelihood.parent
+        with utilities.preserved_logging(), warnings.catch_warnings():
+            # Bambi needs "sample_new_groups" to draw the effects of new
+            # groups, and warns that a later version will not.
+            warnings.simplefilter('ignore')
+            predicted = model.predict(
+                self.posterior_,
+                data = self._frame(x),
+                inplace = False,
+                sample_new_groups = True,
+                random_seed = self.random_state)
+        values = predicted['posterior'][parent]
+        return np.asarray(values.mean(('chain', 'draw')), dtype = float)
+
+    def _response_name(self, y: pd.Series) -> str:
+        """Returns the name of the label in the data that Bambi is given.
+
+        Args:
+            y: labels.
+
+        Returns:
+            "amos_y", or the name of `y` (or "y") for a `formula`.
+
+        """
+        if self.formula is None:
+            return 'amos_y'
+        return str(y.name) if y.name is not None else 'y'
+
+    """ Dunder Methods """
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Returns the state to pickle, without the Bambi model.
+
+        Returns:
+            The attributes, with the model left out (it is built again when
+                it is needed).
+
+        """
+        return {**self.__dict__, '_model': None}
+
+    def __sklearn_tags__(self) -> Any:
+        """Returns scikit-learn's tags for a classifier or regressor.
+
+        Returns:
+            The tags (scikit-learn 1.6 and later).
+
+        """
+        return _estimator_tags(classify = self.is_classifier)
+
+
+# The likelihoods of `BayesianAdditiveTrees`: the inverse of the link of the
+# sum of the trees to the mean of each.
+_BART_LIKELIHOODS: dict[str, str] = {
+    'normal': 'identity',
+    'bernoulli': 'expit',
+    'poisson': 'exp'}
+
+
+@dataclasses.dataclass
+class BayesianAdditiveTrees:
+    """Adapts PyMC's Bayesian additive regression trees (BART) to scikit-learn.
+
+    BART is a sum of `m` small trees, each with a prior that keeps it
+    shallow, whose posterior PyMC samples (with pymc-bart's particle Gibbs
+    sampler for the trees, and NUTS for any other parameter). Like a random
+    forest, it needs no scaling and finds interactions and curves itself, and
+    its posterior says how sure it is of each prediction. With the "normal"
+    likelihood the trees are the mean of a number (with an estimated standard
+    deviation), with "bernoulli" they are the log odds of the second of two
+    classes, and with "poisson" the log of the mean of counts. The
+    predictions are the posterior means.
+
+    A fitted PyMC model cannot be pickled, so the adapter keeps the sampled
+    trees of each chain, and rebuilds pymc-bart's sampler of them when it
+    predicts. The importance of each feature is the share of the splits of
+    the trees on it.
+
+    Wraps:
+        - [`pymc_bart.BART`](https://www.pymc.io/projects/bart/en/latest/api_reference.html)
+          from pymc-bart, for the trees.
+        - [`pymc.sample`](https://www.pymc.io/projects/docs/en/stable/api/generated/pymc.sample.html)
+          from PyMC, to sample their posterior.
+
+    Args:
+        m: number of trees. Defaults to 50.
+        alpha: prior probability that a node at the root splits, which
+            falls with depth. Defaults to 0.95.
+        beta: how fast the probability that a node splits falls with its
+            depth. Defaults to 2.0.
+        likelihood: "normal", "bernoulli", or "poisson". Defaults to
+            "normal".
+        draws: number of posterior draws of each chain. Defaults to 1000.
+        tune: number of tuning draws of each chain, which are discarded.
+            Defaults to 1000.
+        chains: number of chains. Defaults to 2.
+        cores: number of chains to sample at once. Defaults to 1, which
+            samples them in turn (and so in amos's parallel runs too).
+        random_state: seed of the sampler. Defaults to `None`.
+
+    Attributes:
+        trees_: the sampled trees of each chain.
+        classes_: the two classes of a classifier.
+        feature_names_in_: the features.
+        feature_importances_: the share of the splits on each feature.
+
+    """
+
+    m: int = 50
+    alpha: float = 0.95
+    beta: float = 2.0
+    likelihood: str = 'normal'
+    draws: int = 1000
+    tune: int = 1000
+    chains: int = 2
+    cores: int = 1
+    random_state: int | None = None
+    trees_: list[Any] | None = dataclasses.field(
+        default = None, init = False, repr = False)
+    classes_: Any = dataclasses.field(
+        default = None, init = False, repr = False)
+    feature_names_in_: Any = dataclasses.field(
+        default = None, init = False, repr = False)
+    feature_importances_: Any = dataclasses.field(
+        default = None, init = False, repr = False)
+    _outputs: int = dataclasses.field(
+        default = 1, init = False, repr = False)
+    _samplers: list[Any] | None = dataclasses.field(
+        default = None, init = False, repr = False, compare = False)
+
+    """ Properties """
+
+    @property
+    def is_classifier(self) -> bool:
+        """Returns whether the likelihood classifies two classes."""
+        return self.likelihood == 'bernoulli'
+
+    @property
+    def _estimator_type(self) -> str:
+        """Returns the kind of estimator, for scikit-learn before 1.6."""
+        return 'classifier' if self.is_classifier else 'regressor'
+
+    """ Public Methods """
+
+    def fit(self, x: pd.DataFrame, y: pd.Series) -> BayesianAdditiveTrees:
+        """Samples the posterior of the trees.
+
+        Args:
+            x: features.
+            y: labels.
+
+        Raises:
+            ValueError: if the likelihood is not known, or a classifier's
+                label does not have two classes.
+
+        Returns:
+            This adapter.
+
+        """
+        pm = utilities.import_tool('pymc')
+        bart = utilities.import_tool('pymc_bart')
+        if self.likelihood not in _BART_LIKELIHOODS:
+            message = (
+                f'the likelihood of BART must be one of '
+                f'{sorted(_BART_LIKELIHOODS)}, not {self.likelihood!r}')
+            raise ValueError(message)
+        self.feature_names_in_ = np.asarray(x.columns)
+        features = np.ascontiguousarray(x.to_numpy(dtype = float))
+        target = np.asarray(y)
+        if self.is_classifier:
+            self.classes_, target = _two_classes(
+                target, 'BART with the "bernoulli" likelihood')
+        target = target.astype(float)
+        with utilities.preserved_logging(), pm.Model():
+            trees = bart.BART(
+                'mu', features, target,
+                m = self.m, alpha = self.alpha, beta = self.beta)
+            if self.likelihood == 'normal':
+                sigma = pm.HalfNormal('sigma', float(np.std(target)) or 1.0)
+                pm.Normal('y', trees, sigma, observed = target)
+            elif self.likelihood == 'bernoulli':
+                pm.Bernoulli('y', logit_p = trees, observed = target)
+            else:
+                pm.Poisson('y', mu = pm.math.exp(trees), observed = target)
+            posterior = pm.sample(
+                self.draws,
+                tune = self.tune,
+                chains = self.chains,
+                cores = self.cores,
+                random_seed = self.random_state,
+                progressbar = False)
+        operation = trees.owner.op
+        self.trees_ = list(operation.all_trees)
+        self._outputs = int(operation.n_outputs)
+        self._samplers = None
+        # pymc-bart sorts the shares from the largest, and names each by its
+        # position (it does not sort labels that it is given).
+        shares, labels = bart.get_variable_inclusion(posterior, features)
+        importances = np.zeros(features.shape[1])
+        importances[[int(label) for label in labels]] = shares
+        self.feature_importances_ = importances
+        return self
+
+    def get_params(self, deep: bool = True) -> dict[str, Any]:  # noqa: ARG002
+        """Returns the parameters, as scikit-learn expects.
+
+        Args:
+            deep: not used.
+
+        Returns:
+            The parameters.
+
+        """
+        return {
+            field.name: getattr(self, field.name)
+            for field in dataclasses.fields(self) if field.init}
+
+    def predict(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns predictions (the predicted class of a classifier).
+
+        Args:
+            x: features.
+
+        Returns:
+            The predictions.
+
+        """
+        values = self._response(x)
+        if self.is_classifier:
+            positive = (values >= 0.5).astype(int)  # noqa: PLR2004
+            return np.asarray(self.classes_[positive])
+        return values
+
+    def predict_proba(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the predicted probability of each class (two classes only).
+
+        Args:
+            x: features.
+
+        Raises:
+            AttributeError: if the model is not a classifier.
+
+        Returns:
+            One column for each class, in the order of `classes_`.
+
+        """
+        if not self.is_classifier:
+            message = (
+                'only BART with the "bernoulli" likelihood predicts '
+                'probabilities')
+            raise AttributeError(message)
+        values = self._response(x)
+        return np.column_stack([1 - values, values])
+
+    def score(self, x: pd.DataFrame, y: pd.Series) -> float:
+        """Returns the accuracy of a classifier or the R² of a regression.
+
+        Args:
+            x: features.
+            y: labels.
+
+        Returns:
+            The score, as scikit-learn's classifiers and regressors score.
+
+        """
+        return _score(self.predict(x), y, classify = self.is_classifier)
+
+    def set_params(self, **parameters: Any) -> BayesianAdditiveTrees:
+        """Sets parameters, as scikit-learn expects.
+
+        Args:
+            **parameters: any of the parameters of the adapter.
+
+        Returns:
+            This adapter.
+
+        """
+        for key, value in parameters.items():
+            setattr(self, key, value)
+        return self
+
+    """ Private Methods """
+
+    def _response(self, x: pd.DataFrame) -> np.ndarray:
+        """Returns the posterior mean of the label's mean.
+
+        Every posterior draw of the trees of every chain predicts each row,
+        so the predictions do not depend on a random seed.
+
+        Args:
+            x: features.
+
+        Returns:
+            The mean of each row (the probability of the second class, for a
+                classifier).
+
+        """
+        if self._samplers is None:
+            module = utilities.import_tool('pymc_bart.pymc_bart')
+            self._samplers = [
+                module.PosteriorSampler.from_history(
+                    batches, forest, self.m, self._outputs)
+                for forest, batches in self.trees_ or []]
+        features = np.ascontiguousarray(
+            x[list(self.feature_names_in_)].to_numpy(dtype = float))
+        draws = np.concatenate([
+            sampler.sample_posterior(
+                features, list(range(sampler.n_draws)), None)
+            for sampler in self._samplers])
+        # The draws are (draw, output, row), with one output.
+        sums = draws[:, 0, :]
+        link = _BART_LIKELIHOODS[self.likelihood]
+        if link == 'expit':
+            special = importlib.import_module('scipy.special')
+            sums = special.expit(sums)
+        elif link == 'exp':
+            sums = np.exp(sums)
+        return np.asarray(sums.mean(axis = 0), dtype = float)
+
+    """ Dunder Methods """
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Returns the state to pickle, without pymc-bart's samplers.
+
+        Returns:
+            The attributes, with the samplers left out (they are built
+                again from `trees_` when they are needed).
+
+        """
+        return {**self.__dict__, '_samplers': None}
+
+    def __sklearn_tags__(self) -> Any:
+        """Returns scikit-learn's tags for a classifier or regressor.
+
+        Returns:
+            The tags (scikit-learn 1.6 and later).
+
+        """
+        return _estimator_tags(classify = self.is_classifier)
+
+
 """ Private Functions """
 
 
@@ -1194,6 +2280,74 @@ def _collinear(exog: pd.DataFrame, rows: int = 250000) -> list[str]:
     return [str(name) for name, distance in pairs if distance <= tolerance]
 
 
+def _estimator_tags(*, classify: bool) -> Any:
+    """Returns scikit-learn's tags for a classifier or a regressor.
+
+    An adapter that is not a scikit-learn estimator needs them for a search
+    to choose its folds and scorer.
+
+    Args:
+        classify: whether the adapter is a classifier.
+
+    Returns:
+        The tags (scikit-learn 1.6 and later).
+
+    """
+    utils = importlib.import_module('sklearn.utils')
+    return utils.Tags(
+        estimator_type = 'classifier' if classify else 'regressor',
+        target_tags = utils.TargetTags(required = True),
+        classifier_tags = utils.ClassifierTags() if classify else None,
+        regressor_tags = None if classify else utils.RegressorTags())
+
+
+def _posterior_table(draws: dict[str, np.ndarray]) -> pd.DataFrame:
+    """Returns a table of the posteriors of some parameters.
+
+    Args:
+        draws: the posterior draws of each parameter, by its name.
+
+    Returns:
+        One row for each parameter, with its "coefficient" (the posterior
+            mean), "standard_error" (the posterior standard deviation),
+            "statistic" (their ratio), "p_value" (missing, since a posterior
+            has none), and "ci_lower" and "ci_upper" (the 95% equal-tailed
+            credible interval), as in the tables of the other models.
+
+    """
+    columns = [
+        'coefficient', 'standard_error', 'statistic', 'p_value', 'ci_lower',
+        'ci_upper']
+    rows = {}
+    for name, values in draws.items():
+        mean = float(np.mean(values))
+        deviation = float(np.std(values, ddof = 1)) if values.size > 1 else (
+            np.nan)
+        lower, upper = np.quantile(values, [0.025, 0.975])
+        rows[name] = [
+            mean, deviation, mean / deviation if deviation else np.nan,
+            np.nan, float(lower), float(upper)]
+    return pd.DataFrame.from_dict(rows, orient = 'index', columns = columns)
+
+
+def _score(predicted: np.ndarray, y: Any, *, classify: bool) -> float:
+    """Returns the accuracy of a classifier or the R² of a regression.
+
+    Args:
+        predicted: the predictions.
+        y: labels.
+        classify: whether the predictions are classes.
+
+    Returns:
+        The score, as scikit-learn's classifiers and regressors score.
+
+    """
+    metrics = importlib.import_module('sklearn.metrics')
+    if classify:
+        return float(metrics.accuracy_score(y, predicted))
+    return float(metrics.r2_score(y, predicted))
+
+
 def _statsmodels_class(module: Any, name: str) -> type:
     """Returns the class in a statsmodels module named `name` in snake case.
 
@@ -1243,3 +2397,27 @@ def _statistic(results: Any, name: str, like: Any) -> Any:
         return getattr(results, name)
     except ValueError:
         return like * np.nan
+
+
+def _two_classes(
+    target: np.ndarray,
+    model: str) -> tuple[np.ndarray, np.ndarray]:
+    """Returns the two classes of a label, and the label as 0 and 1.
+
+    Args:
+        target: labels.
+        model: a name of the model, for the message of an error.
+
+    Raises:
+        ValueError: if the label does not have two classes.
+
+    Returns:
+        The classes, sorted, and 1 for each label that is the second class
+            (and 0 for the first).
+
+    """
+    classes = np.unique(target)
+    if len(classes) != 2:  # noqa: PLR2004
+        message = f'{model} needs two classes'
+        raise ValueError(message)
+    return classes, (target == classes[1]).astype(int)

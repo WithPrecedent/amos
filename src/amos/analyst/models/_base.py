@@ -130,7 +130,9 @@ class Model(base.Operation, abc.ABC):
             n_iter: number of combinations to try in a random or Optuna
                 search. Defaults to 10.
             scoring: scikit-learn scorer for a search (such as "roc_auc").
-                Defaults to `None`, which uses the model's `score` method.
+                Defaults to `None`, which uses the Matthews correlation
+                coefficient to classify and R² to regress (see
+                `utilities.default_scorer`).
             **kwargs: parameters for the model. Any "plots", "evaluators",
                 or "inferers" (the techniques that replace a workflow's for
                 this model) are left out.
@@ -147,6 +149,7 @@ class Model(base.Operation, abc.ABC):
             k: v for k, v in kwargs.items()
             if k not in base._MODEL_SPECIFIC_GENRES}
         task = self._check_task(item)
+        scoring = scoring or utilities.default_scorer(task)
         extras = self._extra_columns(item, kwargs)
         self._check_features(item, extras)
         path = self._choose_tool(task)

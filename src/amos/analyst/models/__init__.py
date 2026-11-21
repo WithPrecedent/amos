@@ -1,10 +1,10 @@
 """Techniques that fit models and make predictions.
 
 These are the techniques of the last step of the "analyst" stage. Each one
-wraps a model from scikit-learn, xgboost, lightgbm, catboost, InterpretML,
-TabPFN, statsmodels, or pyfixest. Most work for both tasks: `random_forest`,
-for example, is a random forest classifier when the label is classified and a
-random forest regressor when it is regressed. A model is
+wraps a model from scikit-learn, xgboost, lightgbm, catboost, GPBoost,
+InterpretML, TabPFN, statsmodels, pyfixest, Bambi, or PyMC. Most work for both tasks:
+`random_forest`, for example, is a random forest classifier when the label is
+classified and a random forest regressor when it is regressed. A model is
 fitted to the training rows and predicts the test rows (or every row, if the
 data has not been split). The fitted model, its predictions, and (for
 classifiers) its predicted probabilities are stored in the dataset.
@@ -13,7 +13,9 @@ Every model accepts the parameters of the tool it wraps. It also accepts
 "search" ("grid", "random", or "optuna"), which searches for the best values
 of any parameter that is given as a list, using cross-validation on the
 training rows ("cv" folds, 5 by default, and "n_iter" draws for a random or
-Optuna search). If the dataset has groups, the folds of a search keep the
+Optuna search). A search scores a classifier by the Matthews correlation
+coefficient and a regression by R², unless "scoring" names another scorer
+(see `utilities.default_scorer`). If the dataset has groups, the folds of a search keep the
 rows of each group of its first group column together, as the group
 validators do.
 
@@ -33,13 +35,20 @@ Contents:
     FixedEffects: adapts pyfixest regressions to the scikit-learn interface.
     ProportionalHazards: adapts statsmodels' Cox model to the scikit-learn
         interface.
-    Adaboost, Baseline, BinomialBayesMixedglm, Catboost, Cox, DecisionTree,
-        ElasticNet, ExplainableBoosting, ExtraTrees, Fixest, GEE,
-        GeneralizedPoisson, GLM, GradientBoosting, KNN, Lasso, Lightgbm,
-        Linear, Logit, LogitSM, Mixedlm, Mnlogit, NaiveBayes,
+    GaussianProcessBoosting: adapts GPBoost's trees with random effects to
+        the scikit-learn interface.
+    BayesianMixedModel: adapts Bambi's Bayesian (mixed) regressions to the
+        scikit-learn interface.
+    BayesianAdditiveTrees: adapts PyMC's Bayesian additive regression trees
+        to the scikit-learn interface.
+    Adaboost, Bambi, Baseline, BinomialBayesMixedglm, Catboost, Cox,
+        DecisionTree, ElasticNet, ExplainableBoosting, ExtraTrees, Fixest,
+        GEE, GeneralizedPoisson, GLM, Gpboost, GradientBoosting, KNN, Lasso,
+        Lightgbm, Linear, Logit, LogitSM, Mixedlm, Mnlogit, NaiveBayes,
         NegativeBinomial, NeuralNetwork, OLS, OrdinalRegression, Poisson,
-        Probit, QuantileRegression, RandomForest, Ridge, RobustRegression,
-        SVM, Tabpfn, WLS, Xgboost, ZeroInflatedPoisson: models.
+        Probit, Pymc, QuantileRegression, RandomForest, Ridge,
+        RobustRegression, SVM, Tabpfn, WLS, Xgboost, ZeroInflatedPoisson:
+        models.
     search_folds: the folds of a search, which keep the rows of each group
         together.
 
@@ -55,7 +64,10 @@ __all__: list[str] = [
     'SVM',
     'WLS',
     'Adaboost',
+    'Bambi',
     'Baseline',
+    'BayesianAdditiveTrees',
+    'BayesianMixedModel',
     'BinomialBayesMixedglm',
     'Catboost',
     'Cox',
@@ -65,7 +77,9 @@ __all__: list[str] = [
     'ExtraTrees',
     'FixedEffects',
     'Fixest',
+    'GaussianProcessBoosting',
     'GeneralizedPoisson',
+    'Gpboost',
     'GradientBoosting',
     'LabelCoded',
     'Lasso',
@@ -83,6 +97,7 @@ __all__: list[str] = [
     'Poisson',
     'Probit',
     'ProportionalHazards',
+    'Pymc',
     'QuantileRegression',
     'RandomForest',
     'Ridge',
@@ -94,7 +109,14 @@ __all__: list[str] = [
     'search_folds',
 ]
 
-from ._adapters import FixedEffects, ProportionalHazards, Statsmodel
+from ._adapters import (
+    BayesianAdditiveTrees,
+    BayesianMixedModel,
+    FixedEffects,
+    GaussianProcessBoosting,
+    ProportionalHazards,
+    Statsmodel,
+)
 from ._adapters import _collinear as _collinear
 from ._base import LabelCoded, Model, search_folds
 from ._techniques import (
@@ -105,6 +127,7 @@ from ._techniques import (
     SVM,
     WLS,
     Adaboost,
+    Bambi,
     Baseline,
     BinomialBayesMixedglm,
     Catboost,
@@ -115,6 +138,7 @@ from ._techniques import (
     ExtraTrees,
     Fixest,
     GeneralizedPoisson,
+    Gpboost,
     GradientBoosting,
     Lasso,
     Lightgbm,
@@ -129,6 +153,7 @@ from ._techniques import (
     OrdinalRegression,
     Poisson,
     Probit,
+    Pymc,
     QuantileRegression,
     RandomForest,
     Ridge,

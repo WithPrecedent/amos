@@ -642,7 +642,7 @@ class PermutationImportance(Evaluator):
         x = item.x_test if item.is_split else item.x
         y = item.y.loc[x.index]
         if scoring is None:
-            scoring = 'accuracy' if item.task == 'classify' else 'r2'
+            scoring = utilities.default_scorer(item.task)
         model = _model(item)
         others = _other_columns(model, item)
         if others or not hasattr(model, '__sklearn_tags__'):

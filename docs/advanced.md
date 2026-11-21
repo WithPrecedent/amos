@@ -1231,7 +1231,7 @@ Every model accepts these parameters:
 | `search` | "grid", "random", or "optuna". Without it, lists are passed to the model as they are. |
 | `cv` | Number of cross-validation folds. Defaults to 5. If the dataset has groups, each fold keeps the rows of every group of its first group column together. |
 | `n_iter` | Number of combinations to try in a random or Optuna search. Defaults to 10. |
-| `scoring` | The scikit-learn scorer to compare with, such as "roc_auc". Defaults to the model's own score. |
+| `scoring` | The scikit-learn scorer to compare with, such as "roc_auc". Defaults to "matthews_corrcoef" (the Matthews correlation coefficient) for a classifier and "r2" for a regression. |
 
 With a search, every parameter given as a list is searched. In a random or
 Optuna search, a list of two numbers is a range (whole numbers are drawn from
@@ -1241,6 +1241,34 @@ usually finds good values in fewer tries, and it searches a range that spans
 two or more orders of magnitude (such as a learning rate from 0.001 to 0.1) on
 a log scale. The search uses the training rows only, and the results of every
 combination are stored in `tables` as "{name}_search".
+
+#### Why classifiers are compared by the Matthews correlation coefficient
+
+Wherever amos compares classifiers without being told how, it uses the
+Matthews correlation coefficient (MCC): the scorer of a model's search, the
+pipelines' searches and the `classification` pipeline's criterion,
+`auto_model`'s cross-validation, the model-based selectors, permutation
+importance, and the learning and validation curves. Name another scorer
+("scoring") or criterion ("criterion", or "metric" for `auto_model`) to
+change it.
+
+The MCC is the correlation between the predicted and the true classes, from
+-1 (always wrong) through 0 (no better than chance) to 1 (always right). As
+[Chicco and Jurman (2023)](https://doi.org/10.1186/s13040-023-00322-4) show,
+a high MCC means that all four of the basic rates of a confusion matrix
+(sensitivity, specificity, precision, and negative predictive value) are high.
+A high balanced accuracy guarantees three of them, a high accuracy or F1
+score two, and a high area under the ROC curve only one, so a model can score
+well on those while doing poorly on one class, which is common when the
+classes are imbalanced. Their argument is for two classes; for more,
+scikit-learn's MCC is Gorodkin's generalization of it, which keeps its scale.
+`matthews` is also the metric of that name, for a scorecard or an
+experiment's criterion.
+
+> Chicco, D., & Jurman, G. (2023). The Matthews correlation coefficient (MCC)
+> should replace the ROC AUC as the standard metric for assessing binary
+> classification. *BioData Mining*, 16, 4.
+> <https://doi.org/10.1186/s13040-023-00322-4>
 
 When rows are not independent, such as the ratings of one product by several reviewers,
 give the dataset `groups`. A search then folds whole groups (with
@@ -1568,6 +1596,35 @@ print(list(dataset.tables["fixest_coefficients"].index[:3]))
 # ['age', 'sex', 'bmi']
 ```
 
+### Bayesian models
+
+Two models sample a posterior with PyMC (install them with
+`pip install amos[bayesian]`, on Python 3.12 or later). Each predicts the
+posterior mean, and "draws", "tune", and "chains" set its sampler (1000,
+1000, and 2 by default; "cores" samples chains at once, and is 1 by default
+so that amos's parallel runs do not start processes of their own).
+
+* `bambi` is a Bayesian regression written by Bambi from a formula, with a
+  random intercept for each of "groups" (the dataset's first group, by
+  default). Set "formula" to write it yourself, with the names of the
+  columns, and "family" for the label ("bernoulli" for two classes and
+  "gaussian" for a number by default). Its table of coefficients has the
+  mean and standard deviation of each coefficient's posterior and its 95%
+  credible interval, and no p-values.
+* `pymc` is Bayesian additive regression trees (BART, from pymc-bart): a sum
+  of "m" small trees (50 by default) that need no scaling and find curves
+  and interactions themselves. Its importances are the share of its splits
+  on each feature. "likelihood" is "bernoulli" for two classes and "normal"
+  for a number by default (or "poisson" for counts).
+
+```python
+# skip
+dataset = amos.Dataset(clinics, label = "target", seed = 43, groups = ["clinic"])
+amos.splitters.GroupSplit().apply(dataset)
+amos.models.Bambi().apply(dataset, formula = "target ~ age + bmi + (1|clinic)")
+print(dataset.tables["bambi_coefficients"][["coefficient", "ci_lower", "ci_upper"]])
+```
+
 ## Choosing techniques automatically
 
 Name "auto" in place of a step's techniques, and `amos` chooses techniques
@@ -1621,7 +1678,7 @@ model_choices = auto_result.tables["auto_model"]
 print(model_choices.loc["naive_bayes", "reason"])
 # assumes normal features, but 73% of them are not
 print(model_choices["score"].round(3).dropna().to_dict())
-# {'logit': 0.967, 'random_forest': 0.955, 'gradient_boosting': 0.968}
+# {'logit': 0.941, 'random_forest': 0.915, 'gradient_boosting': 0.935}
 print(model_choices.index[model_choices["chosen"]].tolist())
 # ['logit']
 print(list(auto_result.figures))
@@ -1689,6 +1746,24 @@ models do not use them. Then:
   metrics are named in the scorecard's "metrics".
 * `fixest` can use groups as fixed effects and clusters, and `group_split`
   keeps each row of the dataset's first group in the same set.
+* `mixedlm`, `gee`, and `binomial_bayes_mixedglm` model the correlation of
+  the rows of each group (see above). `gpboost` does the same for gradient
+  boosting: GPBoost fits trees of the features together with a random
+  intercept for each level of "groups" (the dataset's first group by
+  default), and can add a Gaussian process over "coordinates" (such as a
+  latitude and a longitude). Rows of groups that it has not seen are
+  predicted by the trees alone, and the variances of its random effects are
+  stored in `tables` as "gpboost_random_effects".
+* `bambi` fits a Bayesian regression with Bambi, by default with a random
+  intercept for each level of "groups" (the dataset's first group), or any
+  model that "formula" writes in Bambi's syntax (such as
+  `"outcome ~ age + (age|hospital)"`). PyMC samples its posterior ("draws",
+  "tune", and "chains" set the sampler). The posterior mean, standard
+  deviation, and 95% credible interval of each coefficient are stored in
+  `tables` as "bambi_coefficients" (with no p-values), and those of the
+  standard deviation of each group's random effects as
+  "bambi_random_effects". A row of a group that it has not seen is
+  predicted over the random effects that a new group could have.
 
 ```python
 data = cancer.frame.copy()
@@ -2389,7 +2464,7 @@ print(scorecard.heading)
 print(list(scorecard.table.columns[:4]))
 # ['rank', 'scaler', 'model', 'f1']
 print(scorecard.to_markdown().splitlines()[1])
-# | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+# | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ```
 
 A scorecard can be saved in several formats:

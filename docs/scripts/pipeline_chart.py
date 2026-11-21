@@ -48,6 +48,15 @@ _FAMILIES: tuple[tuple[str, str, str], ...] = (
      'Features made more normal (Yeo-Johnson); a calibration curve.'),
     ('_ADDITIVE', 'Additive',
      'Missing values left in; the shape function of each feature.'),
+    ('_GROUPED_TREES', 'Boosted trees with random effects',
+     'Missing values left in; split by group. Importances and '
+     'permutation importance.'),
+    ('_BAYESIAN', 'Bayesian regressions',
+     'Categories encoded against a reference level; not scaled. The '
+     'posteriors of the coefficients in a regression table and plot.'),
+    ('_BAYESIAN_TREES', 'Bayesian trees',
+     'Not scaled. The share of splits on each feature and permutation '
+     'importance.'),
     ('_PRETRAINED', 'Pretrained',
      'TabPFN fills, scales, and weighs the features itself.'),
     ('_STATISTICAL', 'Models for inference',

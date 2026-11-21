@@ -4,6 +4,65 @@ All notable changes to this project will be documented in this file.
 
 <!-- insertion marker -->
 
+## 0.10.3
+
+* `gpboost` is a new model, which wraps GPBoost (now in the `boosting`
+  extra): gradient boosting whose trees are fitted together with a random
+  intercept for each level of "groups" (the dataset's first group by
+  default) and, if "coordinates" names columns, a Gaussian process over
+  them. It regresses with the "gaussian" likelihood (or another, such as
+  "poisson") and classifies two classes with "bernoulli_logit" (or
+  "bernoulli_probit"). Rows of groups that it has not seen are predicted
+  with their random effects at zero, and the variances of the random
+  effects are stored in `tables` as "gpboost_random_effects". The
+  `GaussianProcessBoosting` adapter gives GPBoost the scikit-learn
+  interface, so `gpboost` can be searched and criticized like any model:
+  given only the features (as permutation importance gives it), it
+  predicts from its trees alone.
+* `gpboost_classification` and `gpboost_regression` are new pipelines,
+  which split by group, leave missing values for GPBoost, and search its
+  learning rate and tree size.
+* `bambi` is a new model, which wraps Bambi (in the new `bayesian` extra,
+  on Python 3.12 and later): a Bayesian regression that PyMC samples, by
+  default of the label on every feature with a random intercept for each
+  level of "groups" (the dataset's first group), or of any "formula" in
+  Bambi's syntax. It classifies two classes with the "bernoulli" family and
+  regresses with "gaussian" (or another "family"). The posterior mean,
+  standard deviation, and 95% credible interval of each coefficient are
+  stored in `tables` as "bambi_coefficients", and those of the standard
+  deviations of the random effects as "bambi_random_effects". The
+  `BayesianMixedModel` adapter gives it the scikit-learn interface, and
+  keeps its posterior (not Bambi's model, which cannot be pickled).
+* `pymc` is a new model, which fits Bayesian additive regression trees
+  (BART) with PyMC and pymc-bart (also in the `bayesian` extra): "m" small
+  trees (50 by default) whose posterior is sampled, with the "bernoulli"
+  likelihood for two classes and "normal" (or "poisson") for numbers. Its
+  importances are the share of its trees' splits on each feature. The
+  `BayesianAdditiveTrees` adapter keeps the sampled trees, so the model can
+  be pickled, and predicts the mean of every posterior draw.
+* `bambi_classification`, `bambi_regression` (both split by group),
+  `pymc_classification`, and `pymc_regression` are new pipelines.
+* Classifiers are now compared by the Matthews correlation coefficient
+  wherever amos chooses how: the scorer of a model's search (which was the
+  model's own score, usually accuracy), the pipelines' searches and the
+  `classification` pipeline's criterion (which were balanced accuracy),
+  `auto_model`'s default metric (balanced accuracy), and the default
+  scorer of the model-based selectors, permutation importance, and the
+  learning and validation curves (accuracy). A high MCC needs a high
+  sensitivity, specificity, precision, and negative predictive value
+  (Chicco and Jurman, BioData Mining 16, 4, 2023,
+  https://doi.org/10.1186/s13040-023-00322-4). `utilities.default_scorer`
+  returns the scorer for a task, and the advanced guide explains the
+  choice. The scorecard of a classifier also reports `matthews` by default,
+  after `balanced_accuracy`.
+* Plots keep their SciencePlots styles ("science, nature" by default) after
+  Bambi or PyMC is imported. Importing them imports arviz_plots, which
+  reloads matplotlib's library of styles and so dropped SciencePlots'
+  styles: amos now registers them again when they are missing.
+* The README's scorecard and importance plot are drawn again, with the
+  `matthews` column and the drops in MCC that permutation importance now
+  measures.
+
 ## 0.10.2
 
 * Savers are a new genre of the wrangler (`amos.savers`, with the base

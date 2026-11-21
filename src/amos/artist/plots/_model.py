@@ -1732,7 +1732,8 @@ def _scoring(item: base.Dataset) -> str:
         item: the dataset.
 
     Returns:
-        "accuracy" for classification, and "r2" otherwise.
+        The scorer of `utilities.default_scorer`: "matthews_corrcoef" for
+            classification, and "r2" otherwise.
 
     """
-    return 'accuracy' if item.task == 'classify' else 'r2'
+    return utilities.default_scorer(item.task)

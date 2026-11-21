@@ -95,8 +95,8 @@ class _ModelSearch(_ModelBased):
             The parameters, with "estimator", "scoring", and "cv".
 
         """
-        scoring = parameters.get('scoring') or (
-            'accuracy' if item.task == 'classify' else 'r2')
+        scoring = parameters.get('scoring') or utilities.default_scorer(
+            item.task)
         cv = models.search_folds(
             item, item.x_train, item.y_train, parameters.get('cv', 5))
         return {

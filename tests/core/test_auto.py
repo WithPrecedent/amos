@@ -396,7 +396,7 @@ def test_auto_model_records_every_model_it_considered() -> None:
     record = dataset.history[-1]
     assert record['technique'] == 'auto_model'
     assert record['chosen'] == [chosen]
-    assert (record['metric'], record['folds']) == ('balanced_accuracy', 5)
+    assert (record['metric'], record['folds']) == ('matthews', 5)
 
 
 def test_auto_model_considers_only_models_for_the_task() -> None:

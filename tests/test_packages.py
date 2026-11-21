@@ -23,11 +23,14 @@ ROOT = pathlib.Path(__file__).parent.parent
 # The packages that do not use their own names when imported.
 IMPORT_NAMES = {
     'DoubleML': 'doubleml',
+    'Bambi': 'bambi',
     'DoWhy': 'dowhy',
+    'GPBoost': 'gpboost',
     'InterpretML': 'interpret',
     'MAPIE': 'mapie',
     'Optuna': 'optuna',
     'Polars': 'polars',
+    'PyMC': 'pymc',
     'SciencePlots': 'scienceplots',
     'TabPFN': 'tabpfn',
     'imbalanced-learn': 'imblearn',
@@ -50,7 +53,7 @@ def _readme_packages() -> list[str]:
 def test_every_package_in_the_readme_has_a_test() -> None:
     packages = _readme_packages()
     assert 'scikit-learn' in packages
-    assert len(packages) == 27
+    assert len(packages) == 30
     for package in packages:
         name = IMPORT_NAMES.get(package, package.replace('-', '_'))
         assert callable(globals().get(f'test_{name}')), package
@@ -132,6 +135,59 @@ def test_lightgbm(regressed: amos.Dataset) -> None:
     model.fit(regressed.x_train, regressed.y_train)
     np.testing.assert_allclose(
         regressed.predictions.to_numpy(), model.predict(regressed.x_test))
+
+
+def test_gpboost(regressed: amos.Dataset) -> None:
+    requires('gpboost')
+    gpboost = importlib.import_module('gpboost')
+    data = regressed.data
+    data['court'] = np.resize(list('abcdef'), len(data))
+    regressed.groups = ['court']
+    amos.models.Gpboost().apply(regressed, n_estimators = 10)
+    train, test = regressed.x_train, regressed.x_test
+    gp_model = gpboost.GPModel(
+        group_data = data.loc[train.index, ['court']].to_numpy(dtype = str),
+        likelihood = 'gaussian',
+        seed = SEED)
+    model = gpboost.GPBoostRegressor(
+        n_estimators = 10, verbose = -1, random_state = SEED)
+    model.fit(train, regressed.y_train, gp_model = gp_model)
+    predicted = model.predict(
+        test,
+        group_data_pred = data.loc[test.index, ['court']].to_numpy(
+            dtype = str))
+    np.testing.assert_allclose(
+        regressed.predictions.to_numpy(), predicted['response_mean'])
+
+
+def test_bambi(regressed: amos.Dataset) -> None:
+    requires('bambi')
+    bambi = importlib.import_module('bambi')
+    amos.models.Bambi().apply(regressed, draws = 100, tune = 100)
+    table = regressed.tables['bambi_coefficients']
+    data = regressed.x_train.rename(
+        columns = lambda name: f'amos_x{name.removeprefix("x")}')
+    data['amos_y'] = regressed.y_train
+    formula = 'amos_y ~ ' + ' + '.join(c for c in data if c != 'amos_y')
+    posterior = bambi.Model(formula, data).fit(
+        draws = 100, tune = 100, chains = 2, cores = 1, target_accept = 0.9,
+        random_seed = SEED, progressbar = False)
+    means = posterior['posterior']['amos_x0'].mean(('chain', 'draw'))
+    np.testing.assert_allclose(table.loc['x0', 'coefficient'], float(means))
+
+
+def test_pymc(regressed: amos.Dataset) -> None:
+    requires('pymc_bart')
+    amos.models.Pymc().apply(regressed, draws = 100, tune = 100, m = 20)
+    model = regressed.model
+    # The predictions are the mean of every posterior draw of the trees.
+    assert len(model.trees_) >= 1
+    np.testing.assert_allclose(
+        regressed.predictions.to_numpy(), model.predict(regressed.x_test))
+    importances = model.feature_importances_
+    assert np.isclose(importances.sum(), 1)
+    assert importances.argmax() == np.abs(
+        np.corrcoef(regressed.x_train.T, regressed.y_train)[-1, :-1]).argmax()
 
 
 def test_statsmodels(regressed: amos.Dataset) -> None:
@@ -512,7 +568,7 @@ def test_mlxtend(classified: amos.Dataset) -> None:
     selector = feature_selection.SequentialFeatureSelector(
         linear_model.LogisticRegression(max_iter = 1000, random_state = SEED),
         k_features = 3,
-        scoring = 'accuracy',
+        scoring = 'matthews_corrcoef',
         cv = 3).fit(x_train, y_train)
     assert classified.features == list(selector.k_feature_names_)
     table = classified.tables['sequential_selection_search'].set_index('size')
